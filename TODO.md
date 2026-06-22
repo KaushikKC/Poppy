@@ -25,13 +25,14 @@
 - [x] `frontend/chat.js` — streaming fetch, live bubble rendering, status states
 - [x] Tested: `POST /chat` streams cleanly, first reply in ~1s
 
-## Step 3 — Speech-to-Text
-- [ ] Add `POST /stt` endpoint to backend using `faster-whisper` (model: `small`)
-- [ ] Browser: add push-to-talk button that records mic audio via MediaRecorder API
-- [ ] Browser: POST recorded audio blob to `/stt` → receive transcript
-- [ ] Wire transcript into `/chat` automatically
-- [ ] Test: speak → correct text appears → LLM replies (text only still)
-- [ ] Optional: integrate Silero VAD for automatic turn detection (defer if complex)
+## Step 3 — Speech-to-Text ✅
+- [x] `backend/stt.py` — lazy-loaded Whisper small, transcribes any ffmpeg-decodeable audio
+- [x] `POST /stt` endpoint — accepts multipart audio upload, returns `{"transcript": "..."}`
+- [x] `frontend/mic.js` — click-to-toggle recording via MediaRecorder (WebM/Opus), posts to /stt, auto-sends result
+- [x] Mic button added to HTML with recording/transcribing visual states in CSS
+- [x] `window.sendMessage` exposed so mic.js can trigger chat after transcription
+- [x] `backend/tts.py` — correct Piper 1.4.2 API (AudioChunk generator → PCM bytes) ready for Step 4
+- [x] Tested: macOS say → WAV → /stt → correct transcript returned
 
 ## Step 4 — Text-to-Speech (Streaming)
 - [ ] Add Piper TTS to backend
