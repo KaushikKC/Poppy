@@ -1,11 +1,14 @@
-const BACKEND = window.BACKEND || "http://localhost:8000";
+const BACKEND    = window.BACKEND    || "http://localhost:8000";
+const WS_BACKEND = window.WS_BACKEND || "ws://localhost:8000";
 
-const form        = document.getElementById("chat-form");
-const input       = document.getElementById("user-input");
-const sendBtn     = document.getElementById("send-btn");
-const clearBtn    = document.getElementById("clear-btn");
-const transcript  = document.getElementById("transcript");
-const statusDot   = document.getElementById("status-dot");
+const form       = document.getElementById("chat-form");
+const input      = document.getElementById("user-input");
+const sendBtn    = document.getElementById("send-btn");
+const clearBtn   = document.getElementById("clear-btn");
+const transcript = document.getElementById("transcript");
+const statusDot  = document.getElementById("status-dot");
+
+const player = new AudioPlayer();
 
 function setStatus(state) {
   statusDot.className = `dot ${state}`;
@@ -21,49 +24,75 @@ function addBubble(role, text = "") {
   return div;
 }
 
+function setInputLocked(locked) {
+  sendBtn.disabled = locked;
+  input.disabled   = locked;
+  const micBtn = document.getElementById("mic-btn");
+  if (micBtn) micBtn.disabled = locked;
+}
+
 window.sendMessage = async function sendMessage(text) {
   addBubble("user", text);
   const replyBubble = addBubble("assistant");
   replyBubble.classList.add("streaming");
 
-  sendBtn.disabled = true;
-  input.disabled   = true;
+  setInputLocked(true);
   setStatus("thinking");
 
-  try {
-    const res = await fetch(`${BACKEND}/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    });
+  const ws = new WebSocket(`${WS_BACKEND}/ws/chat`);
+  ws.binaryType = "arraybuffer";
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  let accumulated = "";
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let accumulated = "";
+  player.onPlaybackStart(() => setStatus("speaking"));
+  player.onPlaybackEnd(() => {
+    if (!replyBubble.classList.contains("streaming")) setStatus("idle");
+  });
 
-    setStatus("speaking");
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: "chat", text }));
+  };
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      accumulated += decoder.decode(value, { stream: true });
-      replyBubble.textContent = accumulated;
-      transcript.scrollTop = transcript.scrollHeight;
+  ws.onmessage = async (event) => {
+    if (event.data instanceof ArrayBuffer) {
+      await player.enqueueWav(event.data.slice(0));
+      return;
     }
 
+    const msg = JSON.parse(event.data);
+
+    if (msg.type === "config") {
+      player.setSampleRate(msg.sampleRate);
+
+    } else if (msg.type === "token") {
+      if (statusDot.title === "thinking") setStatus("thinking");
+      accumulated += msg.text;
+      replyBubble.textContent = accumulated;
+      transcript.scrollTop = transcript.scrollHeight;
+
+    } else if (msg.type === "done") {
+      replyBubble.classList.remove("streaming");
+      ws.close();
+      setInputLocked(false);
+      input.focus();
+
+    } else if (msg.type === "error") {
+      replyBubble.textContent = `Error: ${msg.message}`;
+      replyBubble.classList.remove("streaming");
+      ws.close();
+      setInputLocked(false);
+      setStatus("idle");
+      input.focus();
+    }
+  };
+
+  ws.onerror = () => {
+    replyBubble.textContent = "Connection error — is the backend running?";
     replyBubble.classList.remove("streaming");
-  } catch (err) {
-    replyBubble.textContent = `Error: ${err.message}`;
-    replyBubble.classList.remove("streaming");
-  } finally {
+    setInputLocked(false);
     setStatus("idle");
-    sendBtn.disabled = false;
-    input.disabled   = false;
-    input.focus();
-  }
-}
+  };
+};
 
 form.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -75,5 +104,7 @@ form.addEventListener("submit", (e) => {
 
 clearBtn.addEventListener("click", async () => {
   transcript.innerHTML = "";
+  player.stop();
   await fetch(`${BACKEND}/history`, { method: "DELETE" }).catch(() => {});
+  setStatus("idle");
 });
