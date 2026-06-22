@@ -1,4 +1,4 @@
-const BACKEND = "http://localhost:8000";
+const BACKEND = window.BACKEND || "http://localhost:8000";
 
 const form        = document.getElementById("chat-form");
 const input       = document.getElementById("user-input");
@@ -21,7 +21,7 @@ function addBubble(role, text = "") {
   return div;
 }
 
-async function sendMessage(text) {
+window.sendMessage = async function sendMessage(text) {
   addBubble("user", text);
   const replyBubble = addBubble("assistant");
   replyBubble.classList.add("streaming");
