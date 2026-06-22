@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Private Companion</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>Private Companion</h1>
+      <span id="status-dot" class="dot idle" title="idle"></span>
+    </header>
+
+    <div id="transcript"></div>
+
+    <form id="chat-form">
+      <input
+        id="user-input"
+        type="text"
+        placeholder="Type a message…"
+        autocomplete="off"
+        autofocus
+      />
+      <button type="submit" id="send-btn">Send</button>
+      <button type="button" id="clear-btn">Clear</button>
+    </form>
+  </div>
+
+  <script src="chat.js"></script>
+</body>
+</html>
