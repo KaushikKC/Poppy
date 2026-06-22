@@ -124,3 +124,24 @@ button:disabled { opacity: 0.4; cursor: default; }
 
 #send-btn  { background: #7c6ef0; color: #fff; }
 #clear-btn { background: #2a2a34; color: #aaa; }
+
+#mic-btn {
+  padding: 0.7rem 0.85rem;
+  background: #2a2a34;
+  color: #aaa;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+#mic-btn.recording {
+  background: #7a1f1f;
+  color: #ff6b6b;
+  animation: pulse 0.8s infinite;
+}
+#mic-btn.transcribing {
+  background: #2a2a34;
+  color: #f5a623;
+  opacity: 0.7;
+}
