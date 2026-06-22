@@ -15,14 +15,15 @@
 - [x] Piper TTS synthesis: working at 22050 Hz
 - [x] Note: `deepseek-r1:7b` also present but unsuitable (CoT model, think tokens)
 
-## Step 2 — Text Chat Backend
-- [ ] Create project structure: `backend/`, `frontend/`
-- [ ] Write `backend/main.py` — FastAPI app with:
-  - [ ] `POST /chat` endpoint: accepts text, streams tokens from Ollama
-  - [ ] `GET /health` endpoint
-- [ ] Write `frontend/index.html` — simple text box + streamed reply display
-- [ ] Test: type a message → streamed response appears in browser
-- [ ] Confirm streaming feels real-time (no full-wait)
+## Step 2 — Text Chat Backend ✅
+- [x] Create project structure: `backend/`, `frontend/`
+- [x] `backend/config.py` — model paths, system prompt, tuning constants
+- [x] `backend/ollama_client.py` — async streaming client via httpx
+- [x] `backend/main.py` — FastAPI: `POST /chat` streams tokens, `GET /health`, `DELETE /history`
+- [x] `frontend/index.html` — chat UI shell
+- [x] `frontend/style.css` — dark theme, chat bubbles, status dot animations
+- [x] `frontend/chat.js` — streaming fetch, live bubble rendering, status states
+- [x] Tested: `POST /chat` streams cleanly, first reply in ~1s
 
 ## Step 3 — Speech-to-Text
 - [ ] Add `POST /stt` endpoint to backend using `faster-whisper` (model: `small`)
