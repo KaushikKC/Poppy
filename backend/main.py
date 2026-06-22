@@ -1,9 +1,10 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, WebSocket
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from ollama_client import stream_reply
 from stt import transcribe
+from ws_handler import handle_chat, clear_history as ws_clear_history
 from config import MAX_HISTORY_TURNS
 
 app = FastAPI(title="Private Companion Backend")
@@ -64,7 +65,13 @@ async def speech_to_text(audio: UploadFile = File(...)):
     return {"transcript": transcript}
 
 
+@app.websocket("/ws/chat")
+async def websocket_chat(ws: WebSocket):
+    await handle_chat(ws)
+
+
 @app.delete("/history")
 async def clear_history():
     conversation_history.clear()
+    await ws_clear_history()
     return {"cleared": True}
