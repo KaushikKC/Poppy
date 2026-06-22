@@ -1,8 +1,9 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from ollama_client import stream_reply
+from stt import transcribe
 from config import MAX_HISTORY_TURNS
 
 app = FastAPI(title="Private Companion Backend")
@@ -46,6 +47,21 @@ async def chat(req: ChatRequest):
             del conversation_history[: len(conversation_history) - MAX_HISTORY_TURNS * 2]
 
     return StreamingResponse(token_stream(), media_type="text/plain")
+
+
+@app.post("/stt")
+async def speech_to_text(audio: UploadFile = File(...)):
+    data = await audio.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty audio file")
+    suffix = ".webm"
+    if audio.content_type and "/" in audio.content_type:
+        ext = audio.content_type.split("/")[-1].split(";")[0]
+        suffix = f".{ext}"
+    transcript = transcribe(data, suffix=suffix)
+    if not transcript:
+        return JSONResponse({"transcript": "", "empty": True})
+    return {"transcript": transcript}
 
 
 @app.delete("/history")
