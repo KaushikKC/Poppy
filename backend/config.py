@@ -16,7 +16,7 @@ WHISPER_COMPUTE = "int8"
 PIPER_MODEL_PATH = "../models/piper/en_US-lessac-medium.onnx"
 PIPER_SAMPLE_RATE = 22050
 
-TTS_CHUNK_MIN_CHARS = 30
+TTS_CHUNK_MIN_CHARS = 15
 TTS_SENTENCE_BREAKS = frozenset(".!?")
 TTS_SOFT_BREAKS = frozenset(",;:")
 TTS_SOFT_BREAK_MIN_CHARS = 60
