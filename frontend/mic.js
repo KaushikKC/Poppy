@@ -1,11 +1,17 @@
-// BACKEND and sendBtn are declared in chat.js — don't redeclare them here
+// BACKEND and sendBtn are declared in chat.js — not redeclared here
 
 const micBtn    = document.getElementById("mic-btn");
+const vadBtn    = document.getElementById("vad-btn");
 const userInput = document.getElementById("user-input");
 
 let mediaRecorder = null;
 let audioChunks   = [];
 let isRecording   = false;
+
+let vadInstance   = null;
+let vadActive     = false;
+
+// ── Push-to-talk helpers ──────────────────────────────────────────────────────
 
 function setMicState(state) {
   micBtn.className = state === "idle" ? "" : state;
@@ -56,11 +62,66 @@ function stopRecording() {
   }
 }
 
+micBtn.addEventListener("click", () => {
+  if (vadActive) return;
+  if (isRecording) stopRecording();
+  else             startRecording();
+});
+
+// ── VAD toggle ────────────────────────────────────────────────────────────────
+
+if (vadBtn) {
+  vadBtn.addEventListener("click", async () => {
+    if (!vadActive) {
+      vadInstance = new VAD({ threshold: 0.018, silenceMs: 800, minSpeechMs: 200 });
+
+      vadInstance.onStart = () => {
+        vadBtn.classList.add("active");
+        vadBtn.title = "Listening… speak now";
+      };
+
+      vadInstance.onEnd = () => {
+        vadBtn.classList.remove("active");
+        vadBtn.title = "Processing…";
+      };
+
+      vadInstance.onSpeech = async (blob, mimeType) => {
+        await transcribeAndSend(blob, mimeType);
+        vadBtn.title = "Auto-listening — click to stop";
+      };
+
+      try {
+        await vadInstance.start();
+        vadActive = true;
+        vadBtn.classList.add("on");
+        vadBtn.title = "Auto-listening — click to stop";
+        micBtn.disabled = true;
+      } catch (err) {
+        console.error("VAD start error:", err);
+        alert("Could not start auto-listen. Check mic permissions.");
+        vadInstance = null;
+      }
+    } else {
+      vadInstance?.stop();
+      vadInstance = null;
+      vadActive   = false;
+      vadBtn.classList.remove("on", "active");
+      vadBtn.title = "Auto-listen";
+      micBtn.disabled = false;
+    }
+  });
+}
+
+// ── Shared transcribe + send ──────────────────────────────────────────────────
+
 async function transcribeAndSend(blob, mimeType) {
+  window._turnStart = Date.now(); // latency timer starts here
+
   const ext      = mimeType.split(";")[0].split("/")[1] || "webm";
   const formData = new FormData();
   formData.append("audio", blob, `recording.${ext}`);
 
+  setMicState("transcribing");
   let transcript = "";
   try {
     const res = await fetch(`${BACKEND}/stt`, { method: "POST", body: formData });
@@ -79,11 +140,3 @@ async function transcribeAndSend(blob, mimeType) {
   userInput.value = "";
   sendMessage(transcript);
 }
-
-micBtn.addEventListener("click", () => {
-  if (isRecording) {
-    stopRecording();
-  } else {
-    startRecording();
-  }
-});
