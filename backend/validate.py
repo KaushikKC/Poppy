@@ -82,7 +82,15 @@ async def _single_exchange(text: str) -> tuple[float, float]:
 
 
 async def check_latency() -> bool:
-    print("\n── Latency (3 exchanges) ────────────────────────────")
+    print("\n── Latency (3 exchanges, after warmup) ─────────────")
+    # Warmup: Whisper and Piper load lazily on first request, skewing turn 1
+    print(f"{INFO}  Warming up models (first request loads Whisper + Piper)…")
+    try:
+        await asyncio.wait_for(_single_exchange("Hi."), timeout=60)
+        print(f"{INFO}  Warmup done.")
+    except Exception as e:
+        print(f"{INFO}  Warmup failed ({e}) — latency may include cold-start penalty")
+
     prompts = [
         "Say hi in one sentence.",
         "What is two plus two?",
@@ -156,7 +164,10 @@ def check_memory() -> bool:
         try:
             name = proc.info["name"] or ""
             cmd  = " ".join(proc.info["cmdline"] or [])
-            rss  = proc.info["memory_info"].rss / (1024 ** 3)
+            mem  = proc.info["memory_info"]
+            if mem is None:
+                continue
+            rss  = mem.rss / (1024 ** 3)
 
             for label, keyword in targets.items():
                 if keyword in name.lower() or keyword in cmd.lower():
