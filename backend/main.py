@@ -9,6 +9,7 @@ from ollama_client import stream_reply
 from stt import transcribe
 from ws_handler import handle_chat, clear_history as ws_clear_history
 from config import MAX_HISTORY_TURNS
+import personas as persona_store
 import db
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
@@ -74,6 +75,11 @@ async def speech_to_text(audio: UploadFile = File(...)):
 @app.websocket("/ws/chat")
 async def websocket_chat(ws: WebSocket):
     await handle_chat(ws)
+
+
+@app.get("/personas")
+async def list_personas():
+    return persona_store.ui_list()
 
 
 @app.get("/sessions")
