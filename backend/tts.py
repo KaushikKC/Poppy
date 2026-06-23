@@ -3,21 +3,23 @@ import wave
 import numpy as np
 from pathlib import Path
 from piper.voice import PiperVoice
-from config import PIPER_MODEL_PATH, PIPER_SAMPLE_RATE
+from config import PIPER_MODEL_PATH
 
-_voice: PiperVoice | None = None
-_model_path = Path(__file__).parent / PIPER_MODEL_PATH
-
-
-def _get_voice() -> PiperVoice:
-    global _voice
-    if _voice is None:
-        _voice = PiperVoice.load(str(_model_path))
-    return _voice
+_DEFAULT_PATH = str((Path(__file__).parent / PIPER_MODEL_PATH).resolve())
+_voices: dict[str, PiperVoice] = {}
 
 
-def synthesize_to_wav_bytes(text: str) -> bytes:
-    voice = _get_voice()
+def _get_voice(path: str | None = None) -> PiperVoice:
+    resolved = str(Path(path).resolve()) if path else _DEFAULT_PATH
+    if resolved not in _voices:
+        if not Path(resolved).exists():
+            resolved = _DEFAULT_PATH
+        _voices[resolved] = PiperVoice.load(resolved)
+    return _voices[resolved]
+
+
+def synthesize_to_wav_bytes(text: str, voice_path: str | None = None) -> bytes:
+    voice = _get_voice(voice_path)
     buf = io.BytesIO()
     with wave.open(buf, "wb") as wf:
         wf.setnchannels(1)
