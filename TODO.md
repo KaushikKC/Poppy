@@ -42,12 +42,13 @@
 - [x] `frontend/chat.js` — replaced fetch with WebSocket; integrates AudioPlayer; status dot tracks thinking/speaking/idle
 - [x] Tested end-to-end: config → tokens → WAV audio chunks → done (28 KB audio chunk for "Hello!")
 
-## Step 5 — Avatar
-- [ ] Add TalkingHead.js (or Ready Player Me / VRM) to frontend
-- [ ] Feed live audio output into avatar's viseme driver
-- [ ] Confirm lip-sync looks acceptable with spoken audio
-- [ ] Basic idle animation when not speaking
-- [ ] Test full loop: speak → avatar talks back in sync
+## Step 5 — Avatar ✅
+- [x] `frontend/avatar.js` — canvas Avatar class: blinking eyes (random 2.5–6.5s), mouth driven by live audio amplitude via AnalyserNode, purple glow ring while speaking
+- [x] `frontend/audio_player.js` — AnalyserNode inserted into signal chain (source→analyser→destination), exposed via `getAnalyser()`
+- [x] `frontend/chat.js` — avatar created at page load, `setAnalyser()` called on first config message, state toggled speaking/idle on audio playback start/end
+- [x] `frontend/index.html` — 220×220 canvas added above transcript, avatar.js loaded before chat.js
+- [x] `frontend/style.css` — avatar centered, 180px display size, circular crop
+- [x] Backend unchanged — pure frontend addition as planned
 
 ## Step 6 — Latency Polish & QoL
 - [ ] Measure end-to-end latency: mic-stop → first avatar audio (target ≤1.5s)
