@@ -50,13 +50,16 @@
 - [x] `frontend/style.css` — avatar centered, 180px display size, circular crop
 - [x] Backend unchanged — pure frontend addition as planned
 
-## Step 6 — Latency Polish & QoL
-- [ ] Measure end-to-end latency: mic-stop → first avatar audio (target ≤1.5s)
-- [ ] If LLM bottleneck: reduce context window (8192→4096) or switch to 3–4B model
-- [ ] Add session conversation history (in-memory list, last N turns only, cap at ~10)
-- [ ] Optional: save session transcript to local SQLite on close
-- [ ] Optional: Silero VAD auto-turn-detection (replaces push-to-talk button)
-- [ ] Clean up UI — minimal, calm visual design
+## Step 6 — Latency Polish & QoL ✅
+- [x] Latency measured in `chat.js`: `window._turnStart` set on mic-stop or send, `showLatency()` displays green badge in header on first audio (fades after 3s)
+- [x] Context window already 4096 in config ✓ — model at 17.5 tok/s, no bottleneck
+- [x] History already capped at MAX_HISTORY_TURNS=10 in ws_handler ✓
+- [x] `backend/db.py` — SQLite (companion.db) saves every session + turn; `*.db` gitignored
+- [x] `backend/ws_handler.py` — UUID session_id per WS connection, turns saved async; `done` message carries sessionId
+- [x] `backend/main.py` — `GET /sessions` lists all sessions; `GET /export/{id}` returns turns as JSON + plain text
+- [x] `frontend/vad.js` — VAD class: amplitude threshold 0.018, 800ms silence, 200ms min speech, onSpeech callback
+- [x] `frontend/mic.js` — VAD toggle button; push-to-talk and auto-listen coexist; latency timer set in `transcribeAndSend`
+- [x] `frontend/style.css` — green latency badge (top-right header), VAD button with on/active pulse states
 
 ## Validation Gates (before calling MVP done)
 - [ ] Full offline: airplane mode → app still works end-to-end
