@@ -11,6 +11,16 @@ const statusDot  = document.getElementById("status-dot");
 const player = new AudioPlayer();
 const avatar = document.getElementById("avatar-canvas") ? new Avatar("avatar-canvas") : null;
 
+let _latencyTimer = null;
+function showLatency(ms) {
+  const badge = document.getElementById("latency-badge");
+  if (!badge) return;
+  badge.textContent = `${(ms / 1000).toFixed(2)}s`;
+  badge.classList.add("visible");
+  clearTimeout(_latencyTimer);
+  _latencyTimer = setTimeout(() => badge.classList.remove("visible"), 3000);
+}
+
 function setStatus(state) {
   statusDot.className = `dot ${state}`;
   statusDot.title = state;
@@ -46,6 +56,12 @@ window.sendMessage = async function sendMessage(text) {
   let accumulated = "";
 
   player.onPlaybackStart(() => {
+    if (window._turnStart) {
+      const ms = Date.now() - window._turnStart;
+      window._turnStart = 0;
+      showLatency(ms);
+      console.info(`Latency (mic-stop → first audio): ${ms} ms`);
+    }
     setStatus("speaking");
     avatar?.setState("speaking");
   });
@@ -109,6 +125,7 @@ form.addEventListener("submit", (e) => {
   const text = input.value.trim();
   if (!text) return;
   input.value = "";
+  window._turnStart = Date.now();
   sendMessage(text);
 });
 
