@@ -26,6 +26,19 @@ header {
   gap: 0.6rem;
 }
 
+#avatar-wrap {
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+#avatar-canvas {
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: #0f0f12;
+}
+
 header h1 {
   font-size: 1.1rem;
   font-weight: 600;
