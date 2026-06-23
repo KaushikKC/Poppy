@@ -4,15 +4,19 @@ from typing import AsyncIterator
 from config import OLLAMA_URL, OLLAMA_MODEL, OLLAMA_CONTEXT_WINDOW, SYSTEM_PROMPT
 
 
-def _build_messages(history: list[dict], user_text: str) -> list[dict]:
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+def _build_messages(history: list[dict], user_text: str, system_prompt: str) -> list[dict]:
+    messages = [{"role": "system", "content": system_prompt}]
     messages.extend(history)
     messages.append({"role": "user", "content": user_text})
     return messages
 
 
-async def stream_reply(history: list[dict], user_text: str) -> AsyncIterator[str]:
-    messages = _build_messages(history, user_text)
+async def stream_reply(
+    history: list[dict],
+    user_text: str,
+    system_prompt: str = SYSTEM_PROMPT,
+) -> AsyncIterator[str]:
+    messages = _build_messages(history, user_text, system_prompt)
     payload = {
         "model": OLLAMA_MODEL,
         "messages": messages,
