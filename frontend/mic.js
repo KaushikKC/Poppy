@@ -1,8 +1,7 @@
-const BACKEND = window.BACKEND || "http://localhost:8000";
+// BACKEND and sendBtn are declared in chat.js — don't redeclare them here
 
-const micBtn   = document.getElementById("mic-btn");
+const micBtn    = document.getElementById("mic-btn");
 const userInput = document.getElementById("user-input");
-const sendBtn  = document.getElementById("send-btn");
 
 let mediaRecorder = null;
 let audioChunks   = [];
@@ -21,8 +20,9 @@ async function startRecording() {
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  } catch {
-    alert("Microphone access denied. Please allow mic access and try again.");
+  } catch (err) {
+    console.error("getUserMedia error:", err);
+    alert("Microphone access denied. Please allow mic access in Chrome and try again.");
     return;
   }
 
@@ -30,7 +30,7 @@ async function startRecording() {
     ? "audio/webm;codecs=opus"
     : "audio/webm";
 
-  audioChunks  = [];
+  audioChunks   = [];
   mediaRecorder = new MediaRecorder(stream, { mimeType });
 
   mediaRecorder.ondataavailable = (e) => {
@@ -74,17 +74,10 @@ async function transcribeAndSend(blob, mimeType) {
   }
 
   setMicState("idle");
-
   if (!transcript) return;
 
-  userInput.value = transcript;
-
-  if (typeof sendMessage === "function") {
-    userInput.value = "";
-    sendMessage(transcript);
-  } else {
-    sendBtn.click();
-  }
+  userInput.value = "";
+  sendMessage(transcript);
 }
 
 micBtn.addEventListener("click", () => {
