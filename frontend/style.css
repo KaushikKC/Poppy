@@ -26,6 +26,16 @@ header {
   gap: 0.6rem;
 }
 
+#latency-badge {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: #5ced73;
+  opacity: 0;
+  transition: opacity 0.3s;
+  font-variant-numeric: tabular-nums;
+}
+#latency-badge.visible { opacity: 1; }
+
 #avatar-wrap {
   display: flex;
   justify-content: center;
@@ -157,4 +167,21 @@ button:disabled { opacity: 0.4; cursor: default; }
   background: #2a2a34;
   color: #f5a623;
   opacity: 0.7;
+}
+
+#vad-btn {
+  padding: 0.7rem 0.8rem;
+  background: #2a2a34;
+  color: #666;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+#vad-btn.on    { background: #1e3322; color: #5ced73; }
+#vad-btn.active {
+  background: #1e3322;
+  color: #5ced73;
+  animation: pulse 0.6s infinite;
 }
