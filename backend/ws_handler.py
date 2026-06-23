@@ -1,15 +1,21 @@
 import asyncio
+import uuid
 from fastapi import WebSocket, WebSocketDisconnect
 from ollama_client import stream_reply
 from tts import synthesize_to_wav_bytes
 from phrase_chunker import PhraseChunker
 from config import MAX_HISTORY_TURNS
+import db
 
 conversation_history: list[dict] = []
 
 
 async def _synthesize(text: str) -> bytes:
     return await asyncio.to_thread(synthesize_to_wav_bytes, text)
+
+
+async def _db_save(session_id: str, role: str, content: str) -> None:
+    await asyncio.to_thread(db.save_turn, session_id, role, content)
 
 
 def _trim_history():
@@ -20,6 +26,9 @@ def _trim_history():
 
 async def handle_chat(ws: WebSocket):
     await ws.accept()
+    session_id = str(uuid.uuid4())
+    await asyncio.to_thread(db.create_session, session_id)
+
     try:
         while True:
             msg = await ws.receive_json()
@@ -63,7 +72,12 @@ async def handle_chat(ws: WebSocket):
             conversation_history.append({"role": "assistant", "content": assistant_text})
             _trim_history()
 
-            await ws.send_json({"type": "done"})
+            await asyncio.gather(
+                _db_save(session_id, "user", user_text),
+                _db_save(session_id, "assistant", assistant_text),
+            )
+
+            await ws.send_json({"type": "done", "sessionId": session_id})
 
     except WebSocketDisconnect:
         pass
