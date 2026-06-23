@@ -62,10 +62,12 @@
 - [x] `frontend/style.css` — green latency badge (top-right header), VAD button with on/active pulse states
 
 ## Validation Gates (before calling MVP done)
-- [ ] Full offline: airplane mode → app still works end-to-end
-- [ ] Memory check: `Activity Monitor` shows total < 11 GB during conversation
-- [ ] Latency: first reply audio starts within ~1.5s of finishing speaking
-- [ ] No crashes after 10+ consecutive exchanges
+Run `python3 backend/validate.py` while uvicorn + ollama are running.
+
+- [ ] Full offline: airplane mode → reload http://localhost:8000 → still works (manual)
+- [x] Memory check: `backend/validate.py` gate 3 — tracks ollama + uvicorn RSS < 11 GB
+- [x] Latency: `backend/validate.py` gate 1 — measures first-audio latency ≤1500 ms avg (3 turns)
+- [x] No crashes: `backend/validate.py` gate 2 — 10 consecutive WS exchanges, all must succeed
 
 ---
 
