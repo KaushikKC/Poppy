@@ -5,13 +5,14 @@ from ollama_client import stream_reply
 from tts import synthesize_to_wav_bytes
 from phrase_chunker import PhraseChunker
 from config import MAX_HISTORY_TURNS
+import personas as persona_store
 import db
 
 conversation_history: list[dict] = []
 
 
-async def _synthesize(text: str) -> bytes:
-    return await asyncio.to_thread(synthesize_to_wav_bytes, text)
+async def _synthesize(text: str, voice_path: str | None) -> bytes:
+    return await asyncio.to_thread(synthesize_to_wav_bytes, text, voice_path)
 
 
 async def _db_save(session_id: str, role: str, content: str) -> None:
@@ -39,18 +40,22 @@ async def handle_chat(ws: WebSocket):
             if not user_text:
                 continue
 
+            persona = persona_store.get(msg.get("persona", ""))
+            system_prompt = persona["system_prompt"]
+            voice_path    = persona["voice_path"]
+
             await ws.send_json({"type": "config", "sampleRate": 22050})
 
             chunker = PhraseChunker()
             full_reply: list[str] = []
 
             async def tts_and_send(phrase: str):
-                audio = await _synthesize(phrase)
+                audio = await _synthesize(phrase, voice_path)
                 await ws.send_bytes(audio)
 
             tts_tasks: list[asyncio.Task] = []
 
-            async for token in stream_reply(conversation_history, user_text):
+            async for token in stream_reply(conversation_history, user_text, system_prompt):
                 full_reply.append(token)
                 await ws.send_json({"type": "token", "text": token})
 
