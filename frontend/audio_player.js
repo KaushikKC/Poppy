@@ -9,10 +9,16 @@ class AudioPlayer {
 
   _ensureCtx(sampleRate) {
     if (!this._ctx || this._ctx.state === "closed") {
-      this._ctx = new AudioContext({ sampleRate });
+      this._ctx      = new AudioContext({ sampleRate });
+      this._analyser = this._ctx.createAnalyser();
+      this._analyser.fftSize = 256;
+      this._analyser.smoothingTimeConstant = 0.8;
+      this._analyser.connect(this._ctx.destination);
       this._nextStart = 0;
     }
   }
+
+  getAnalyser() { return this._analyser || null; }
 
   setSampleRate(sampleRate) {
     this._ensureCtx(sampleRate);
@@ -36,7 +42,7 @@ class AudioPlayer {
 
     const source = this._ctx.createBufferSource();
     source.buffer = audioBuffer;
-    source.connect(this._ctx.destination);
+    source.connect(this._analyser);
 
     const now = this._ctx.currentTime;
     const startAt = Math.max(now + 0.05, this._nextStart);
