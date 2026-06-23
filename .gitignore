@@ -11,3 +11,6 @@ models/
 *.mp3
 node_modules/
 .DS_Store
+*.db
+*.db-shm
+*.db-wal
