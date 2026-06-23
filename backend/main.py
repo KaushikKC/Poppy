@@ -1,11 +1,15 @@
+from pathlib import Path
 from fastapi import FastAPI, HTTPException, UploadFile, File, WebSocket
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from ollama_client import stream_reply
 from stt import transcribe
 from ws_handler import handle_chat, clear_history as ws_clear_history
 from config import MAX_HISTORY_TURNS
+
+FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 
 app = FastAPI(title="Private Companion Backend")
 
@@ -75,3 +79,7 @@ async def clear_history():
     conversation_history.clear()
     await ws_clear_history()
     return {"cleared": True}
+
+
+# Serve frontend at / — must come AFTER all API routes
+app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
