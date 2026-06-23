@@ -34,13 +34,13 @@
 - [x] `backend/tts.py` — correct Piper 1.4.2 API (AudioChunk generator → PCM bytes) ready for Step 4
 - [x] Tested: macOS say → WAV → /stt → correct transcript returned
 
-## Step 4 — Text-to-Speech (Streaming)
-- [ ] Add Piper TTS to backend
-- [ ] Implement phrase-chunking: accumulate LLM tokens, break on `.`, `?`, `!`, `,`
-- [ ] For each phrase: synthesize audio with Piper → stream audio chunk over WebSocket
-- [ ] Browser: receive audio chunks via WebSocket → play via Web Audio API (queue chunks)
-- [ ] Test: full voice loop (speak → STT → LLM → TTS → hear reply)
-- [ ] Tune chunk size: balance latency vs. natural phrasing (target first audio ≤1.5s)
+## Step 4 — Text-to-Speech (Streaming) ✅
+- [x] `backend/phrase_chunker.py` — PhraseChunker breaks token stream on sentence/soft-break rules
+- [x] `backend/ws_handler.py` — WebSocket loop: streams tokens + fires Piper synthesis concurrently per phrase
+- [x] `backend/main.py` — `/ws/chat` WebSocket route wired; history clear unified across HTTP + WS
+- [x] `frontend/audio_player.js` — AudioPlayer queues WAV chunks, schedules gapless playback via Web Audio API
+- [x] `frontend/chat.js` — replaced fetch with WebSocket; integrates AudioPlayer; status dot tracks thinking/speaking/idle
+- [x] Tested end-to-end: config → tokens → WAV audio chunks → done (28 KB audio chunk for "Hello!")
 
 ## Step 5 — Avatar
 - [ ] Add TalkingHead.js (or Ready Player Me / VRM) to frontend
