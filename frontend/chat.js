@@ -9,6 +9,7 @@ const transcript = document.getElementById("transcript");
 const statusDot  = document.getElementById("status-dot");
 
 const player = new AudioPlayer();
+const avatar = document.getElementById("avatar-canvas") ? new Avatar("avatar-canvas") : null;
 
 function setStatus(state) {
   statusDot.className = `dot ${state}`;
@@ -44,9 +45,15 @@ window.sendMessage = async function sendMessage(text) {
 
   let accumulated = "";
 
-  player.onPlaybackStart(() => setStatus("speaking"));
+  player.onPlaybackStart(() => {
+    setStatus("speaking");
+    avatar?.setState("speaking");
+  });
   player.onPlaybackEnd(() => {
-    if (!replyBubble.classList.contains("streaming")) setStatus("idle");
+    if (!replyBubble.classList.contains("streaming")) {
+      setStatus("idle");
+      avatar?.setState("idle");
+    }
   });
 
   ws.onopen = () => {
@@ -63,6 +70,7 @@ window.sendMessage = async function sendMessage(text) {
 
     if (msg.type === "config") {
       player.setSampleRate(msg.sampleRate);
+      if (avatar && player.getAnalyser()) avatar.setAnalyser(player.getAnalyser());
 
     } else if (msg.type === "token") {
       if (statusDot.title === "thinking") setStatus("thinking");
@@ -75,6 +83,8 @@ window.sendMessage = async function sendMessage(text) {
       ws.close();
       setInputLocked(false);
       input.focus();
+      // fallback: if no audio was generated, reset avatar immediately
+      if (avatar) setTimeout(() => avatar.setState("idle"), 100);
 
     } else if (msg.type === "error") {
       replyBubble.textContent = `Error: ${msg.message}`;
@@ -105,6 +115,7 @@ form.addEventListener("submit", (e) => {
 clearBtn.addEventListener("click", async () => {
   transcript.innerHTML = "";
   player.stop();
+  avatar?.setState("idle");
   await fetch(`${BACKEND}/history`, { method: "DELETE" }).catch(() => {});
   setStatus("idle");
 });
