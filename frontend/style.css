@@ -36,6 +36,34 @@ header {
 }
 #latency-badge.visible { opacity: 1; }
 
+#persona-picker {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.persona-btn {
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  border: 1.5px solid #2e2e3a;
+  background: #1a1a22;
+  color: #888;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.18s, color 0.18s, background 0.18s;
+}
+.persona-btn:hover {
+  border-color: var(--persona-color, #7c6ef0);
+  color: #ccc;
+}
+.persona-btn.active {
+  border-color: var(--persona-color, #7c6ef0);
+  color: var(--persona-color, #7c6ef0);
+  background: #1e1a2e;
+}
+
 #avatar-wrap {
   display: flex;
   justify-content: center;
