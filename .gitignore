@@ -14,3 +14,5 @@ node_modules/
 *.db
 *.db-shm
 *.db-wal
+companion.key
+companion_memory.enc
