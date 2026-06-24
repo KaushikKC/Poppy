@@ -73,6 +73,6 @@ Run `python3 backend/validate.py` while uvicorn + ollama are running.
 
 ## Post-MVP Milestones (do NOT start until above is done)
 - [x] **M1** — Persona selection: Friendly / Professional / Playful pills; avatar colors, system prompt, and voice switch per persona; history cleared on switch
-- [ ] **M2** — Accent detection: streaming classifier proposes persona automatically
-- [ ] **M3** — Emotional-support framing: safety layer, crisis signposting, encrypted local memory
-- [ ] **M4** — Realistic face (opt-in, capable machines only)
+- [x] **M2** — Accent detection: `backend/accent.py` streaming EMA classifier on STT transcript; suggests a persona via dismissible chip (offline, no extra model)
+- [x] **M3** — Emotional-support framing: `backend/safety.py` crisis detection + signposting card; SAFETY/CRISIS prompt addenda; `backend/memory_store.py` Fernet-encrypted cross-session memory with view/forget panel
+- [ ] **M4** — Realistic face (opt-in, capable machines only) — DEFERRED: a GAN talking-head (Wav2Lip/SadTalker) would break the <11 GB memory gate and add seconds of latency alongside the LLM+Whisper+Piper on a 16 GB M3. Revisit on more capable hardware.
