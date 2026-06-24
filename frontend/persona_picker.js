@@ -11,6 +11,20 @@ const PersonaPicker = (() => {
     if (p) _callbacks.forEach(cb => cb(key, p));
   }
 
+  let _container = null;
+
+  function _select(key) {
+    if (key === _current || !_personas.find(p => p.key === key)) return;
+    _current = key;
+    localStorage.setItem(_STORAGE_KEY, _current);
+    if (_container) {
+      _container.querySelectorAll(".persona-btn").forEach(b => {
+        b.classList.toggle("active", b.dataset.key === _current);
+      });
+    }
+    _emit(_current);
+  }
+
   function _render(container) {
     container.innerHTML = "";
     _personas.forEach(p => {
@@ -21,15 +35,7 @@ const PersonaPicker = (() => {
       btn.style.setProperty("--persona-color", p.avatar.outline);
       btn.title = p.description;
       btn.textContent = p.name;
-      btn.addEventListener("click", () => {
-        if (p.key === _current) return;
-        _current = p.key;
-        localStorage.setItem(_STORAGE_KEY, _current);
-        container.querySelectorAll(".persona-btn").forEach(b => {
-          b.classList.toggle("active", b.dataset.key === _current);
-        });
-        _emit(_current);
-      });
+      btn.addEventListener("click", () => _select(p.key));
       container.appendChild(btn);
     });
   }
@@ -37,6 +43,7 @@ const PersonaPicker = (() => {
   async function init() {
     const container = document.getElementById("persona-picker");
     if (!container) return;
+    _container = container;
 
     try {
       const res = await fetch(`${_BACKEND}/personas`);
@@ -58,6 +65,8 @@ const PersonaPicker = (() => {
   return {
     init,
     current: () => _current,
+    select: _select,
+    name: (key) => (_personas.find(p => p.key === key) || {}).name || key,
     onChange: (cb) => _callbacks.push(cb),
   };
 })();
