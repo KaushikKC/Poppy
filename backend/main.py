@@ -1,6 +1,6 @@
 import asyncio
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, UploadFile, File, WebSocket
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, WebSocket
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -10,6 +10,7 @@ from stt import transcribe
 from ws_handler import handle_chat, clear_history as ws_clear_history
 from config import MAX_HISTORY_TURNS
 import personas as persona_store
+import accent
 import db
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
@@ -58,7 +59,10 @@ async def chat(req: ChatRequest):
 
 
 @app.post("/stt")
-async def speech_to_text(audio: UploadFile = File(...)):
+async def speech_to_text(
+    audio: UploadFile = File(...),
+    persona: str = Form("friendly"),
+):
     data = await audio.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty audio file")
@@ -69,7 +73,8 @@ async def speech_to_text(audio: UploadFile = File(...)):
     transcript = transcribe(data, suffix=suffix)
     if not transcript:
         return JSONResponse({"transcript": "", "empty": True})
-    return {"transcript": transcript}
+    suggestion = accent.observe(transcript, persona)
+    return {"transcript": transcript, "suggestion": suggestion}
 
 
 @app.websocket("/ws/chat")
@@ -100,6 +105,7 @@ async def export_session(session_id: str):
 async def clear_history():
     conversation_history.clear()
     await ws_clear_history()
+    accent.reset()
     return {"cleared": True}
 
 
