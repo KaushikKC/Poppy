@@ -72,7 +72,7 @@ Run `python3 backend/validate.py` while uvicorn + ollama are running.
 ---
 
 ## Post-MVP Milestones (do NOT start until above is done)
-- [ ] **M1** — Persona selection: user picks voice + avatar style + system-prompt style
+- [x] **M1** — Persona selection: Friendly / Professional / Playful pills; avatar colors, system prompt, and voice switch per persona; history cleared on switch
 - [ ] **M2** — Accent detection: streaming classifier proposes persona automatically
 - [ ] **M3** — Emotional-support framing: safety layer, crisis signposting, encrypted local memory
 - [ ] **M4** — Realistic face (opt-in, capable machines only)
