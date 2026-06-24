@@ -64,6 +64,38 @@ header {
   background: #1e1a2e;
 }
 
+#persona-suggestion {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  color: #c9b8ff;
+  background: #1a1730;
+  border: 1px solid #3a2f6e;
+  border-radius: 999px;
+  padding: 0.3rem 0.4rem 0.3rem 0.85rem;
+  align-self: center;
+}
+#persona-suggestion.hidden { display: none; }
+
+.suggestion-apply {
+  padding: 0.2rem 0.7rem;
+  font-size: 0.75rem;
+  background: #7c6ef0;
+  color: #fff;
+  border-radius: 999px;
+}
+.suggestion-dismiss {
+  padding: 0.2rem 0.45rem;
+  font-size: 0.7rem;
+  background: transparent;
+  color: #8a82a8;
+  border-radius: 999px;
+}
+.suggestion-dismiss:hover { color: #ccc; }
+
 #avatar-wrap {
   display: flex;
   justify-content: center;
