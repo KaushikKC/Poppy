@@ -11,6 +11,7 @@ from ws_handler import handle_chat, clear_history as ws_clear_history
 from config import MAX_HISTORY_TURNS
 import personas as persona_store
 import accent
+import memory_store
 import db
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
@@ -99,6 +100,18 @@ async def export_session(session_id: str):
         raise HTTPException(status_code=404, detail="Session not found")
     lines = [f"[{t['created_at']}] {t['role'].upper()}: {t['content']}" for t in turns]
     return JSONResponse({"session_id": session_id, "turns": turns, "text": "\n".join(lines)})
+
+
+@app.get("/memory")
+async def get_memory():
+    facts = await asyncio.to_thread(memory_store.recall)
+    return {"facts": facts}
+
+
+@app.delete("/memory")
+async def forget_memory():
+    await asyncio.to_thread(memory_store.forget_all)
+    return {"forgotten": True}
 
 
 @app.delete("/history")
