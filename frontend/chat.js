@@ -139,6 +139,13 @@ window.sendMessage = async function sendMessage(text) {
       player.setSampleRate(msg.sampleRate);
       if (avatar && player.getAnalyser()) avatar.setAnalyser(player.getAnalyser());
 
+    } else if (msg.type === "safety") {
+      const notice = document.createElement("div");
+      notice.className = "safety-notice";
+      notice.textContent = msg.resources;
+      transcript.appendChild(notice);
+      transcript.scrollTop = transcript.scrollHeight;
+
     } else if (msg.type === "token") {
       if (statusDot.title === "thinking") setStatus("thinking");
       accumulated += msg.text;
