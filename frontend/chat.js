@@ -18,9 +18,49 @@ PersonaPicker.onChange((_key, personaData) => {
   transcript.innerHTML = "";
   player.stop();
   avatar?.setState("idle");
+  document.getElementById("persona-suggestion")?.classList.add("hidden");
   fetch(`${BACKEND}/history`, { method: "DELETE" }).catch(() => {});
   setStatus("idle");
 });
+
+// ── Accent-driven persona suggestion chip ──────────────────────────────────
+let _suggestionTimer = null;
+window.showPersonaSuggestion = function showPersonaSuggestion(suggestion) {
+  const box = document.getElementById("persona-suggestion");
+  if (!box || !suggestion) return;
+  const name = PersonaPicker.name(suggestion.persona);
+
+  box.innerHTML = "";
+  const label = document.createElement("span");
+  label.textContent = `${suggestion.reason} — try ${name}?`;
+
+  const apply = document.createElement("button");
+  apply.type = "button";
+  apply.className = "suggestion-apply";
+  apply.textContent = "Switch";
+  apply.addEventListener("click", () => {
+    PersonaPicker.select(suggestion.persona);
+    hide();
+  });
+
+  const dismiss = document.createElement("button");
+  dismiss.type = "button";
+  dismiss.className = "suggestion-dismiss";
+  dismiss.textContent = "✕";
+  dismiss.title = "Dismiss";
+  dismiss.addEventListener("click", hide);
+
+  box.append(label, apply, dismiss);
+  box.classList.remove("hidden");
+
+  clearTimeout(_suggestionTimer);
+  _suggestionTimer = setTimeout(hide, 10000);
+
+  function hide() {
+    clearTimeout(_suggestionTimer);
+    box.classList.add("hidden");
+  }
+};
 
 let _latencyTimer = null;
 function showLatency(ms) {
