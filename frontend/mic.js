@@ -120,6 +120,7 @@ async function transcribeAndSend(blob, mimeType) {
   const ext      = mimeType.split(";")[0].split("/")[1] || "webm";
   const formData = new FormData();
   formData.append("audio", blob, `recording.${ext}`);
+  formData.append("persona", PersonaPicker.current());
 
   setMicState("transcribing");
   let transcript = "";
@@ -128,6 +129,9 @@ async function transcribeAndSend(blob, mimeType) {
     if (!res.ok) throw new Error(`STT HTTP ${res.status}`);
     const data = await res.json();
     transcript = data.transcript?.trim() ?? "";
+    if (data.suggestion && window.showPersonaSuggestion) {
+      window.showPersonaSuggestion(data.suggestion);
+    }
   } catch (err) {
     console.error("STT error:", err);
     setMicState("idle");
