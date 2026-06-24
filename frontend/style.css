@@ -176,6 +176,19 @@ header h1 {
   50%       { opacity: 0; }
 }
 
+.safety-notice {
+  align-self: stretch;
+  background: #2a1a1a;
+  border: 1px solid #7a3b3b;
+  border-left: 3px solid #e57373;
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: #f0d4d4;
+  white-space: pre-wrap;
+}
+
 #chat-form {
   display: flex;
   gap: 0.5rem;
