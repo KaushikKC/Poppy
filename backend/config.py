@@ -9,6 +9,22 @@ SYSTEM_PROMPT = (
     "Speak naturally, as you would in a real conversation."
 )
 
+# Emotional-support framing — appended to every persona's system prompt.
+SAFETY_ADDENDUM = (
+    " Be emotionally supportive: listen, validate the user's feelings, and never "
+    "judge or dismiss them. Do not give medical, legal, or crisis instructions. "
+    "If the user seems to be struggling, gently encourage them to reach out to "
+    "someone they trust or a professional."
+)
+
+# Stronger guidance injected only when the safety layer flags acute distress.
+CRISIS_ADDENDUM = (
+    " The user may be in serious emotional distress. Respond with warmth and calm. "
+    "Acknowledge their pain without minimizing it, do not lecture, and gently "
+    "encourage them to contact a crisis line or someone they trust. Keep your "
+    "reply short, caring, and human. Never provide any means or methods of self-harm."
+)
+
 WHISPER_MODEL = "small"
 WHISPER_DEVICE = "cpu"
 WHISPER_COMPUTE = "int8"
