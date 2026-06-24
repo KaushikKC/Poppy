@@ -9,10 +9,18 @@ class Avatar {
     this._t       = 0;
     this._analyser    = null;
     this._analyserBuf = null;
+    this._colors = {
+      face:     "#18112e",
+      gradient: "#2d2248",
+      eyes:     "#9b8ff5",
+      outline:  "#7c6ef0",
+      glow:     "124,110,240",
+    };
     this._loop();
   }
 
-  setState(s)       { this._state = s; }
+  setState(s)  { this._state = s; }
+  setColors(c) { Object.assign(this._colors, c); }
   setAnalyser(node) {
     this._analyser    = node;
     this._analyserBuf = new Uint8Array(node.frequencyBinCount);
@@ -53,23 +61,25 @@ class Avatar {
 
     ctx.clearRect(0, 0, W, H);
 
+    const { face, gradient, eyes, outline, glow } = this._colors;
+
     // speaking glow
     if (this._state === "speaking" && this._mouth > 0.05) {
       const g = ctx.createRadialGradient(cx, cy, R * 0.85, cx, cy, R * 1.35);
-      g.addColorStop(0, `rgba(124,110,240,${0.12 * this._mouth})`);
-      g.addColorStop(1, "rgba(124,110,240,0)");
+      g.addColorStop(0, `rgba(${glow},${0.12 * this._mouth})`);
+      g.addColorStop(1, `rgba(${glow},0)`);
       ctx.beginPath(); ctx.arc(cx, cy, R * 1.35, 0, Math.PI * 2);
       ctx.fillStyle = g; ctx.fill();
     }
 
     // face
     const fg = ctx.createRadialGradient(cx, cy - R * 0.15, R * 0.08, cx, cy, R);
-    fg.addColorStop(0, "#2d2248");
+    fg.addColorStop(0, gradient);
     fg.addColorStop(1, "#13102000");
     ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
-    ctx.fillStyle = "#18112e"; ctx.fill();
+    ctx.fillStyle = face; ctx.fill();
     ctx.fillStyle = fg; ctx.fill();
-    ctx.strokeStyle = "#7c6ef0"; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.strokeStyle = outline; ctx.lineWidth = 1.5; ctx.stroke();
 
     // eyes
     const eyeY = cy - R * 0.2;
@@ -80,7 +90,7 @@ class Avatar {
     for (const ex of [cx - eyeX, cx + eyeX]) {
       ctx.beginPath();
       ctx.ellipse(ex, eyeY, eRx, eRy, 0, 0, Math.PI * 2);
-      ctx.fillStyle = "#9b8ff5"; ctx.fill();
+      ctx.fillStyle = eyes; ctx.fill();
 
       if (this._eyeOpen > 0.15) {
         ctx.beginPath();
@@ -97,7 +107,7 @@ class Avatar {
     ctx.beginPath();
     ctx.moveTo(cx - R * 0.045, cy + R * 0.05);
     ctx.quadraticCurveTo(cx, cy + R * 0.17, cx + R * 0.045, cy + R * 0.05);
-    ctx.strokeStyle = "rgba(124,110,240,0.28)";
+    ctx.strokeStyle = `rgba(${glow},0.28)`;
     ctx.lineWidth = 1.4; ctx.lineCap = "round"; ctx.stroke();
 
     // mouth
@@ -109,12 +119,12 @@ class Avatar {
       ctx.beginPath();
       ctx.moveTo(cx - mW * 0.58, mY);
       ctx.quadraticCurveTo(cx, mY + R * 0.07, cx + mW * 0.58, mY);
-      ctx.strokeStyle = "#7c6ef0"; ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.stroke();
+      ctx.strokeStyle = outline; ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.stroke();
     } else {
       ctx.beginPath();
       ctx.ellipse(cx, mY, mW, mH, 0, 0, Math.PI * 2);
       ctx.fillStyle = "#06040e"; ctx.fill();
-      ctx.strokeStyle = "#7c6ef0"; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.strokeStyle = outline; ctx.lineWidth = 1.5; ctx.stroke();
 
       if (this._mouth > 0.22) {
         ctx.save();
