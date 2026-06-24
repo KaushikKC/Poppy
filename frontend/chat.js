@@ -11,6 +11,17 @@ const statusDot  = document.getElementById("status-dot");
 const player = new AudioPlayer();
 const avatar = document.getElementById("avatar-canvas") ? new Avatar("avatar-canvas") : null;
 
+// Initialize persona picker; on change, update avatar colors and reset history
+PersonaPicker.init();
+PersonaPicker.onChange((_key, personaData) => {
+  if (avatar) avatar.setColors(personaData.avatar);
+  transcript.innerHTML = "";
+  player.stop();
+  avatar?.setState("idle");
+  fetch(`${BACKEND}/history`, { method: "DELETE" }).catch(() => {});
+  setStatus("idle");
+});
+
 let _latencyTimer = null;
 function showLatency(ms) {
   const badge = document.getElementById("latency-badge");
@@ -73,7 +84,7 @@ window.sendMessage = async function sendMessage(text) {
   });
 
   ws.onopen = () => {
-    ws.send(JSON.stringify({ type: "chat", text }));
+    ws.send(JSON.stringify({ type: "chat", text, persona: PersonaPicker.current() }));
   };
 
   ws.onmessage = async (event) => {
