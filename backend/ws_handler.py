@@ -4,8 +4,10 @@ from fastapi import WebSocket, WebSocketDisconnect
 from ollama_client import stream_reply
 from tts import synthesize_to_wav_bytes
 from phrase_chunker import PhraseChunker
-from config import MAX_HISTORY_TURNS
+from config import MAX_HISTORY_TURNS, SAFETY_ADDENDUM, CRISIS_ADDENDUM
 import personas as persona_store
+import safety
+import memory_store
 import db
 
 conversation_history: list[dict] = []
@@ -41,8 +43,16 @@ async def handle_chat(ws: WebSocket):
                 continue
 
             persona = persona_store.get(msg.get("persona", ""))
-            system_prompt = persona["system_prompt"]
-            voice_path    = persona["voice_path"]
+            voice_path = persona["voice_path"]
+
+            # Emotional-support framing: base persona + supportive addendum +
+            # remembered facts, with a stronger addendum if distress is detected.
+            risk = safety.check(user_text)
+            memory_block = await asyncio.to_thread(memory_store.as_prompt_block)
+            system_prompt = persona["system_prompt"] + SAFETY_ADDENDUM + memory_block
+            if risk["crisis"]:
+                system_prompt += CRISIS_ADDENDUM
+                await ws.send_json({"type": "safety", "resources": risk["resources"]})
 
             await ws.send_json({"type": "config", "sampleRate": 22050})
 
@@ -81,6 +91,9 @@ async def handle_chat(ws: WebSocket):
                 _db_save(session_id, "user", user_text),
                 _db_save(session_id, "assistant", assistant_text),
             )
+
+            # Capture any durable facts from this turn into encrypted memory.
+            await asyncio.to_thread(memory_store.extract_and_store, user_text)
 
             await ws.send_json({"type": "done", "sessionId": session_id})
 
