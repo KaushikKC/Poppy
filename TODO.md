@@ -5,7 +5,7 @@
 - [x] Install Ollama (v0.30.8)
 - [x] Pull LLM model: `llama3.1:8b-instruct-q4_K_M` (4.9 GB)
 - [x] Install Python deps: fastapi 0.115, uvicorn 0.41, websockets 15, faster-whisper 1.2.1, piper-tts 1.4.2
-- [x] Download Piper voice model: `en_US-lessac-medium` → `models/piper/`
+- [x] Download Piper voice models → `models/piper/`: `en_US-lessac-medium` (Friendly), `en_US-ryan-high` (Professional), `en_US-amy-medium` (Playful)
 - [x] Download Whisper `small` model (cached via faster-whisper)
 - [x] Project structure created: `backend/`, `frontend/`, `models/piper/`
 
