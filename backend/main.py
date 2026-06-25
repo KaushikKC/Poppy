@@ -9,6 +9,9 @@ from ws_handler import handle_chat, clear_history as ws_clear_history
 import personas as persona_store
 import accent
 import memory_store
+import audio_utils
+import accent_detect
+import emotion_detect
 import db
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
@@ -35,15 +38,24 @@ async def speech_to_text(
     data = await audio.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty audio file")
-    suffix = ".webm"
-    if audio.content_type and "/" in audio.content_type:
-        ext = audio.content_type.split("/")[-1].split(";")[0]
-        suffix = f".{ext}"
-    transcript = transcribe(data, suffix=suffix)
+
+    # Decode once, then transcribe and detect accent + emotion from the same audio.
+    pcm = await asyncio.to_thread(audio_utils.decode_16k_mono, data)
+    transcript = await asyncio.to_thread(transcribe, pcm)
+    detected_accent = await asyncio.to_thread(accent_detect.tracker.update, pcm)
+    emotion, _ = await asyncio.to_thread(emotion_detect.detect, pcm)
+
     if not transcript:
-        return JSONResponse({"transcript": "", "empty": True})
+        return JSONResponse(
+            {"transcript": "", "empty": True, "accent": detected_accent, "emotion": emotion}
+        )
     suggestion = accent.observe(transcript, persona)
-    return {"transcript": transcript, "suggestion": suggestion}
+    return {
+        "transcript": transcript,
+        "accent": detected_accent,
+        "emotion": emotion,
+        "suggestion": suggestion,
+    }
 
 
 @app.websocket("/ws/chat")
