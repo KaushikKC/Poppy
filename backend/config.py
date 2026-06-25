@@ -29,8 +29,10 @@ WHISPER_MODEL = "small"
 WHISPER_DEVICE = "cpu"
 WHISPER_COMPUTE = "int8"
 
-PIPER_MODEL_PATH = "../models/piper/en_US-lessac-medium.onnx"
-PIPER_SAMPLE_RATE = 22050
+# Multi-accent TTS (Kokoro). The companion replies in the speaker's detected
+# accent; voices are selected in accent.py and synthesized in tts.py.
+KOKORO_REPO_ID = "hexgrad/Kokoro-82M"
+KOKORO_SAMPLE_RATE = 24000
 
 TTS_CHUNK_MIN_CHARS = 15
 TTS_SENTENCE_BREAKS = frozenset(".!?")
