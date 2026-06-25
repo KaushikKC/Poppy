@@ -1,5 +1,4 @@
-import tempfile
-import os
+import numpy as np
 from faster_whisper import WhisperModel
 from config import WHISPER_MODEL, WHISPER_DEVICE, WHISPER_COMPUTE
 
@@ -13,13 +12,10 @@ def _get_model() -> WhisperModel:
     return _model
 
 
-def transcribe(audio_bytes: bytes, suffix: str = ".webm") -> str:
+def transcribe(pcm: np.ndarray) -> str:
+    """Transcribe 16 kHz mono float32 audio (already decoded by audio_utils)."""
+    if pcm is None or len(pcm) == 0:
+        return ""
     model = _get_model()
-    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
-        f.write(audio_bytes)
-        tmp_path = f.name
-    try:
-        segments, _ = model.transcribe(tmp_path, beam_size=5, language="en")
-        return " ".join(s.text.strip() for s in segments).strip()
-    finally:
-        os.unlink(tmp_path)
+    segments, _ = model.transcribe(pcm, beam_size=5, language="en")
+    return " ".join(s.text.strip() for s in segments).strip()
