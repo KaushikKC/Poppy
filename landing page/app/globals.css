@@ -1,0 +1,125 @@
+@import "tailwindcss";
+
+@theme {
+  --color-skywash: #97c4e8;
+  --color-poppy: #e92832;
+  --color-leaf: #173f16;
+  --color-meadow: #6fa95a;
+  --color-cream: #fff8ea;
+  --color-clay: #f1c7a6;
+  --color-ink: #10210f;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui;
+  --font-display: var(--font-instrument-serif), Georgia, serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
+
+  --animate-mode-drift: mode-drift 18s linear infinite;
+  --animate-privacy-spin: privacy-spin 18s linear infinite;
+}
+
+/*
+ * Only irreducible globals live here. Everything else (layout, spacing,
+ * typography, color) is expressed as Tailwind utilities inline in the JSX.
+ * These cannot be utilities because:
+ *  - the runtime CSS variables drive the canvas (read via getComputedStyle)
+ *    and reshade the UI per tone via the body[data-tone] overrides;
+ *  - ::selection / :focus-visible are global pseudo-elements;
+ *  - keyframes + reduced-motion are global at-rules.
+ */
+@layer base {
+  :root {
+    --sky: #97c4e8;
+    --sky-soft: #dcecfb;
+    --poppy: #e92832;
+    --poppy-dark: #98101a;
+    --leaf: #143c16;
+    --meadow: #74ad5f;
+    --field-deep: #4f8a48;
+    --cream: #fff8ea;
+    --clay: #f1c7a6;
+    --ink: #071207;
+    --night: #050706;
+    --line: rgba(20, 60, 22, 0.18);
+    --panel: rgba(255, 248, 234, 0.88);
+    --section-pad: clamp(3.25rem, 7vh, 5.25rem);
+    --header-space: 88px;
+  }
+
+  body[data-tone="bright"] {
+    --sky: #8fd9ff;
+    --sky-soft: #edfbff;
+    --poppy: #ff303b;
+    --leaf: #14501c;
+    --meadow: #8cc77a;
+    --field-deep: #5f9e57;
+    --panel: rgba(255, 250, 236, 0.92);
+  }
+
+  body[data-tone="deep"] {
+    --sky: #4f9ad8;
+    --sky-soft: #bcdfff;
+    --poppy: #c8192b;
+    --leaf: #0d2b12;
+    --meadow: #5e9a55;
+    --field-deep: #3f7a3c;
+    --panel: rgba(246, 238, 218, 0.92);
+  }
+
+  html {
+    height: 100%;
+    overflow: hidden;
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    height: 100%;
+    overflow: hidden;
+    background: var(--sky);
+    color: var(--ink);
+    font-family: var(--font-sans);
+  }
+
+  ::selection {
+    background: var(--poppy);
+    color: var(--cream);
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--poppy);
+    outline-offset: 4px;
+  }
+
+  @media (max-width: 620px) {
+    :root {
+      --header-space: 68px;
+    }
+  }
+}
+
+@keyframes mode-drift {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes privacy-spin {
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

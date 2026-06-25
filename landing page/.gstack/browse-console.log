@@ -1,0 +1,36 @@
+[2026-06-18T18:49:57.612Z] [error] Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+[2026-06-18T18:49:59.286Z] [error] eapps.Platform throws: "Widget "d02f93f0-3a9c-44c1-8dca-340174829834" can`t be initialized because WIDGET_NOT_FOUND" with 
+	 -> JSHandle@node
+[2026-06-18T18:49:59.287Z] [warning] Hotjar not launching due to suspicious userAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36
+[2026-06-18T18:49:59.305Z] [error] Failed to load resource: the server responded with a status of 500 ()
+[2026-06-18T18:49:59.307Z] [info] [Default.com] Powered by Default.com
+[2026-06-18T18:50:01.685Z] [warning] No available adapters.
+[2026-06-18T18:50:01.685Z] [warning] No available adapters.
+[2026-06-18T18:50:08.084Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"LoadModule","detail":{"module":"launcher"}},"timestamp":"1781808608078"}
+[2026-06-18T18:50:08.084Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"LoadModule","detail":{"module":"launcher"}},"timestamp":"1781808608078-"}
+[2026-06-18T18:50:08.084Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"LoadModule","detail":{"module":"launcher"}},"timestamp":"1781808608079"}
+[2026-06-18T18:50:08.084Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"LoadModule","detail":{"module":"launcher"}},"timestamp":"1781808608079-"}
+[2026-06-18T18:50:08.109Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"LoadModule","detail":{"module":"compliance"}},"timestamp":"1781808608100"}
+[2026-06-18T18:50:08.109Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"LoadModule","detail":{"module":"compliance"}},"timestamp":"1781808608100-"}
+[2026-06-18T18:50:08.109Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"LoadModule","detail":{"module":"compliance"}},"timestamp":"1781808608100--"}
+[2026-06-18T18:50:08.109Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"LoadModule","detail":{"module":"compliance"}},"timestamp":"1781808608100---"}
+[2026-06-18T18:50:08.109Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"BeforeModuleActivate","detail":{"module":"launcher"}},"timestamp":"1781808608101"}
+[2026-06-18T18:50:08.109Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"BeforeModuleActivate","detail":{"module":"launcher"}},"timestamp":"1781808608101-"}
+[2026-06-18T18:50:08.109Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"BeforeModuleActivate","detail":{"module":"launcher"}},"timestamp":"1781808608101--"}
+[2026-06-18T18:50:08.109Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"BeforeModuleActivate","detail":{"module":"launcher"}},"timestamp":"1781808608101---"}
+[2026-06-18T18:50:08.109Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"AfterModuleActivate","detail":{"module":"launcher"}},"timestamp":"1781808608101--------"}
+[2026-06-18T18:50:08.110Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"AfterModuleActivate","detail":{"module":"launcher"}},"timestamp":"1781808608101---------"}
+[2026-06-18T18:50:08.110Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"AfterModuleActivate","detail":{"module":"launcher"}},"timestamp":"1781808608101----------"}
+[2026-06-18T18:50:08.110Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"AfterModuleActivate","detail":{"module":"launcher"}},"timestamp":"1781808608101-----------"}
+[2026-06-18T18:50:08.110Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"BeforeModuleActivate","detail":{"module":"launcher"}},"timestamp":"1781808608101----------------"}
+[2026-06-18T18:50:08.110Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"BeforeModuleActivate","detail":{"module":"launcher"}},"timestamp":"1781808608101-----------------"}
+[2026-06-18T18:50:08.110Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"BeforeModuleActivate","detail":{"module":"launcher"}},"timestamp":"1781808608101------------------"}
+[2026-06-18T18:50:08.110Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"BeforeModuleActivate","detail":{"module":"launcher"}},"timestamp":"1781808608101-------------------"}
+[2026-06-18T18:50:08.110Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"AfterModuleActivate","detail":{"module":"launcher"}},"timestamp":"1781808608101------------------------"}
+[2026-06-18T18:50:08.110Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"AfterModuleActivate","detail":{"module":"launcher"}},"timestamp":"1781808608101-------------------------"}
+[2026-06-18T18:50:08.110Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"AfterModuleActivate","detail":{"module":"launcher"}},"timestamp":"1781808608101--------------------------"}
+[2026-06-18T18:50:08.110Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"AfterModuleActivate","detail":{"module":"launcher"}},"timestamp":"1781808608101---------------------------"}
+[2026-06-18T18:50:08.110Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"AudioEyeReady","detail":{}},"timestamp":"1781808608105"}
+[2026-06-18T18:50:08.110Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"AudioEyeReady","detail":{}},"timestamp":"1781808608105-"}
+[2026-06-18T18:50:08.111Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"AudioEyeReady","detail":{}},"timestamp":"1781808608105--"}
+[2026-06-18T18:50:08.111Z] [warning] Unknown event type: {"object":"AudioEye","method":"relayAppEvent","detail":{"event":"AudioEyeReady","detail":{}},"timestamp":"1781808608105---"}
