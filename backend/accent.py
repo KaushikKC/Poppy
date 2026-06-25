@@ -105,3 +105,42 @@ def observe(text: str, current_persona: str) -> dict | None:
 
 def reset() -> None:
     _classifier.reset()
+
+# ---------------------------------------------------------------------------
+# Spoken-reply accent → TTS voice mapping
+#
+# Separate concern from the persona suggester above: the companion replies in
+# the *same accent* the user speaks in. This section owns the accent label →
+# concrete Kokoro voice mapping plus a detect_accent() hook. tts.py and
+# ws_handler.py route through here, so a real classifier can be dropped into
+# detect_accent() later without touching the TTS or WebSocket layers.
+# ---------------------------------------------------------------------------
+
+# accent label -> (kokoro lang_code, kokoro voice)
+#   a = American English, b = British English, h = Hindi (Indian)
+ACCENT_VOICES: dict[str, tuple[str, str]] = {
+    "american": ("a", "af_heart"),
+    "british": ("b", "bf_emma"),
+    "indian": ("h", "hf_alpha"),
+}
+
+DEFAULT_ACCENT = "indian"
+
+
+def normalize(accent: str | None) -> str:
+    """Coerce an arbitrary accent label to a supported one."""
+    return accent if accent in ACCENT_VOICES else DEFAULT_ACCENT
+
+
+def voice_for(accent: str | None) -> tuple[str, str]:
+    """Return (lang_code, voice) for the given accent label."""
+    return ACCENT_VOICES[normalize(accent)]
+
+
+def detect_accent(audio_bytes: bytes | None = None, text: str | None = None) -> str:
+    """Pick the speaker's accent. STUB — always returns DEFAULT_ACCENT for now.
+
+    Later this will classify "american" / "british" / "indian" from the user's
+    audio (or transcript). Keep the signature so callers don't change.
+    """
+    return DEFAULT_ACCENT
