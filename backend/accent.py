@@ -126,6 +126,17 @@ ACCENT_VOICES: dict[str, tuple[str, str]] = {
 
 DEFAULT_ACCENT = "indian"
 
+# The detector (dima806/english_accents_classification) knows more accents than
+# we have voices for. Fold each raw label into the nearest of our three:
+#   rhotic North-American -> american; non-rhotic -> british; indian -> indian.
+RAW_TO_OURS: dict[str, str] = {
+    "us": "american",
+    "canada": "american",
+    "england": "british",
+    "australia": "british",
+    "indian": "indian",
+}
+
 
 def normalize(accent: str | None) -> str:
     """Coerce an arbitrary accent label to a supported one."""
@@ -137,10 +148,6 @@ def voice_for(accent: str | None) -> tuple[str, str]:
     return ACCENT_VOICES[normalize(accent)]
 
 
-def detect_accent(audio_bytes: bytes | None = None, text: str | None = None) -> str:
-    """Pick the speaker's accent. STUB — always returns DEFAULT_ACCENT for now.
-
-    Later this will classify "american" / "british" / "indian" from the user's
-    audio (or transcript). Keep the signature so callers don't change.
-    """
-    return DEFAULT_ACCENT
+def map_raw(label: str) -> str:
+    """Map a detector label (us/england/indian/...) to one of our accents."""
+    return RAW_TO_OURS.get(label.lower(), DEFAULT_ACCENT)
