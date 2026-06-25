@@ -77,6 +77,25 @@ function setStatus(state) {
   statusDot.title = state;
 }
 
+// Accent detected from the user's voice; sent with each message so the reply
+// is spoken in that accent. Updated by mic.js after each transcription.
+window._accent = window._accent || null;
+window.setAccent = function setAccent(accent) {
+  window._accent = accent;
+  const badge = document.getElementById("accent-badge");
+  if (badge) badge.textContent = accent ? `🗣 ${accent}` : "";
+};
+
+// Emotion detected from the voice; shapes the reply's tone. Momentary, so it's
+// consumed after one message (a later typed message has no emotion = neutral).
+const EMOJI = { happy: "😊", sad: "😔", angry: "😠", neutral: "😐" };
+window._emotion = window._emotion || null;
+window.setEmotion = function setEmotion(emotion) {
+  window._emotion = emotion && emotion !== "neutral" ? emotion : null;
+  const badge = document.getElementById("emotion-badge");
+  if (badge) badge.textContent = emotion ? `${EMOJI[emotion] ?? ""} ${emotion}` : "";
+};
+
 function addBubble(role, text = "") {
   const div = document.createElement("div");
   div.className = `bubble ${role}`;
@@ -124,7 +143,14 @@ window.sendMessage = async function sendMessage(text) {
   });
 
   ws.onopen = () => {
-    ws.send(JSON.stringify({ type: "chat", text, persona: PersonaPicker.current() }));
+    ws.send(JSON.stringify({
+      type: "chat",
+      text,
+      persona: PersonaPicker.current(),
+      accent: window._accent || undefined,
+      emotion: window._emotion || undefined,
+    }));
+    window._emotion = null; // emotion is momentary — consume it for this turn
   };
 
   ws.onmessage = async (event) => {

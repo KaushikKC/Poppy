@@ -132,6 +132,8 @@ async function transcribeAndSend(blob, mimeType) {
     if (data.suggestion && window.showPersonaSuggestion) {
       window.showPersonaSuggestion(data.suggestion);
     }
+    if (data.accent) window.setAccent?.(data.accent);    // identity, sticky
+    window.setEmotion?.(data.emotion || "neutral");      // momentary, this clip
   } catch (err) {
     console.error("STT error:", err);
     setMicState("idle");
