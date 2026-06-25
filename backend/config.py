@@ -34,6 +34,21 @@ WHISPER_COMPUTE = "int8"
 KOKORO_REPO_ID = "hexgrad/Kokoro-82M"
 KOKORO_SAMPLE_RATE = 24000
 
+# Accent detection from the user's voice (accent_detect.py). A wav2vec2
+# classifier runs on each uploaded clip; results are smoothed (sticky) so the
+# reply accent stays stable across a session.
+ACCENT_MODEL_REPO = "dima806/english_accents_classification"
+ACCENT_MIN_CONFIDENCE = 0.40   # ignore readings below this confidence
+ACCENT_HISTORY = 5             # rolling window for majority vote
+ACCENT_MIN_SECONDS = 0.4       # clips shorter than this are too short to trust
+
+# Emotion detection from the user's voice (emotion_detect.py). Unlike accent
+# (a stable identity), emotion is momentary — detected per utterance, no
+# smoothing — and shapes the reply's tone via the system prompt.
+EMOTION_MODEL_REPO = "superb/wav2vec2-base-superb-er"  # labels: neu/hap/ang/sad
+EMOTION_MIN_CONFIDENCE = 0.50  # below this, treat as neutral
+EMOTION_MIN_SECONDS = 0.6      # clips shorter than this are too short to trust
+
 TTS_CHUNK_MIN_CHARS = 15
 TTS_SENTENCE_BREAKS = frozenset(".!?")
 TTS_SOFT_BREAKS = frozenset(",;:")
