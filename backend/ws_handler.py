@@ -4,8 +4,9 @@ from fastapi import WebSocket, WebSocketDisconnect
 from ollama_client import stream_reply
 from tts import synthesize_to_wav_bytes
 from phrase_chunker import PhraseChunker
-from config import MAX_HISTORY_TURNS, SAFETY_ADDENDUM, CRISIS_ADDENDUM
+from config import MAX_HISTORY_TURNS, KOKORO_SAMPLE_RATE, SAFETY_ADDENDUM, CRISIS_ADDENDUM
 import personas as persona_store
+import accent as accent_mod
 import safety
 import memory_store
 import db
@@ -13,8 +14,8 @@ import db
 conversation_history: list[dict] = []
 
 
-async def _synthesize(text: str, voice_path: str | None) -> bytes:
-    return await asyncio.to_thread(synthesize_to_wav_bytes, text, voice_path)
+async def _synthesize(text: str, accent: str) -> bytes:
+    return await asyncio.to_thread(synthesize_to_wav_bytes, text, accent)
 
 
 async def _db_save(session_id: str, role: str, content: str) -> None:
@@ -43,8 +44,6 @@ async def handle_chat(ws: WebSocket):
                 continue
 
             persona = persona_store.get(msg.get("persona", ""))
-            voice_path = persona["voice_path"]
-
             # Emotional-support framing: base persona + supportive addendum +
             # remembered facts, with a stronger addendum if distress is detected.
             risk = safety.check(user_text)
@@ -54,13 +53,19 @@ async def handle_chat(ws: WebSocket):
                 system_prompt += CRISIS_ADDENDUM
                 await ws.send_json({"type": "safety", "resources": risk["resources"]})
 
-            await ws.send_json({"type": "config", "sampleRate": 22050})
+            # Reply in the user's accent. Use the client-supplied accent if any,
+            # otherwise fall back to the (currently stubbed) detector.
+            reply_accent = accent_mod.normalize(
+                msg.get("accent") or accent_mod.detect_accent(text=user_text)
+            )
+
+            await ws.send_json({"type": "config", "sampleRate": KOKORO_SAMPLE_RATE})
 
             chunker = PhraseChunker()
             full_reply: list[str] = []
 
             async def tts_and_send(phrase: str):
-                audio = await _synthesize(phrase, voice_path)
+                audio = await _synthesize(phrase, reply_accent)
                 await ws.send_bytes(audio)
 
             tts_tasks: list[asyncio.Task] = []
