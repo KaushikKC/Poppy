@@ -2,7 +2,7 @@ fastapi==0.115.0
 uvicorn==0.41.0
 websockets==15.0.1
 faster-whisper==1.2.1
-piper-tts==1.4.2
+kokoro>=0.9.4  # multi-accent TTS; also needs system espeak-ng (brew install espeak-ng)
 httpx==0.28.1
 python-multipart==0.0.20
 cryptography==44.0.0
