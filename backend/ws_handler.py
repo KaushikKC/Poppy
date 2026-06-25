@@ -9,6 +9,8 @@ import personas as persona_store
 import accent as accent_mod
 import safety
 import memory_store
+import accent_detect
+import emotion as emotion_mod
 import db
 
 conversation_history: list[dict] = []
@@ -53,10 +55,16 @@ async def handle_chat(ws: WebSocket):
                 system_prompt += CRISIS_ADDENDUM
                 await ws.send_json({"type": "safety", "resources": risk["resources"]})
 
-            # Reply in the user's accent. Use the client-supplied accent if any,
-            # otherwise fall back to the (currently stubbed) detector.
+            # Adapt tone to how the user sounds this turn (momentary; neutral if
+            # absent, e.g. typed messages).
+            tone = emotion_mod.tone_for(msg.get("emotion"))
+            if tone:
+                system_prompt = f"{system_prompt} {tone}"
+
+            # Reply in the user's accent: use the client-supplied accent if any,
+            # otherwise the latest accent detected from their voice (sticky).
             reply_accent = accent_mod.normalize(
-                msg.get("accent") or accent_mod.detect_accent(text=user_text)
+                msg.get("accent") or accent_detect.tracker.current
             )
 
             await ws.send_json({"type": "config", "sampleRate": KOKORO_SAMPLE_RATE})
