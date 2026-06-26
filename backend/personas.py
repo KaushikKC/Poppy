@@ -1,7 +1,3 @@
-from pathlib import Path
-
-_ROOT = Path(__file__).parent.parent
-
 PERSONAS: dict[str, dict] = {
     "friendly": {
         "name": "Friendly",
@@ -11,7 +7,6 @@ PERSONAS: dict[str, dict] = {
             "Keep replies concise — two to four sentences unless the user asks for more. "
             "Speak naturally, as you would in a real conversation."
         ),
-        "voice_path": str(_ROOT / "models/piper/en_US-lessac-medium.onnx"),
         "avatar": {
             "face": "#18112e",
             "gradient": "#2d2248",
@@ -28,7 +23,6 @@ PERSONAS: dict[str, dict] = {
             "Use clear, direct language. Answer in two to three sentences unless "
             "more detail is explicitly requested. No filler phrases."
         ),
-        "voice_path": str(_ROOT / "models/piper/en_US-ryan-high.onnx"),
         "avatar": {
             "face": "#0d1f2d",
             "gradient": "#1a3a4a",
@@ -45,7 +39,6 @@ PERSONAS: dict[str, dict] = {
             "Keep it fun and light — two to three sentences. "
             "Feel free to use humor, but keep it friendly and appropriate."
         ),
-        "voice_path": str(_ROOT / "models/piper/en_US-amy-medium.onnx"),
         "avatar": {
             "face": "#2d0a1a",
             "gradient": "#4a1a2a",
