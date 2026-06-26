@@ -96,6 +96,39 @@ window.setEmotion = function setEmotion(emotion) {
   if (badge) badge.textContent = emotion ? `${EMOJI[emotion] ?? ""} ${emotion}` : "";
 };
 
+// ── Barge-in ────────────────────────────────────────────────────────────────
+// The user can interrupt the assistant mid-reply: stop the audio, abort the
+// in-flight turn, and let the new utterance take over. mic.js calls this on
+// speech onset (VAD) or when push-to-talk starts.
+let currentWs = null;
+let currentReplyBubble = null;
+window._replyActive = false;
+
+function endReply(ws) {
+  if (ws && ws !== currentWs) return; // a newer turn already took over
+  window._replyActive = false;
+  currentWs = null;
+  currentReplyBubble = null;
+}
+
+window.interruptReply = function interruptReply() {
+  if (!window._replyActive) return false;
+  window._replyActive = false;
+  try { player.stop(); } catch {}
+  try { currentWs && currentWs.close(); } catch {}
+  if (currentReplyBubble && currentReplyBubble.classList.contains("streaming")) {
+    currentReplyBubble.classList.remove("streaming");
+    currentReplyBubble.classList.add("interrupted");
+    if (!currentReplyBubble.textContent) currentReplyBubble.textContent = "…";
+  }
+  currentWs = null;
+  currentReplyBubble = null;
+  setInputLocked(false);
+  setStatus("idle");
+  avatar?.setState("idle");
+  return true;
+};
+
 function addBubble(role, text = "") {
   const div = document.createElement("div");
   div.className = `bubble ${role}`;
@@ -122,6 +155,9 @@ window.sendMessage = async function sendMessage(text) {
 
   const ws = new WebSocket(`${WS_BACKEND}/ws/chat`);
   ws.binaryType = "arraybuffer";
+  currentWs = ws;
+  currentReplyBubble = replyBubble;
+  window._replyActive = true;
 
   let accumulated = "";
 
@@ -181,6 +217,7 @@ window.sendMessage = async function sendMessage(text) {
     } else if (msg.type === "done") {
       replyBubble.classList.remove("streaming");
       ws.close();
+      endReply(ws);
       setInputLocked(false);
       input.focus();
       // fallback: if no audio was generated, reset avatar immediately
@@ -190,6 +227,7 @@ window.sendMessage = async function sendMessage(text) {
       replyBubble.textContent = `Error: ${msg.message}`;
       replyBubble.classList.remove("streaming");
       ws.close();
+      endReply(ws);
       setInputLocked(false);
       setStatus("idle");
       input.focus();
@@ -197,8 +235,10 @@ window.sendMessage = async function sendMessage(text) {
   };
 
   ws.onerror = () => {
+    if (ws !== currentWs) return; // interrupted or superseded turn — ignore
     replyBubble.textContent = "Connection error — is the backend running?";
     replyBubble.classList.remove("streaming");
+    endReply(ws);
     setInputLocked(false);
     setStatus("idle");
   };
