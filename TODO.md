@@ -103,16 +103,14 @@ in real time. State should be sticky/gradual, not flip per turn.
 - [ ] Define an accent+gender → avatar style map (skin tone / hair / features / accent cue). Decide: procedural variations vs per-identity image/SVG assets.
 - [ ] Wire `setAccent`/new `setGender` to call `avatar.setIdentity(accent, gender)`; keep persona color as a secondary layer.
 
-### Gap 3 — Realistic real-time avatar  ⬜ (supersedes deferred M4)
-- [ ] Current avatar is a stylized procedural face with **amplitude-only mouth** (no real lip-sync). Pick a target tier:
-  - Lightweight (fits 16 GB, offline): viseme/phoneme-driven 2D rigged or SVG/Live2D face — real mouth shapes from the TTS phonemes instead of a blob.
-  - Heavy (needs better HW): GAN talking-head (Wav2Lip/SadTalker) — the deferred M4.
-- [ ] If viseme route: emit phoneme timing from Kokoro (or align text) and map phonemes → mouth shapes in `avatar.js`.
+### Gap 3 — Realistic real-time avatar  ⬜ (supersedes deferred M4) — DECISION: lightweight viseme 2D rig
+- [ ] Current avatar is a stylized procedural face with **amplitude-only mouth** (no real lip-sync). Target tier chosen: **lightweight viseme/phoneme-driven 2D rig** (fits 16 GB, offline) — real mouth shapes from the TTS phonemes instead of a blob. (GAN talking-head Wav2Lip/SadTalker remains out of scope — needs better HW.)
+- [ ] Emit phoneme/viseme timing from Kokoro (or align text) and map phonemes → mouth shapes in `avatar.js`.
 
-### Gap 4 — Coherent identity model + cleanup  ⬜
-- [ ] Two unrelated things are both called "accent": `accent.observe()` (persona suggester from **text** register) vs `accent_detect` (real **audio** accent). Rename to disambiguate (e.g. `register_suggester` vs `accent`).
-- [ ] Remove dead code: `accent.detect_accent()` stub (unused — real path is `accent_detect.tracker`); Piper `voice_path` in `personas.py` (Kokoro now picks voice by accent, persona no longer controls voice).
-- [ ] Decide precedence: persona vs detected (accent, gender) when choosing voice/avatar — document it.
+### Gap 4 — Coherent identity model + cleanup  ✅
+- [x] Two things were both called "accent": split the text-register persona suggester into `persona_suggest.py` (`PersonaSuggester`); `accent.py` is now only the spoken-accent → voice map.
+- [x] Remove dead code: `detect_accent()` (already gone; stale comments removed); Piper `voice_path` + dead `_ROOT`/`Path` import in `personas.py`.
+- [x] Precedence documented in `accent.py`: the **detected accent**, not the persona, decides the reply voice; persona only shapes prompt + avatar colors.
 
 ### Gap 5 — Offline packaging & validation  ⬜
 - [ ] Pre-download/bundle the new models for true offline: Kokoro-82M, `dima806/english_accents_classification`, `superb/wav2vec2-base-superb-er` (first run currently needs network).
