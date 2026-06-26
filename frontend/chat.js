@@ -192,6 +192,10 @@ window.sendMessage = async function sendMessage(text) {
   };
 
   ws.onmessage = async (event) => {
+    // Ignore frames from a superseded turn: after a barge-in the old socket may
+    // still deliver buffered audio/tokens, which must not leak into the new turn.
+    if (ws !== currentWs) return;
+
     if (event.data instanceof ArrayBuffer) {
       await player.enqueueWav(event.data.slice(0));
       return;
