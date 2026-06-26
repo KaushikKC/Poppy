@@ -23,6 +23,9 @@ function setMicState(state) {
 }
 
 async function startRecording() {
+  // Push-to-talk also barges in: if the assistant is replying, cut it off.
+  window.interruptReply?.();
+
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
@@ -78,6 +81,8 @@ if (vadBtn) {
       vadInstance = new VAD({ threshold: 0.018, silenceMs: 800, minSpeechMs: 200 });
 
       vadInstance.onStart = () => {
+        // Barge-in: speaking while the assistant talks cuts it off immediately.
+        window.interruptReply?.();
         vadBtn.classList.add("active");
         vadBtn.title = "Listening… speak now";
       };
