@@ -7,12 +7,15 @@ your machine. Built for an Apple Silicon Mac (M3, 16 GB).
 ## Pipeline
 
 ```
-mic → Whisper (STT) → llama3.1 8B via Ollama (LLM) → Piper (TTS) → Web Audio + canvas avatar
+mic → Whisper (STT) ┬→ accent + emotion detection (wav2vec2)
+                    └→ llama3.1 8B via Ollama (LLM) → Kokoro (TTS) → Web Audio + canvas avatar
 ```
 
 Everything runs locally: Ollama serves the LLM, faster-whisper does
-speech-to-text on CPU, Piper synthesizes speech on CPU, and a single FastAPI
-process serves both the API and the web UI.
+speech-to-text, Kokoro synthesizes speech in the speaker's detected accent, two
+small wav2vec2 classifiers read accent and emotion from the voice, and a single
+FastAPI process serves both the API and the web UI. The detected accent picks
+the reply voice; emotion shapes its tone.
 
 ## Prerequisites
 
@@ -22,15 +25,10 @@ process serves both the API and the web UI.
   ```sh
   ollama pull llama3.1:8b-instruct-q4_K_M
   ```
-- **Piper voice models** in `models/piper/` (one per persona):
-  - `en_US-lessac-medium` — Friendly
-  - `en_US-ryan-high` — Professional
-  - `en_US-amy-medium` — Playful
-
-  Download `.onnx` + `.onnx.json` for each from
-  [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US).
-- The Whisper `small` model downloads automatically on first use (cached by
-  faster-whisper). **Run once while online** so it's cached for offline use.
+- **espeak-ng** (Kokoro's grapheme-to-phoneme backend):
+  ```sh
+  brew install espeak-ng
+  ```
 
 ## Setup
 
@@ -38,13 +36,24 @@ process serves both the API and the web UI.
 pip install -r backend/requirements.txt
 ```
 
+Then download the speech models **once while online** (Kokoro TTS, the accent and
+emotion classifiers, and Whisper) so the app can run fully offline afterward:
+
+```sh
+python3 backend/download_models.py
+```
+
+This caches everything in your Hugging Face cache and is safe to re-run. `run.sh`
+verifies they're present before starting (and then runs with no network access).
+
 ## Run
 
 ```sh
 ./run.sh
 ```
 
-This checks that Ollama is up, then launches the app. Open
+This checks that Ollama is up and the speech models are cached, then launches the
+app with network access disabled (`HF_HUB_OFFLINE`). Open
 **http://localhost:8000** in Chrome (mic access requires `http://localhost`, not
 `file://`).
 
@@ -57,10 +66,17 @@ cd backend && python3 -m uvicorn main:app --host 127.0.0.1 --port 8000
 
 - **Type** in the box, or click the **mic** to push-to-talk, or the **circle**
   button to auto-listen (voice activity detection).
-- **Persona pills** (Friendly / Professional / Playful) switch the voice, avatar
-  colors, and conversational tone. Switching clears the current conversation.
+- **Persona pills** (Friendly / Professional / Playful) switch the avatar colors
+  and conversational tone. Switching clears the current conversation. (The reply
+  *voice* is chosen by your detected accent, not the persona.)
+- The companion **detects your accent** (British / American / Indian) from your
+  voice and replies in a matching voice; the choice is sticky across the session.
+  It also reads your **emotion** to shade the reply's tone. Both show as header
+  badges.
 - After a couple of spoken turns, the app may **suggest a persona** that matches
   your speaking style — accept or dismiss the chip.
+- While the assistant is speaking you can **barge in**: click the mic or just
+  start talking (auto-listen) and it cuts off the current reply.
 - The **🧠 button** shows what the companion remembers about you (stored
   encrypted on disk) and lets you forget everything.
 - If a message signals serious distress, a **crisis-resources card** appears and
@@ -79,7 +95,8 @@ and memory (<11 GB). The offline gate below is manual.
 
 The app makes no external network calls — it only talks to local Ollama and
 serves local files. To confirm:
-1. Make sure you've run online once so the Whisper model is cached.
+1. Run `python3 backend/download_models.py` once online so every model is cached
+   (verify with `python3 backend/download_models.py --check`).
 2. Start Ollama and the app.
 3. Turn on **airplane mode** (or disable Wi-Fi/Ethernet).
 4. Reload **http://localhost:8000** and have a full spoken conversation.
@@ -92,7 +109,7 @@ Everything should work with no network.
 |--------|------|---------|
 | GET | `/health` | Liveness check |
 | WS | `/ws/chat` | Full voice loop: tokens + WAV audio chunks |
-| POST | `/stt` | Audio upload → transcript (+ persona suggestion) |
+| POST | `/stt` | Audio upload → transcript + detected accent + emotion (+ persona suggestion) |
 | GET | `/personas` | List personas (name, description, colors) |
 | GET | `/memory` | Facts remembered about the user |
 | DELETE | `/memory` | Forget all remembered facts |
