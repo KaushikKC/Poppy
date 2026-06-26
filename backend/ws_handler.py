@@ -77,38 +77,44 @@ async def handle_chat(ws: WebSocket):
                 await ws.send_bytes(audio)
 
             tts_tasks: list[asyncio.Task] = []
+            try:
+                async for token in stream_reply(conversation_history, user_text, system_prompt):
+                    full_reply.append(token)
+                    await ws.send_json({"type": "token", "text": token})
 
-            async for token in stream_reply(conversation_history, user_text, system_prompt):
-                full_reply.append(token)
-                await ws.send_json({"type": "token", "text": token})
+                    phrase = chunker.push(token)
+                    if phrase:
+                        tts_tasks.append(asyncio.create_task(tts_and_send(phrase)))
 
-                phrase = chunker.push(token)
-                if phrase:
-                    task = asyncio.create_task(tts_and_send(phrase))
-                    tts_tasks.append(task)
+                remainder = chunker.flush()
+                if remainder:
+                    tts_tasks.append(asyncio.create_task(tts_and_send(remainder)))
 
-            remainder = chunker.flush()
-            if remainder:
-                task = asyncio.create_task(tts_and_send(remainder))
-                tts_tasks.append(task)
+                if tts_tasks:
+                    await asyncio.gather(*tts_tasks)
 
-            if tts_tasks:
-                await asyncio.gather(*tts_tasks)
+                assistant_text = "".join(full_reply)
+                conversation_history.append({"role": "user", "content": user_text})
+                conversation_history.append({"role": "assistant", "content": assistant_text})
+                _trim_history()
 
-            assistant_text = "".join(full_reply)
-            conversation_history.append({"role": "user", "content": user_text})
-            conversation_history.append({"role": "assistant", "content": assistant_text})
-            _trim_history()
+                await asyncio.gather(
+                    _db_save(session_id, "user", user_text),
+                    _db_save(session_id, "assistant", assistant_text),
+                )
 
-            await asyncio.gather(
-                _db_save(session_id, "user", user_text),
-                _db_save(session_id, "assistant", assistant_text),
-            )
+                # Capture any durable facts from this turn into encrypted memory.
+                await asyncio.to_thread(memory_store.extract_and_store, user_text)
 
-            # Capture any durable facts from this turn into encrypted memory.
-            await asyncio.to_thread(memory_store.extract_and_store, user_text)
-
-            await ws.send_json({"type": "done", "sessionId": session_id})
+                await ws.send_json({"type": "done", "sessionId": session_id})
+            finally:
+                # On barge-in the socket closes mid-stream; cancel any pending
+                # synthesis so we don't leave orphaned tasks sending into a dead
+                # connection.
+                for t in tts_tasks:
+                    if not t.done():
+                        t.cancel()
+                await asyncio.gather(*tts_tasks, return_exceptions=True)
 
     except WebSocketDisconnect:
         pass
