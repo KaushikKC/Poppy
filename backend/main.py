@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from stt import transcribe
 from ws_handler import handle_chat, clear_history as ws_clear_history
 import personas as persona_store
-import accent
+import persona_suggest
 import memory_store
 import audio_utils
 import accent_detect
@@ -49,7 +49,7 @@ async def speech_to_text(
         return JSONResponse(
             {"transcript": "", "empty": True, "accent": detected_accent, "emotion": emotion}
         )
-    suggestion = accent.observe(transcript, persona)
+    suggestion = persona_suggest.observe(transcript, persona)
     return {
         "transcript": transcript,
         "accent": detected_accent,
@@ -97,7 +97,7 @@ async def forget_memory():
 @app.delete("/history")
 async def clear_history():
     await ws_clear_history()
-    accent.reset()
+    persona_suggest.reset()
     return {"cleared": True}
 
 
