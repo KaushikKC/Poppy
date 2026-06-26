@@ -25,7 +25,9 @@ function setMicState(state) {
 async function startRecording() {
   let stream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
   } catch (err) {
     console.error("getUserMedia error:", err);
     alert("Microphone access denied. Please allow mic access in Chrome and try again.");
