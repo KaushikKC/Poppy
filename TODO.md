@@ -76,3 +76,46 @@ Run `python3 backend/validate.py` while uvicorn + ollama are running.
 - [x] **M2** — Accent detection: `backend/accent.py` streaming EMA classifier on STT transcript; suggests a persona via dismissible chip (offline, no extra model)
 - [x] **M3** — Emotional-support framing: `backend/safety.py` crisis detection + signposting card; SAFETY/CRISIS prompt addenda; `backend/memory_store.py` Fernet-encrypted cross-session memory with view/forget panel
 - [ ] **M4** — Realistic face (opt-in, capable machines only) — DEFERRED: a GAN talking-head (Wav2Lip/SadTalker) would break the <11 GB memory gate and add seconds of latency alongside the LLM+Whisper+Piper on a 16 GB M3. Revisit on more capable hardware.
+
+---
+
+## Vision Roadmap — "Adaptive identity companion"
+Goal: the companion automatically mirrors how the user speaks — detect their
+**accent** (British / American / Indian) and **gender** from voice, then reply in a
+matching **voice**, swap to a matching **avatar** (accent + gender), and animate it
+in real time. State should be sticky/gradual, not flip per turn.
+
+### Already working (verified) ✅
+- [x] Accent detection from voice — `backend/accent_detect.py` (wav2vec2 `dima806/english_accents_classification`), folded to american/british/indian via `accent.map_raw`, sticky majority vote (`ACCENT_HISTORY=5`, conf ≥ 0.40).
+- [x] Reply spoken in the detected accent — `backend/tts.py` Kokoro, `accent.voice_for()` → (lang, voice): american=`af_heart`, british=`bf_emma`, indian=`hf_alpha`.
+- [x] Emotion from voice (momentary) shapes reply tone — `backend/emotion_detect.py` + `emotion.tone_for`.
+- [x] Accent/emotion badges in the header; accent sent with every message.
+- [x] Barge-in / interruption (mic or auto-listen cuts off the reply).
+
+### Gap 1 — Gender detection + gendered voice  ⬜ (biggest missing piece)
+- [ ] Detect speaker gender from voice (pitch/F0 heuristic on the 16 kHz PCM, or a small classifier). Make it sticky like accent.
+- [ ] Add **male Kokoro voices** and key voice on (accent, gender): e.g. american `am_adam`, british `bm_george`, indian `hm_omega`. Today **all three voices are female** (`af_/bf_/hf_`).
+- [ ] Extend `ACCENT_VOICES` → `VOICES[(accent, gender)]`; thread `gender` through `/stt` → `window._gender` → chat message → `ws_handler` → `tts.synthesize_to_wav_bytes`.
+- [ ] Add a `GenderTracker` (mirror `AccentTracker`) + config thresholds; reset on `/history` clear.
+
+### Gap 2 — Avatar reacts to accent + gender  ⬜
+- [ ] Today the avatar (`frontend/avatar.js`) only changes **color by persona**; `setAccent()` only updates a text badge. Drive avatar appearance from (accent, gender), not just persona.
+- [ ] Define an accent+gender → avatar style map (skin tone / hair / features / accent cue). Decide: procedural variations vs per-identity image/SVG assets.
+- [ ] Wire `setAccent`/new `setGender` to call `avatar.setIdentity(accent, gender)`; keep persona color as a secondary layer.
+
+### Gap 3 — Realistic real-time avatar  ⬜ (supersedes deferred M4)
+- [ ] Current avatar is a stylized procedural face with **amplitude-only mouth** (no real lip-sync). Pick a target tier:
+  - Lightweight (fits 16 GB, offline): viseme/phoneme-driven 2D rigged or SVG/Live2D face — real mouth shapes from the TTS phonemes instead of a blob.
+  - Heavy (needs better HW): GAN talking-head (Wav2Lip/SadTalker) — the deferred M4.
+- [ ] If viseme route: emit phoneme timing from Kokoro (or align text) and map phonemes → mouth shapes in `avatar.js`.
+
+### Gap 4 — Coherent identity model + cleanup  ⬜
+- [ ] Two unrelated things are both called "accent": `accent.observe()` (persona suggester from **text** register) vs `accent_detect` (real **audio** accent). Rename to disambiguate (e.g. `register_suggester` vs `accent`).
+- [ ] Remove dead code: `accent.detect_accent()` stub (unused — real path is `accent_detect.tracker`); Piper `voice_path` in `personas.py` (Kokoro now picks voice by accent, persona no longer controls voice).
+- [ ] Decide precedence: persona vs detected (accent, gender) when choosing voice/avatar — document it.
+
+### Gap 5 — Offline packaging & validation  ⬜
+- [ ] Pre-download/bundle the new models for true offline: Kokoro-82M, `dima806/english_accents_classification`, `superb/wav2vec2-base-superb-er` (first run currently needs network).
+- [ ] Re-check the <11 GB memory gate with Kokoro + 2 wav2vec2 classifiers loaded alongside LLM + Whisper (`backend/validate.py`).
+- [ ] Close the last MVP gate: airplane-mode offline reload test (line 67 above).
+- [ ] Update `requirements.txt` / `README` for the accent+emotion model deps.
