@@ -20,7 +20,9 @@ class VAD {
   }
 
   async start() {
-    this._stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    this._stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
     this._actx   = new AudioContext();
 
     const src      = this._actx.createMediaStreamSource(this._stream);
