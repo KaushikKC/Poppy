@@ -141,8 +141,10 @@ function addBubble(role, text = "") {
 function setInputLocked(locked) {
   sendBtn.disabled = locked;
   input.disabled   = locked;
-  const micBtn = document.getElementById("mic-btn");
-  if (micBtn) micBtn.disabled = locked;
+  // The mic button is intentionally left interactive while a reply streams:
+  // clicking it (push-to-talk) barges in and interrupts the assistant. VAD mode
+  // owns micBtn.disabled separately, and the mic click handler ignores clicks
+  // while auto-listen is on, so leaving it enabled here is safe.
 }
 
 window.sendMessage = async function sendMessage(text) {
