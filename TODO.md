@@ -112,8 +112,9 @@ in real time. State should be sticky/gradual, not flip per turn.
 - [x] Remove dead code: `detect_accent()` (already gone; stale comments removed); Piper `voice_path` + dead `_ROOT`/`Path` import in `personas.py`.
 - [x] Precedence documented in `accent.py`: the **detected accent**, not the persona, decides the reply voice; persona only shapes prompt + avatar colors.
 
-### Gap 5 — Offline packaging & validation  ⬜
-- [ ] Pre-download/bundle the new models for true offline: Kokoro-82M, `dima806/english_accents_classification`, `superb/wav2vec2-base-superb-er` (first run currently needs network).
-- [ ] Re-check the <11 GB memory gate with Kokoro + 2 wav2vec2 classifiers loaded alongside LLM + Whisper (`backend/validate.py`).
-- [ ] Close the last MVP gate: airplane-mode offline reload test (line 67 above).
-- [ ] Update `requirements.txt` / `README` for the accent+emotion model deps.
+### Gap 5 — Offline packaging & validation  🟡 (tooling done; manual gates remain)
+- [x] Prefetch the models for true offline: `backend/download_models.py` downloads Kokoro-82M, `dima806/english_accents_classification`, `superb/wav2vec2-base-superb-er`, and Whisper, with `--check` to verify they're cached.
+- [x] `run.sh` preflights the cache and runs with `HF_HUB_OFFLINE`/`TRANSFORMERS_OFFLINE` so the app makes no network calls at runtime.
+- [x] `requirements.txt` now declares `transformers`/`torch`/`numpy`; `README` documents Kokoro + accent/emotion + the offline setup step.
+- [ ] **(manual, run on the Mac)** Re-check the <11 GB memory gate with Kokoro + both wav2vec2 classifiers resident — run `backend/validate.py` *after* a spoken turn (accent/emotion load lazily on first `/stt`, so a text-only run won't have them resident).
+- [ ] **(manual)** Close the last MVP gate: airplane-mode offline reload test (line 67) — now backed by `download_models.py --check` + offline run.sh.
