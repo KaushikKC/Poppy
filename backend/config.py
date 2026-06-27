@@ -49,6 +49,15 @@ EMOTION_MODEL_REPO = "superb/wav2vec2-base-superb-er"  # labels: neu/hap/ang/sad
 EMOTION_MIN_CONFIDENCE = 0.50  # below this, treat as neutral
 EMOTION_MIN_SECONDS = 0.6      # clips shorter than this are too short to trust
 
+# Gender detection from the user's voice (gender_detect.py). Estimated offline
+# from pitch (median fundamental frequency) — no extra model — and, like accent,
+# treated as a stable identity: smoothed (sticky) so the reply voice (and avatar)
+# don't flip. Picks the male vs female Kokoro voice for the detected accent.
+GENDER_F0_THRESHOLD = 165.0    # Hz; median F0 below this reads as male, above as female
+GENDER_MIN_VOICED_FRAMES = 5   # need at least this many voiced frames to decide
+GENDER_HISTORY = 3             # rolling window for majority vote
+GENDER_MIN_SECONDS = 0.4       # clips shorter than this are too short to trust
+
 TTS_CHUNK_MIN_CHARS = 15
 TTS_SENTENCE_BREAKS = frozenset(".!?")
 TTS_SOFT_BREAKS = frozenset(",;:")
