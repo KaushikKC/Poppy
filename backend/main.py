@@ -11,6 +11,7 @@ import persona_suggest
 import memory_store
 import audio_utils
 import accent_detect
+import gender_detect
 import emotion_detect
 import db
 
@@ -39,20 +40,23 @@ async def speech_to_text(
     if not data:
         raise HTTPException(status_code=400, detail="Empty audio file")
 
-    # Decode once, then transcribe and detect accent + emotion from the same audio.
+    # Decode once, then transcribe and detect accent + gender + emotion from it.
     pcm = await asyncio.to_thread(audio_utils.decode_16k_mono, data)
     transcript = await asyncio.to_thread(transcribe, pcm)
     detected_accent = await asyncio.to_thread(accent_detect.tracker.update, pcm)
+    detected_gender = await asyncio.to_thread(gender_detect.tracker.update, pcm)
     emotion, _ = await asyncio.to_thread(emotion_detect.detect, pcm)
 
     if not transcript:
-        return JSONResponse(
-            {"transcript": "", "empty": True, "accent": detected_accent, "emotion": emotion}
-        )
+        return JSONResponse({
+            "transcript": "", "empty": True,
+            "accent": detected_accent, "gender": detected_gender, "emotion": emotion,
+        })
     suggestion = persona_suggest.observe(transcript, persona)
     return {
         "transcript": transcript,
         "accent": detected_accent,
+        "gender": detected_gender,
         "emotion": emotion,
         "suggestion": suggestion,
     }
