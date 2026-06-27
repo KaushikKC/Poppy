@@ -39,7 +39,7 @@ KOKORO_SAMPLE_RATE = 24000
 # reply accent stays stable across a session.
 ACCENT_MODEL_REPO = "dima806/english_accents_classification"
 ACCENT_MIN_CONFIDENCE = 0.40   # ignore readings below this confidence
-ACCENT_HISTORY = 5             # rolling window for majority vote
+ACCENT_HISTORY = 3             # rolling window for majority vote (smaller = switches sooner)
 ACCENT_MIN_SECONDS = 0.4       # clips shorter than this are too short to trust
 
 # Emotion detection from the user's voice (emotion_detect.py). Unlike accent
