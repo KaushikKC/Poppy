@@ -16,3 +16,7 @@ node_modules/
 *.db-wal
 companion.key
 companion_memory.enc
+
+# user-supplied avatar portrait (private; calibrate config.json instead)
+frontend/avatar/face.jpg
+frontend/avatar/face.png
