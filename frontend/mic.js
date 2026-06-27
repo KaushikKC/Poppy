@@ -140,6 +140,7 @@ async function transcribeAndSend(blob, mimeType) {
       window.showPersonaSuggestion(data.suggestion);
     }
     if (data.accent) window.setAccent?.(data.accent);    // identity, sticky
+    if (data.gender) window.setGender?.(data.gender);    // identity, sticky
     window.setEmotion?.(data.emotion || "neutral");      // momentary, this clip
   } catch (err) {
     console.error("STT error:", err);
