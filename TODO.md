@@ -92,16 +92,15 @@ in real time. State should be sticky/gradual, not flip per turn.
 - [x] Accent/emotion badges in the header; accent sent with every message.
 - [x] Barge-in / interruption (mic or auto-listen cuts off the reply).
 
-### Gap 1 — Gender detection + gendered voice  ⬜ (biggest missing piece)
-- [ ] Detect speaker gender from voice (pitch/F0 heuristic on the 16 kHz PCM, or a small classifier). Make it sticky like accent.
-- [ ] Add **male Kokoro voices** and key voice on (accent, gender): e.g. american `am_adam`, british `bm_george`, indian `hm_omega`. Today **all three voices are female** (`af_/bf_/hf_`).
-- [ ] Extend `ACCENT_VOICES` → `VOICES[(accent, gender)]`; thread `gender` through `/stt` → `window._gender` → chat message → `ws_handler` → `tts.synthesize_to_wav_bytes`.
-- [ ] Add a `GenderTracker` (mirror `AccentTracker`) + config thresholds; reset on `/history` clear.
+### Gap 1 — Gender detection + gendered voice  ✅
+- [x] Detect speaker gender from voice — `gender_detect.py` estimates median F0 by autocorrelation (offline, no model) and thresholds at 165 Hz; a `GenderTracker` makes it sticky (majority vote).
+- [x] Added **male Kokoro voices** keyed on (accent, gender): american `am_michael`, british `bm_george`, indian `hm_omega` alongside the female voices.
+- [x] `accent.py` voice map is now `VOICES[(accent, gender)]`; gender threads `/stt` → `window._gender` → chat message → `ws_handler` → `tts.synthesize_to_wav_bytes`. All 6 voices verified cached for offline.
+- [x] `gender.py` labels + `GenderTracker` + config thresholds; header shows a gender badge.
 
-### Gap 2 — Avatar reacts to accent + gender  ⬜
-- [ ] Today the avatar (`frontend/avatar.js`) only changes **color by persona**; `setAccent()` only updates a text badge. Drive avatar appearance from (accent, gender), not just persona.
-- [ ] Define an accent+gender → avatar style map (skin tone / hair / features / accent cue). Decide: procedural variations vs per-identity image/SVG assets.
-- [ ] Wire `setAccent`/new `setGender` to call `avatar.setIdentity(accent, gender)`; keep persona color as a secondary layer.
+### Gap 2 — Avatar reacts to accent + gender  ✅
+- [x] `avatar.setIdentity(accent, gender)`: gender drives hair (long/back vs short crown), eyebrows (thicker male), and lips (fuller/tinted female); accent draws a flag badge (US/GB/IN). Persona colors remain the base layer.
+- [x] `setAccent`/`setGender` call `avatar.setIdentity`; falls back to the neutral face until an identity is detected. (Chose tasteful procedural cues + flag over skin-tone mapping to avoid stereotyping.)
 
 ### Gap 3 — Realistic real-time avatar  ⬜ (supersedes deferred M4) — DECISION: lightweight viseme 2D rig
 - [ ] Current avatar is a stylized procedural face with **amplitude-only mouth** (no real lip-sync). Target tier chosen: **lightweight viseme/phoneme-driven 2D rig** (fits 16 GB, offline) — real mouth shapes from the TTS phonemes instead of a blob. (GAN talking-head Wav2Lip/SadTalker remains out of scope — needs better HW.)
