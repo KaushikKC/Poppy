@@ -102,9 +102,13 @@ in real time. State should be sticky/gradual, not flip per turn.
 - [x] `avatar.setIdentity(accent, gender)`: gender drives hair (long/back vs short crown), eyebrows (thicker male), and lips (fuller/tinted female); accent draws a flag badge (US/GB/IN). Persona colors remain the base layer.
 - [x] `setAccent`/`setGender` call `avatar.setIdentity`; falls back to the neutral face until an identity is detected. (Chose tasteful procedural cues + flag over skin-tone mapping to avoid stereotyping.)
 
-### Gap 3 — Realistic real-time avatar  ⬜ (supersedes deferred M4) — DECISION: lightweight viseme 2D rig
-- [ ] Current avatar is a stylized procedural face with **amplitude-only mouth** (no real lip-sync). Target tier chosen: **lightweight viseme/phoneme-driven 2D rig** (fits 16 GB, offline) — real mouth shapes from the TTS phonemes instead of a blob. (GAN talking-head Wav2Lip/SadTalker remains out of scope — needs better HW.)
-- [ ] Emit phoneme/viseme timing from Kokoro (or align text) and map phonemes → mouth shapes in `avatar.js`.
+### Gap 3 — Realistic real-time avatar  🟡 (supersedes deferred M4) — DECISION: photoreal single-photo 2D puppet
+Researched the field (Tavus Phoenix-4 = cloud Gaussian-diffusion on big GPUs; Wav2Lip/MuseTalk/SadTalker/LivePortrait = need an NVIDIA GPU for real-time → all out of scope for a 16 GB M3 alongside Llama+Whisper+Piper). Chosen tier: **photoreal 2D puppet from a single still portrait** — no GPU, no runtime ML, backend untouched.
+- [x] `frontend/photo_avatar.js` — `PhotoAvatar` (drop-in for `Avatar`): draws a real portrait, animates a talking mouth via jaw-drop + composited mouth interior/teeth, blinks with a skin eyelid, idle breathing. Mouth width (round `O/U` vs wide `E/I`) from the audio spectrum (low/high band balance) — real viseme shaping, not just amplitude.
+- [x] Graceful fallback: with no `frontend/avatar/face.jpg` it delegates to the cartoon `Avatar` (no regression). `chat.js` prefers `PhotoAvatar`; `index.html` loads it; assets serve at `/avatar/*`.
+- [x] `frontend/avatar/config.json` (mouth/eye boxes, jawDrop, mouthScale, skin) + `?avatartune=1` calibration overlay + `frontend/avatar/README.md`. `face.jpg/png` gitignored (privacy).
+- [ ] **User action**: drop a portrait at `frontend/avatar/face.jpg` and calibrate boxes via `?avatartune=1`.
+- [ ] Optional max-fidelity: pre-render true viseme PNGs offline (LivePortrait/SadTalker on a GPU box) → add a `visemes/` crossfade mode. Not yet wired.
 
 ### Gap 4 — Coherent identity model + cleanup  ✅
 - [x] Two things were both called "accent": split the text-register persona suggester into `persona_suggest.py` (`PersonaSuggester`); `accent.py` is now only the spoken-accent → voice map.
