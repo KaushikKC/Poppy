@@ -35,9 +35,11 @@ def _get_pipeline(lang_code: str) -> KPipeline:
     return _pipelines[lang_code]
 
 
-def synthesize_to_wav_bytes(text: str, accent: str | None = None) -> bytes:
-    """Synthesize `text` in the given accent and return WAV bytes (24 kHz mono)."""
-    lang_code, voice = voice_for(accent)
+def synthesize_to_wav_bytes(
+    text: str, accent: str | None = None, gender: str | None = None
+) -> bytes:
+    """Synthesize `text` in the given accent + gender, return WAV bytes (24 kHz mono)."""
+    lang_code, voice = voice_for(accent, gender)
 
     with _lock:
         pipeline = _get_pipeline(lang_code)
