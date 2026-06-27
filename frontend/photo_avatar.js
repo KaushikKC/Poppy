@@ -174,7 +174,36 @@ class PhotoAvatar {
     ctx.drawImage(this._base, 0, 0);
 
     this._drawMouth(ctx, W, H, this._cfg);
+    this._drawEye(ctx, W, H, this._cfg.leftEye, this._cfg);
+    this._drawEye(ctx, W, H, this._cfg.rightEye, this._cfg);
 
+    ctx.restore();
+  }
+
+  // Eyelid sweep. Copies a skin patch from just above the eye and slides it
+  // down over the eye, then draws a thin lash line at its edge.
+  _drawEye(ctx, W, H, e, cfg) {
+    const closed = 1 - this._eye;
+    if (closed < 0.02) return;
+
+    const ex = e.cx * W, ey = e.cy * H;
+    const ew = e.w * W,  eh = e.h * H;
+    const lidH = eh * closed * 1.15;
+
+    const srcY = Math.max(0, ey - eh * 1.6);
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(ex, ey - eh / 2 + lidH / 2, ew / 2, lidH / 2, 0, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(
+      this._base,
+      ex - ew / 2, srcY, ew, lidH,
+      ex - ew / 2, ey - eh / 2, ew, lidH
+    );
+    // fall back to a flat skin tint if the patch is too thin to read
+    ctx.fillStyle = cfg.skin;
+    ctx.globalAlpha = 0.35;
+    ctx.fillRect(ex - ew / 2, ey - eh / 2, ew, lidH);
     ctx.restore();
   }
 
