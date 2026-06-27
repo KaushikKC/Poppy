@@ -10,14 +10,16 @@ import accent as accent_mod
 import safety
 import memory_store
 import accent_detect
+import gender as gender_mod
+import gender_detect
 import emotion as emotion_mod
 import db
 
 conversation_history: list[dict] = []
 
 
-async def _synthesize(text: str, accent: str) -> bytes:
-    return await asyncio.to_thread(synthesize_to_wav_bytes, text, accent)
+async def _synthesize(text: str, accent: str, gender: str) -> bytes:
+    return await asyncio.to_thread(synthesize_to_wav_bytes, text, accent, gender)
 
 
 async def _db_save(session_id: str, role: str, content: str) -> None:
@@ -61,10 +63,13 @@ async def handle_chat(ws: WebSocket):
             if tone:
                 system_prompt = f"{system_prompt} {tone}"
 
-            # Reply in the user's accent: use the client-supplied accent if any,
-            # otherwise the latest accent detected from their voice (sticky).
+            # Reply in the user's accent + gender: use client-supplied values if
+            # any, otherwise the latest detected from their voice (both sticky).
             reply_accent = accent_mod.normalize(
                 msg.get("accent") or accent_detect.tracker.current
+            )
+            reply_gender = gender_mod.normalize(
+                msg.get("gender") or gender_detect.tracker.current
             )
 
             await ws.send_json({"type": "config", "sampleRate": KOKORO_SAMPLE_RATE})
@@ -73,7 +78,7 @@ async def handle_chat(ws: WebSocket):
             full_reply: list[str] = []
 
             async def tts_and_send(phrase: str):
-                audio = await _synthesize(phrase, reply_accent)
+                audio = await _synthesize(phrase, reply_accent, reply_gender)
                 await ws.send_bytes(audio)
 
             tts_tasks: list[asyncio.Task] = []
