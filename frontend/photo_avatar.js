@@ -59,7 +59,7 @@ class PhotoAvatar {
     if (!ok) return; // bad/missing image → stay on cartoon
 
     this._cfg = this._normalizeConfig(cfg);
-    this._img = img;
+    this._buildBase(img);
 
     // take over the canvas from the cartoon
     this._fallback?.stop();
@@ -81,6 +81,29 @@ class PhotoAvatar {
       skin:     cfg.skin || null,
       mouthScale: cfg.mouthScale ?? 1,
     };
+  }
+
+  // Pre-render the portrait "cover"-fit onto an offscreen canvas so each frame
+  // can cheaply copy sub-rects (jaw region, skin patches) from it.
+  _buildBase(img) {
+    const W = this._canvas.width, H = this._canvas.height;
+    const base = document.createElement("canvas");
+    base.width = W; base.height = H;
+    const bctx = base.getContext("2d");
+
+    const scale = Math.max(W / img.width, H / img.height);
+    const dw = img.width * scale, dh = img.height * scale;
+    bctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+
+    this._base = base;
+    this._bctx = bctx;
+
+    // auto-sample a skin tone from just above the mouth if none supplied
+    if (!this._cfg.skin) {
+      const m = this._cfg.mouth;
+      const px = bctx.getImageData(m.cx * W, (m.cy - m.h) * H, 1, 1).data;
+      this._cfg.skin = `rgb(${px[0]},${px[1]},${px[2]})`;
+    }
   }
 }
 
