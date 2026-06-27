@@ -178,6 +178,16 @@ class PhotoAvatar {
     this._drawEye(ctx, W, H, this._cfg.rightEye, this._cfg);
 
     ctx.restore();
+
+    // speaking glow ring (persona-tinted), drawn over the full frame
+    if (this._state === "speaking" && this._open > 0.06) {
+      const cx = W / 2, cy = H / 2, R = Math.min(W, H) * 0.5;
+      const g = ctx.createRadialGradient(cx, cy, R * 0.82, cx, cy, R);
+      g.addColorStop(0, "rgba(0,0,0,0)");
+      g.addColorStop(1, `rgba(${this._colors.glow},${0.5 * this._open})`);
+      ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.fillStyle = g; ctx.fill();
+    }
   }
 
   // Eyelid sweep. Copies a skin patch from just above the eye and slides it
