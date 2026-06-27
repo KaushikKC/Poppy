@@ -1,0 +1,9 @@
+{
+  "image": "avatar/face.jpg",
+  "mouth":    { "cx": 0.50, "cy": 0.72, "w": 0.26, "h": 0.12 },
+  "leftEye":  { "cx": 0.38, "cy": 0.46, "w": 0.16, "h": 0.10 },
+  "rightEye": { "cx": 0.62, "cy": 0.46, "w": 0.16, "h": 0.10 },
+  "jawDrop": 0.05,
+  "mouthScale": 1.0,
+  "skin": null
+}
