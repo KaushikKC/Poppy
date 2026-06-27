@@ -9,7 +9,10 @@ const transcript = document.getElementById("transcript");
 const statusDot  = document.getElementById("status-dot");
 
 const player = new AudioPlayer();
-const avatar = document.getElementById("avatar-canvas") ? new Avatar("avatar-canvas") : null;
+// PhotoAvatar renders a real portrait when frontend/avatar/ is set up, and
+// transparently falls back to the cartoon Avatar otherwise.
+const AvatarClass = window.PhotoAvatar || window.Avatar;
+const avatar = document.getElementById("avatar-canvas") ? new AvatarClass("avatar-canvas") : null;
 
 // Initialize persona picker; on change, update avatar colors and reset history
 PersonaPicker.init();
