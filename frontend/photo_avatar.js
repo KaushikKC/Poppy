@@ -18,7 +18,16 @@ class PhotoAvatar {
     this._colors  = { glow: "124,110,240", outline: "#7c6ef0" };
 
     this._analyser = null;
+    this._timeBuf  = null;
+    this._freqBuf  = null;
     this._ready    = false;
+
+    // animation state
+    this._open  = 0;   // jaw openness 0..1
+    this._wide  = 0;   // mouth shape -1 (round) .. +1 (wide)
+    this._eye   = 1;   // 1 = open, 0 = shut
+    this._blinkIn = this._rndBlink();
+    this._t     = 0;
 
     // cartoon fallback runs the canvas until (and unless) a photo loads
     this._fallback = window.Avatar ? new window.Avatar(canvasId) : null;
@@ -65,6 +74,7 @@ class PhotoAvatar {
     this._fallback?.stop();
     this._fallback = null;
     this._ready = true;
+    this._loop();
   }
 
   _normalizeConfig(cfg) {
@@ -104,6 +114,35 @@ class PhotoAvatar {
       const px = bctx.getImageData(m.cx * W, (m.cy - m.h) * H, 1, 1).data;
       this._cfg.skin = `rgb(${px[0]},${px[1]},${px[2]})`;
     }
+  }
+
+  _rndBlink() { return 2200 + Math.random() * 4200; }
+
+  _loop() {
+    if (!this._ready) return;
+    this._t += 16;
+
+    // blink
+    this._blinkIn -= 16;
+    if (this._blinkIn <= 0 && this._eye === 1) {
+      this._eye = 0;
+      setTimeout(() => { this._eye = 1; }, 110);
+      this._blinkIn = this._rndBlink();
+    }
+
+    // mouth targets are wired to audio in a later commit
+    const open = 0, wide = 0;
+    this._open += (open - this._open) * 0.28;
+    this._wide += (wide - this._wide) * 0.18;
+
+    this._draw();
+    requestAnimationFrame(() => this._loop());
+  }
+
+  _draw() {
+    const ctx = this._ctx;
+    ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+    ctx.drawImage(this._base, 0, 0);
   }
 }
 
