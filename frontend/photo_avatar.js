@@ -128,7 +128,16 @@ class PhotoAvatar {
     for (const v of this._timeBuf) { const x = (v - 128) / 128; s += x * x; }
     const rms = Math.sqrt(s / this._timeBuf.length);
 
-    return { open: Math.min(1, rms * 6 * this._cfg.mouthScale), wide: 0 };
+    // spectral balance: high-frequency energy → wide vowels/sibilants,
+    // low-frequency energy → rounded/open vowels.
+    this._analyser.getByteFrequencyData(this._freqBuf);
+    const n = this._freqBuf.length, mid = Math.floor(n * 0.45);
+    let lo = 0, hi = 0;
+    for (let i = 0; i < n; i++) (i < mid ? (lo += this._freqBuf[i]) : (hi += this._freqBuf[i]));
+    const total = lo + hi + 1;
+    const wide = ((hi - lo) / total) * 1.6; // ~ -1..+1
+
+    return { open: Math.min(1, rms * 6 * this._cfg.mouthScale), wide };
   }
 
   _loop() {
