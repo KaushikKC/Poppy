@@ -205,6 +205,17 @@ class PhotoAvatar {
     ctx.globalAlpha = 0.35;
     ctx.fillRect(ex - ew / 2, ey - eh / 2, ew, lidH);
     ctx.restore();
+
+    // lash line
+    if (closed > 0.5) {
+      ctx.beginPath();
+      ctx.moveTo(ex - ew * 0.42, ey - eh / 2 + lidH);
+      ctx.quadraticCurveTo(ex, ey - eh / 2 + lidH + eh * 0.08, ex + ew * 0.42, ey - eh / 2 + lidH);
+      ctx.strokeStyle = "rgba(40,28,30,0.5)";
+      ctx.lineWidth = 1.5;
+      ctx.lineCap = "round";
+      ctx.stroke();
+    }
   }
 
   // Jaw-drop + mouth-interior composite.
