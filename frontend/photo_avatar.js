@@ -162,8 +162,18 @@ class PhotoAvatar {
 
   _draw() {
     const ctx = this._ctx;
-    ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+    const W = this._canvas.width, H = this._canvas.height;
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.save();
+
+    // subtle idle breathing — a gentle vertical bob keeps the face alive
+    const breathe = Math.sin(this._t / 1400) * 1.4;
+    ctx.translate(0, breathe);
+
     ctx.drawImage(this._base, 0, 0);
+
+    ctx.restore();
   }
 }
 
