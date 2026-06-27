@@ -107,6 +107,10 @@ class PhotoAvatar {
     });
     return {
       image:    cfg.image || "avatar/face.jpg",
+      // region of the source image to frame into the (square) canvas, as
+      // fractions of the image. Use this to zoom into the face on a tall
+      // portrait. Keep it ~square to avoid stretching. Default = whole image.
+      crop:     box(cfg.crop, { cx: 0.5, cy: 0.5, w: 1, h: 1 }),
       mouth:    box(cfg.mouth,    { cx: 0.5,  cy: 0.72, w: 0.26, h: 0.12 }),
       leftEye:  box(cfg.leftEye,  { cx: 0.38, cy: 0.46, w: 0.16, h: 0.10 }),
       rightEye: box(cfg.rightEye, { cx: 0.62, cy: 0.46, w: 0.16, h: 0.10 }),
@@ -124,9 +128,13 @@ class PhotoAvatar {
     base.width = W; base.height = H;
     const bctx = base.getContext("2d");
 
-    const scale = Math.max(W / img.width, H / img.height);
-    const dw = img.width * scale, dh = img.height * scale;
-    bctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+    // source crop rect (in image pixels) → stretched to fill the square canvas
+    const c = this._cfg.crop;
+    const sx = (c.cx - c.w / 2) * img.width;
+    const sy = (c.cy - c.h / 2) * img.height;
+    const sw = c.w * img.width;
+    const sh = c.h * img.height;
+    bctx.drawImage(img, sx, sy, sw, sh, 0, 0, W, H);
 
     this._base = base;
     this._bctx = bctx;
