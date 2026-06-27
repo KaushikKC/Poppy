@@ -77,14 +77,18 @@ class PhotoAvatar {
       return; // no photo configured → cartoon fallback keeps running
     }
 
+    const src = cfg.image || "avatar/face.jpg";
     const img = new Image();
     img.crossOrigin = "anonymous";
     const ok = await new Promise((resolve) => {
       img.onload  = () => resolve(true);
       img.onerror = () => resolve(false);
-      img.src = cfg.image || "avatar/face.jpg";
+      img.src = src;
     });
-    if (!ok) return; // bad/missing image → stay on cartoon
+    if (!ok) {
+      console.warn(`[PhotoAvatar] could not load portrait "${src}" — staying on cartoon`);
+      return; // bad/missing image → stay on cartoon
+    }
 
     this._cfg = this._normalizeConfig(cfg);
     this._buildBase(img);
@@ -127,11 +131,19 @@ class PhotoAvatar {
     this._base = base;
     this._bctx = bctx;
 
-    // auto-sample a skin tone from just above the mouth if none supplied
+    // auto-sample a skin tone from just above the mouth if none supplied.
+    // getImageData throws a SecurityError if the canvas is tainted (e.g. the
+    // page is opened over file://); fall back to a neutral tone so the photo
+    // still takes over instead of getting stuck on the cartoon.
     if (!this._cfg.skin) {
-      const m = this._cfg.mouth;
-      const px = bctx.getImageData(m.cx * W, (m.cy - m.h) * H, 1, 1).data;
-      this._cfg.skin = `rgb(${px[0]},${px[1]},${px[2]})`;
+      try {
+        const m = this._cfg.mouth;
+        const px = bctx.getImageData(m.cx * W, (m.cy - m.h) * H, 1, 1).data;
+        this._cfg.skin = `rgb(${px[0]},${px[1]},${px[2]})`;
+      } catch {
+        console.warn("[PhotoAvatar] skin auto-sample blocked (tainted canvas) — using a default tone. Serve the app over http://localhost:8000, not file://.");
+        this._cfg.skin = "#c79b80";
+      }
     }
   }
 
