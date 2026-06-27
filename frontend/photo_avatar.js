@@ -214,7 +214,31 @@ class PhotoAvatar {
     grad.addColorStop(1, "#120608");
     ctx.fillStyle = grad;
     ctx.fillRect(mx - rx, oy - ry, rx * 2, ry * 2);
+
+    // upper teeth strip appears once the mouth is clearly open
+    if (open > 0.18) {
+      const teethH = ry * 0.4;
+      const tg = ctx.createLinearGradient(0, oy - ry, 0, oy - ry + teethH);
+      tg.addColorStop(0, "rgba(245,242,235,0.95)");
+      tg.addColorStop(1, "rgba(210,205,198,0.2)");
+      ctx.fillStyle = tg;
+      ctx.fillRect(mx - rx, oy - ry, rx * 2, teethH);
+    }
+    // tongue hint at the bottom for wide-open vowels
+    if (open > 0.45) {
+      ctx.beginPath();
+      ctx.ellipse(mx, oy + ry * 0.55, rx * 0.7, ry * 0.5, 0, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(150,60,70,0.55)";
+      ctx.fill();
+    }
     ctx.restore();
+
+    // soft inner-lip shadow rim so the cut edge reads as a lip, not a seam
+    ctx.beginPath();
+    ctx.ellipse(mx, oy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(60,20,28,0.45)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
   }
 }
 
