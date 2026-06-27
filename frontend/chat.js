@@ -84,6 +84,18 @@ window.setAccent = function setAccent(accent) {
   window._accent = accent;
   const badge = document.getElementById("accent-badge");
   if (badge) badge.textContent = accent ? `🗣 ${accent}` : "";
+  avatar?.setIdentity?.(window._accent, window._gender);
+};
+
+// Gender detected from the user's voice; sent with each message so the reply
+// uses the matching male/female voice. Sticky identity, like accent.
+const GENDER_GLYPH = { male: "♂", female: "♀" };
+window._gender = window._gender || null;
+window.setGender = function setGender(gender) {
+  window._gender = gender;
+  const badge = document.getElementById("gender-badge");
+  if (badge) badge.textContent = gender ? `${GENDER_GLYPH[gender] ?? ""} ${gender}` : "";
+  avatar?.setIdentity?.(window._accent, window._gender);
 };
 
 // Emotion detected from the voice; shapes the reply's tone. Momentary, so it's
@@ -186,6 +198,7 @@ window.sendMessage = async function sendMessage(text) {
       text,
       persona: PersonaPicker.current(),
       accent: window._accent || undefined,
+      gender: window._gender || undefined,
       emotion: window._emotion || undefined,
     }));
     window._emotion = null; // emotion is momentary — consume it for this turn
