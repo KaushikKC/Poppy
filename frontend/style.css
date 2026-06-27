@@ -154,6 +154,13 @@ header {
   text-transform: capitalize;
 }
 
+#gender-badge {
+  margin-left: 0.6rem;
+  font-size: 0.72rem;
+  color: #6fcf97;
+  text-transform: capitalize;
+}
+
 #emotion-badge {
   margin-left: 0.6rem;
   font-size: 0.72rem;
