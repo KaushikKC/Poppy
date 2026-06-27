@@ -45,6 +45,8 @@ class PhotoAvatar {
   }
   setAnalyser(node) {
     this._analyser = node;
+    this._timeBuf  = new Uint8Array(node.fftSize);
+    this._freqBuf  = new Uint8Array(node.frequencyBinCount);
     this._fallback?.setAnalyser(node);
   }
 
@@ -118,6 +120,17 @@ class PhotoAvatar {
 
   _rndBlink() { return 2200 + Math.random() * 4200; }
 
+  _sampleAudio() {
+    if (!this._analyser || this._state !== "speaking") return { open: 0, wide: 0 };
+
+    this._analyser.getByteTimeDomainData(this._timeBuf);
+    let s = 0;
+    for (const v of this._timeBuf) { const x = (v - 128) / 128; s += x * x; }
+    const rms = Math.sqrt(s / this._timeBuf.length);
+
+    return { open: Math.min(1, rms * 6 * this._cfg.mouthScale), wide: 0 };
+  }
+
   _loop() {
     if (!this._ready) return;
     this._t += 16;
@@ -130,8 +143,7 @@ class PhotoAvatar {
       this._blinkIn = this._rndBlink();
     }
 
-    // mouth targets are wired to audio in a later commit
-    const open = 0, wide = 0;
+    const { open, wide } = this._sampleAudio();
     this._open += (open - this._open) * 0.28;
     this._wide += (wide - this._wide) * 0.18;
 
