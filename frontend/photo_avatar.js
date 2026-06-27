@@ -173,6 +173,47 @@ class PhotoAvatar {
 
     ctx.drawImage(this._base, 0, 0);
 
+    this._drawMouth(ctx, W, H, this._cfg);
+
+    ctx.restore();
+  }
+
+  // Jaw-drop + mouth-interior composite.
+  _drawMouth(ctx, W, H, cfg) {
+    const m = cfg.mouth;
+    const mx = m.cx * W, my = m.cy * H;
+    const mw = m.w * W,  mh = m.h * H;
+    const open = this._open;
+    if (open < 0.02) return; // closed → the photo's own lips show
+
+    const drop = open * cfg.jawDrop * H;
+
+    // 1. shift the lower face (everything below the upper-lip line) downward
+    const cutY = Math.round(my - mh * 0.15);
+    ctx.drawImage(
+      this._base,
+      0, cutY, W, H - cutY,
+      0, cutY + drop, W, H - cutY
+    );
+
+    // 2. carve a mouth opening in the revealed gap
+    const round = Math.max(0, -this._wide);     // O/U pucker
+    const wideN = Math.max(0, this._wide);      // E/I spread
+    const rx = mw * (0.46 + wideN * 0.18 - round * 0.14);
+    const ry = mh * (0.18 + open * 0.62);
+    const oy = my + drop * 0.45;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(mx, oy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.clip();
+
+    // dark interior
+    const grad = ctx.createLinearGradient(0, oy - ry, 0, oy + ry);
+    grad.addColorStop(0, "#2a1418");
+    grad.addColorStop(1, "#120608");
+    ctx.fillStyle = grad;
+    ctx.fillRect(mx - rx, oy - ry, rx * 2, ry * 2);
     ctx.restore();
   }
 }
