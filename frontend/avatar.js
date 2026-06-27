@@ -23,6 +23,7 @@ class Avatar {
 
   setState(s)  { this._state = s; }
   setColors(c) { Object.assign(this._colors, c); }
+  stop()       { this._stopped = true; }   // PhotoAvatar takes over the canvas
 
   // Adapt the face to the detected speaker identity. accent → flag badge;
   // gender → hair, eyebrows, and lips. Either may be null (unknown yet).
@@ -47,6 +48,7 @@ class Avatar {
   }
 
   _loop() {
+    if (this._stopped) return;
     this._t += 16;
 
     this._blinkIn -= 16;
