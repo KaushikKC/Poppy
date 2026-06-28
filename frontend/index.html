@@ -7,6 +7,20 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <!-- Full-page video presence: a real rendered person, idle ⇆ talking -->
+  <div id="stage" class="poster-only">
+    <img id="stage-poster" src="avatar/face.jpg" alt="" />
+    <video id="video-idle" muted loop playsinline preload="auto">
+      <source src="avatar/idle.webm" type="video/webm" />
+      <source src="avatar/idle.mp4"  type="video/mp4" />
+    </video>
+    <video id="video-talk" muted loop playsinline preload="auto">
+      <source src="avatar/talk.webm" type="video/webm" />
+      <source src="avatar/talk.mp4"  type="video/mp4" />
+    </video>
+    <div id="stage-shade"></div>
+  </div>
+
   <div id="app">
     <header>
       <h1>Private Companion</h1>
@@ -23,9 +37,8 @@
     <div id="persona-picker"></div>
     <div id="persona-suggestion" class="hidden"></div>
 
-    <div id="avatar-wrap">
-      <canvas id="avatar-canvas" width="220" height="220"></canvas>
-    </div>
+    <!-- spacer keeps the person visible; chat + controls live at the bottom -->
+    <div id="stage-spacer"></div>
 
     <div id="transcript"></div>
 
@@ -53,8 +66,7 @@
   </div>
 
   <script src="audio_player.js"></script>
-  <script src="avatar.js"></script>
-  <script src="photo_avatar.js"></script>
+  <script src="video_avatar.js"></script>
   <script src="vad.js"></script>
   <script src="persona_picker.js"></script>
   <script src="chat.js"></script>
