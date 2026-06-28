@@ -17,6 +17,10 @@ node_modules/
 companion.key
 companion_memory.enc
 
-# user-supplied avatar portrait (private; calibrate config.json instead)
+# user-supplied avatar assets (private + large): portrait poster + video loops
 frontend/avatar/face.jpg
 frontend/avatar/face.png
+frontend/avatar/idle.mp4
+frontend/avatar/idle.webm
+frontend/avatar/talk.mp4
+frontend/avatar/talk.webm
