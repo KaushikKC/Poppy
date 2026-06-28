@@ -1,21 +1,66 @@
 # Private Companion
 
-A fully local, offline AI voice companion with a lip-syncing avatar. Speak (or
-type), and it replies with streamed speech and an animated face — no data leaves
-your machine. Built for an Apple Silicon Mac (M3, 16 GB).
+A fully local, offline AI voice companion with a full-page video avatar. Speak
+(or type) and it replies with streamed speech and a real, on-screen person — no
+data ever leaves your machine. Built for an Apple Silicon Mac (M3, 16 GB).
 
 ## Pipeline
 
 ```
-mic → Whisper (STT) ┬→ accent + emotion detection (wav2vec2)
-                    └→ llama3.1 8B via Ollama (LLM) → Kokoro (TTS) → Web Audio + canvas avatar
+mic ─▶ Whisper (STT) ─┬─▶ accent + gender + emotion detection
+                      │        (wav2vec2 classifiers + pitch)
+                      └─▶ llama3.1 8B via Ollama (LLM) ─▶ Kokoro (TTS) ─▶ Web Audio
+                                                                            │
+                                            full-page video avatar  ◀───────┘
+                                            (idle ⇆ talking, crossfaded)
 ```
 
 Everything runs locally: Ollama serves the LLM, faster-whisper does
-speech-to-text, Kokoro synthesizes speech in the speaker's detected accent, two
-small wav2vec2 classifiers read accent and emotion from the voice, and a single
-FastAPI process serves both the API and the web UI. The detected accent picks
-the reply voice; emotion shapes its tone.
+speech-to-text, Kokoro synthesizes speech in the speaker's detected accent and
+gender, small classifiers read accent/gender/emotion from the voice, and a single
+FastAPI process serves both the API and the web UI. Replies stream out
+phrase-by-phrase so the first audio plays in ~1 s.
+
+## Features
+
+**Voice loop**
+- **Speech-to-text** — faster-whisper (`small`), CPU-side to avoid GPU contention.
+- **Local LLM** — `llama3.1:8b-instruct-q4_K_M` via Ollama, streamed token-by-token.
+- **Streaming TTS** — Kokoro synthesizes each phrase as the LLM generates it, so
+  the avatar starts speaking before the full reply is ready.
+- **Push-to-talk** (mic button) **or auto-listen** (voice-activity detection).
+- **Barge-in** — start talking (or click the mic) mid-reply and it cuts the
+  current answer off and listens.
+
+**Adapts to you (all from your voice, offline)**
+- **Accent detection** — British / American / Indian → the reply is spoken in a
+  matching voice. Sticky across the session.
+- **Gender detection** — pitch-based male/female estimate → matching Kokoro voice.
+- **Emotion detection** — happy / sad / angry / neutral shades the reply's tone.
+- **Persona suggestion** — after a few spoken turns it may suggest the persona
+  that fits your speaking style (accept or dismiss the chip).
+- All three (accent / gender / emotion) appear as header badges.
+
+**Personas**
+- **Friendly / Professional / Playful** pills change the conversational tone and
+  accent color. Switching clears the current conversation. (The reply *voice* is
+  chosen by your detected accent + gender, not the persona.)
+
+**Avatar (full-page video presence)**
+- A real rendered person fills the screen: an **idle** loop plays while listening
+  or thinking and **crossfades to a talking** loop while the voice plays.
+- Falls back to a static poster until you add the clips — see
+  [`frontend/avatar/README.md`](frontend/avatar/README.md) for how to generate
+  them (Veo / Google Vids prompts and seamless-loop tips).
+
+**Memory, safety & history**
+- **Encrypted long-term memory** — facts about you are stored encrypted at rest
+  (Fernet). The **🧠 button** shows what's remembered and can forget everything.
+- **Crisis signposting** — if a message signals serious distress, a
+  crisis-resources card appears and the reply tone shifts to supportive.
+- **Session history** — every conversation is saved to SQLite and can be exported
+  as JSON + text.
+- **Latency badge** — shows mic-stop → first-audio time for each turn.
 
 ## Prerequisites
 
@@ -62,25 +107,20 @@ To start manually:
 cd backend && python3 -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
-## Using it
+## Add your avatar
 
-- **Type** in the box, or click the **mic** to push-to-talk, or the **circle**
-  button to auto-listen (voice activity detection).
-- **Persona pills** (Friendly / Professional / Playful) switch the avatar colors
-  and conversational tone. Switching clears the current conversation. (The reply
-  *voice* is chosen by your detected accent, not the persona.)
-- The companion **detects your accent** (British / American / Indian) from your
-  voice and replies in a matching voice; the choice is sticky across the session.
-  It also reads your **emotion** to shade the reply's tone. Both show as header
-  badges.
-- After a couple of spoken turns, the app may **suggest a persona** that matches
-  your speaking style — accept or dismiss the chip.
-- While the assistant is speaking you can **barge in**: click the mic or just
-  start talking (auto-listen) and it cuts off the current reply.
-- The **🧠 button** shows what the companion remembers about you (stored
-  encrypted on disk) and lets you forget everything.
-- If a message signals serious distress, a **crisis-resources card** appears and
-  the reply tone shifts to supportive.
+The avatar is pre-rendered video you generate once (it never runs a model at
+chat time). Put two looping clips of the same person/framing/background in
+`frontend/avatar/`:
+
+```
+frontend/avatar/idle.mp4    # sitting, breathing, blinking, mouth closed
+frontend/avatar/talk.mp4    # the same person speaking naturally
+```
+
+Full prompts, sizing, and loop tips are in
+[`frontend/avatar/README.md`](frontend/avatar/README.md). Until they're added the
+app shows the static `face.jpg` poster.
 
 ## Validation
 
@@ -91,7 +131,7 @@ python3 backend/validate.py
 Checks latency (≤1.5 s avg first-audio), stability (10 consecutive turns),
 and memory (<11 GB). The offline gate below is manual.
 
-### Offline test (the last MVP gate)
+### Offline test
 
 The app makes no external network calls — it only talks to local Ollama and
 serves local files. To confirm:
@@ -109,7 +149,7 @@ Everything should work with no network.
 |--------|------|---------|
 | GET | `/health` | Liveness check |
 | WS | `/ws/chat` | Full voice loop: tokens + WAV audio chunks |
-| POST | `/stt` | Audio upload → transcript + detected accent + emotion (+ persona suggestion) |
+| POST | `/stt` | Audio upload → transcript + detected accent + gender + emotion (+ persona suggestion) |
 | GET | `/personas` | List personas (name, description, colors) |
 | GET | `/memory` | Facts remembered about the user |
 | DELETE | `/memory` | Forget all remembered facts |
@@ -122,4 +162,5 @@ Everything should work with no network.
 - Conversations are saved to `companion.db` (SQLite, gitignored).
 - Long-term memory is **encrypted at rest** with Fernet in
   `companion_memory.enc`; the key is in `companion.key` (chmod 600, gitignored).
+- Your avatar poster/clips (`face.jpg`, `idle/talk.mp4`) are gitignored (private).
 - Nothing is sent off-device.
