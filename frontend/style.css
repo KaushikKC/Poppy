@@ -16,8 +16,9 @@ body {
   object-fit: cover;
 }
 #stage-poster { z-index: 0; object-position: center 22%; } /* keep the face in view on wide screens */
-#video-idle { z-index: 1; opacity: 0; transition: opacity 0.6s ease; }
-#video-talk { z-index: 2; opacity: 0; transition: opacity 0.45s ease; }
+/* idle sits under talk; talk dissolves in/out over it for a clean crossfade */
+#video-idle { z-index: 1; opacity: 0; transition: opacity 0.8s ease-in-out; }
+#video-talk { z-index: 2; opacity: 0; transition: opacity 0.7s cubic-bezier(0.4, 0, 0.2, 1); }
 
 #stage.video-live #video-idle { opacity: 1; }
 #video-talk.show { opacity: 1; }

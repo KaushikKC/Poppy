@@ -23,11 +23,29 @@ class VideoAvatar {
     this._state  = "idle";
     this._ready  = false;
     this._talkOk = false;
+    this._idleTimer  = null;
+    this._idleHoldMs = 900;   // bridge phrase-gap silences before fading to idle
     this._init();
   }
 
   // public API (parity with the old avatar; only setState is meaningful)
-  setState(s)    { this._state = s; this._apply(); }
+  setState(s) {
+    this._state = s;
+    if (!this._ready) return;
+    if (s === "speaking") {
+      // speak immediately, and cancel any pending fade-back to idle
+      clearTimeout(this._idleTimer);
+      this._idleTimer = null;
+      this._show(true);
+    } else {
+      // Debounce the return to idle. Speech is streamed phrase-by-phrase, so the
+      // audio briefly drains between sentences; without this hold the talk loop
+      // would flicker off mid-reply. A short delay bridges those gaps and only
+      // settles to idle once the agent has genuinely stopped speaking.
+      clearTimeout(this._idleTimer);
+      this._idleTimer = setTimeout(() => this._show(false), this._idleHoldMs);
+    }
+  }
   setColors()    {}   // the video carries the look
   setIdentity()  {}   // identity is baked into the chosen clips
   setAnalyser()  {}   // no audio-reactive drawing needed
@@ -55,7 +73,7 @@ class VideoAvatar {
     this._stage?.classList.remove("poster-only");
     this._stage?.classList.add("video-live");
     this._ready = true;
-    this._apply();
+    this._show(this._state === "speaking");
   }
 
   // resolves true once the video has a decodable frame, false on load error
@@ -78,12 +96,12 @@ class VideoAvatar {
     });
   }
 
-  _apply() {
+  // Toggle the talking layer. The talk video keeps looping underneath at all
+  // times (we never pause it), so fading it in always lands mid-motion — no jump.
+  _show(speaking) {
     if (!this._ready) return;
-    const speaking = this._state === "speaking";
     if (this._talkOk) {
       this._talk.classList.toggle("show", speaking);
-      // keep the talking loop near the idle phase so the crossfade isn't jarring
       if (speaking && this._talk.paused) this._talk.play().catch(() => {});
     } else {
       this._idle.classList.toggle("speaking-cue", speaking);
