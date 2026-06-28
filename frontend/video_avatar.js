@@ -51,6 +51,8 @@ class VideoAvatar {
     if (this._talkOk) this._talk.play().catch(() => {});
     else console.info("[VideoAvatar] no talk clip — using a subtle speaking cue on the idle loop. Add frontend/avatar/talk.mp4 for a real talking loop.");
 
+    // hand the canvas from the static poster to the live video layers
+    this._stage?.classList.remove("poster-only");
     this._stage?.classList.add("video-live");
     this._ready = true;
     this._apply();
