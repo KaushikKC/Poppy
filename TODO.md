@@ -102,13 +102,14 @@ in real time. State should be sticky/gradual, not flip per turn.
 - [x] `avatar.setIdentity(accent, gender)`: gender drives hair (long/back vs short crown), eyebrows (thicker male), and lips (fuller/tinted female); accent draws a flag badge (US/GB/IN). Persona colors remain the base layer.
 - [x] `setAccent`/`setGender` call `avatar.setIdentity`; falls back to the neutral face until an identity is detected. (Chose tasteful procedural cues + flag over skin-tone mapping to avoid stereotyping.)
 
-### Gap 3 — Realistic real-time avatar  🟡 (supersedes deferred M4) — DECISION: photoreal single-photo 2D puppet
-Researched the field (Tavus Phoenix-4 = cloud Gaussian-diffusion on big GPUs; Wav2Lip/MuseTalk/SadTalker/LivePortrait = need an NVIDIA GPU for real-time → all out of scope for a 16 GB M3 alongside Llama+Whisper+Piper). Chosen tier: **photoreal 2D puppet from a single still portrait** — no GPU, no runtime ML, backend untouched.
-- [x] `frontend/photo_avatar.js` — `PhotoAvatar` (drop-in for `Avatar`): draws a real portrait, animates a talking mouth via jaw-drop + composited mouth interior/teeth, blinks with a skin eyelid, idle breathing. Mouth width (round `O/U` vs wide `E/I`) from the audio spectrum (low/high band balance) — real viseme shaping, not just amplitude.
-- [x] Graceful fallback: with no `frontend/avatar/face.jpg` it delegates to the cartoon `Avatar` (no regression). `chat.js` prefers `PhotoAvatar`; `index.html` loads it; assets serve at `/avatar/*`.
-- [x] `frontend/avatar/config.json` (mouth/eye boxes, jawDrop, mouthScale, skin) + `?avatartune=1` calibration overlay + `frontend/avatar/README.md`. `face.jpg/png` gitignored (privacy).
-- [ ] **User action**: drop a portrait at `frontend/avatar/face.jpg` and calibrate boxes via `?avatartune=1`.
-- [ ] Optional max-fidelity: pre-render true viseme PNGs offline (LivePortrait/SadTalker on a GPU box) → add a `visemes/` crossfade mode. Not yet wired.
+### Gap 3 — Realistic avatar  🟡 (supersedes deferred M4) — DECISION: full-page pre-rendered VIDEO presence
+Tried and **rejected** still-image puppeting (the canvas cartoon, then a single-photo jaw-drop "PhotoAvatar"): animating one image always looks artificial. Real realism = real rendered **video**. Word-accurate lip-sync to live LLM replies needs a GPU/cloud model (OmniHuman/InfiniteTalk/MuseTalk, or HeyGen/D-ID/Tavus) → breaks the offline/private core, so out. Chosen: **offline video loops** — user generates idle + talking clips once (Veo 3.1 / Google Vids), app crossfades them. Local, free per reply; lips not word-exact (accepted tradeoff).
+- [x] `frontend/video_avatar.js` — `VideoAvatar`: two muted looping `<video>` layers (`#video-idle`, `#video-talk`), crossfaded by opacity off `setState("speaking"/"idle")`. Poster fallback (`face.jpg`) until clips exist; subtle cue if only an idle clip.
+- [x] Full-page redesign: `index.html` `#stage` (poster + idle/talk + shade gradient) behind translucent overlay UI; `style.css` cinematic layout; `chat.js` drives `VideoAvatar`. Pipeline untouched.
+- [x] `frontend/avatar/README.md` rewritten with Veo prompts + seamless-loop guidance. `idle/talk .mp4/.webm` gitignored (private + large).
+- [ ] **User action**: generate + drop `frontend/avatar/idle.mp4` and `talk.mp4` (same person/framing/background, seamless loops).
+- [ ] Superseded files kept in repo but unused: `avatar.js` (cartoon), `photo_avatar.js` + `avatar/config.json` (single-photo puppet).
+- [ ] Optional online mode (not built): per-reply cloud lip-sync (HeyGen/D-ID/Tavus) as an opt-in toggle for word-accurate lips.
 
 ### Gap 4 — Coherent identity model + cleanup  ✅
 - [x] Two things were both called "accent": split the text-register persona suggester into `persona_suggest.py` (`PersonaSuggester`); `accent.py` is now only the spoken-accent → voice map.
