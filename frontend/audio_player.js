@@ -20,6 +20,10 @@ class AudioPlayer {
 
   getAnalyser() { return this._analyser || null; }
 
+  // true while any audio is queued or playing (used to keep the avatar speaking
+  // until the spoken reply actually finishes, not just when the text is done)
+  isPlaying() { return this._pending > 0; }
+
   setSampleRate(sampleRate) {
     this._ensureCtx(sampleRate);
   }

@@ -242,8 +242,15 @@ window.sendMessage = async function sendMessage(text) {
       endReply(ws);
       setInputLocked(false);
       input.focus();
-      // fallback: if no audio was generated, reset avatar immediately
-      if (avatar) setTimeout(() => avatar.setState("idle"), 100);
+      // "done" means the LLM finished generating text — the audio is still
+      // playing out for many seconds after this. Keep the avatar speaking until
+      // the audio truly ends (onPlaybackEnd handles that). Only reset now if no
+      // audio is playing: a text-only reply, or a tiny reply whose audio already
+      // finished before this message arrived.
+      if (avatar && !player.isPlaying()) {
+        setStatus("idle");
+        avatar.setState("idle");
+      }
 
     } else if (msg.type === "error") {
       replyBubble.textContent = `Error: ${msg.message}`;
