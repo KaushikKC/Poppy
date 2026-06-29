@@ -8,29 +8,16 @@ body {
   overflow: hidden;
 }
 
-/* ── Full-page video stage ──────────────────────────────────────────────── */
-#stage { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: #0b0b10; }
-#stage img, #stage video {
-  position: absolute; inset: 0;
-  width: 100%; height: 100%;
-  object-fit: cover;
+/* ── Full-page 3D avatar stage ──────────────────────────────────────────── */
+#stage {
+  position: fixed; inset: 0; z-index: 0; overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 18%, #1a1726 0%, #0d0c14 60%, #08070c 100%);
 }
-#stage-poster { z-index: 0; object-position: center 22%; } /* keep the face in view on wide screens */
-/* idle sits under talk; talk dissolves in/out over it for a clean crossfade */
-#video-idle { z-index: 1; opacity: 0; transition: opacity 0.8s ease-in-out; }
-#video-talk { z-index: 2; opacity: 0; transition: opacity 0.7s cubic-bezier(0.4, 0, 0.2, 1); }
+/* TalkingHead injects its WebGL canvas into this container */
+#avatar3d { position: absolute; inset: 0; z-index: 1; }
+#avatar3d canvas { width: 100% !important; height: 100% !important; display: block; }
 
-#stage.video-live #video-idle { opacity: 1; }
-#video-talk.show { opacity: 1; }
-
-/* subtle "speaking" cue used only when no dedicated talk clip is present */
-#video-idle.speaking-cue { filter: brightness(1.06) contrast(1.02); transform: scale(1.012); transition: transform 0.4s ease, filter 0.4s ease; }
-
-/* before any clip is added, just show the static poster */
-#stage.poster-only #video-idle,
-#stage.poster-only #video-talk { display: none; }
-
-/* legibility gradient: darken top + bottom so overlaid UI reads over any video */
+/* legibility gradient: darken top + bottom so overlaid UI reads over the scene */
 #stage-shade {
   position: absolute; inset: 0; z-index: 3; pointer-events: none;
   background: linear-gradient(to bottom,
