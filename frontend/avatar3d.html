@@ -25,9 +25,9 @@
   <script type="importmap">
   {
     "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js/+esm",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
-      "talkinghead": "https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@1.5/modules/talkinghead.mjs"
+      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js/+esm",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+      "talkinghead": "https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@1.7/modules/talkinghead.mjs"
     }
   }
   </script>
@@ -114,6 +114,9 @@
         (ev) => { if (ev.lengthComputable) log(`  …avatar ${(ev.loaded/ev.total*100).toFixed(0)}%`); }
       );
       log("✓ Avatar loaded & rendering. It should blink and look around.", "ok");
+      // diagnostic: confirm the avatar exposes viseme morph targets HeadAudio can drive
+      const vkeys = head.mtAvatar ? Object.keys(head.mtAvatar).filter(k => k.startsWith("viseme")) : [];
+      log(`morph targets: ${head.mtAvatar ? Object.keys(head.mtAvatar).length : "NO mtAvatar!"} total, visemes: ${vkeys.slice(0,6).join(", ") || "NONE"}`, vkeys.length ? "ok" : "err");
     } catch (err) {
       log("✗ Avatar failed to load: " + err.message, "err");
       log("→ The sample avatar URL may be unavailable. Create your own at readyplayer.me and set AVATAR_ID.", "err");
@@ -129,8 +132,16 @@
       await ha.loadModel(`${HEADAUDIO_BASE}/dist/model-en-mixed.bin`);
       ha.onstarted = () => log("…speech detected", "info");
       ha.onended   = () => log("…silence", "info");
+      let _vlog = 0, _vmiss = false;
       ha.onvalue = (key, value) => {
-        if (head?.mtAvatar?.[key]) Object.assign(head.mtAvatar[key], { newvalue: value, needsUpdate: true });
+        const slot = head?.mtAvatar?.[key];
+        if (slot) {
+          Object.assign(slot, { newvalue: value, needsUpdate: true });
+          if (value > 0.2 && Date.now() - _vlog > 600) { _vlog = Date.now(); log(`viseme ${key} = ${value.toFixed(2)} ✓`, "ok"); }
+        } else if (!_vmiss) {
+          _vmiss = true;
+          log(`✗ no morph slot for "${key}" — avatar/TalkingHead viseme keys don't match`, "err");
+        }
       };
       // tick HeadAudio inside TalkingHead's render loop so morphs update each frame
       if (head) head.opt.update = ha.update.bind(ha);
