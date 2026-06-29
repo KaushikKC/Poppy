@@ -5,19 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Private Companion</title>
   <link rel="stylesheet" href="style.css" />
+
+  <!-- Three.js + TalkingHead as ES modules (CDN for now; vendor locally later) -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js/+esm",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+      "talkinghead": "https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@1.7/modules/talkinghead.mjs"
+    }
+  }
+  </script>
 </head>
 <body>
-  <!-- Full-page video presence: a real rendered person, idle ⇆ talking -->
-  <div id="stage" class="poster-only">
-    <img id="stage-poster" src="avatar/face.jpg" alt="" />
-    <video id="video-idle" muted loop playsinline preload="auto">
-      <source src="avatar/idle.webm" type="video/webm" />
-      <source src="avatar/idle.mp4"  type="video/mp4" />
-    </video>
-    <video id="video-talk" muted loop playsinline preload="auto">
-      <source src="avatar/talk.webm" type="video/webm" />
-      <source src="avatar/talk.mp4"  type="video/mp4" />
-    </video>
+  <!-- Full-page 3D avatar with real-time lip-sync (TalkingHead + HeadAudio) -->
+  <div id="stage">
+    <div id="avatar3d"></div>
     <div id="stage-shade"></div>
   </div>
 
@@ -66,11 +69,13 @@
   </div>
 
   <script src="audio_player.js"></script>
-  <script src="video_avatar.js"></script>
+  <script src="avatar_bridge.js"></script>
   <script src="vad.js"></script>
   <script src="persona_picker.js"></script>
   <script src="chat.js"></script>
   <script src="mic.js"></script>
   <script src="memory.js"></script>
+  <!-- 3D avatar controller (ES module, loads after the classic scripts) -->
+  <script type="module" src="avatar3d.module.mjs"></script>
 </body>
 </html>
