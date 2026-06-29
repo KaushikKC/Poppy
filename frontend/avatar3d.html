@@ -38,21 +38,42 @@
   <div id="log">3D avatar lip-sync test — loading…</div>
 
   <div id="panel">
+    <input id="avatar-url" type="text" placeholder="Paste your Ready Player Me .glb URL…"
+           style="flex:1; min-width:220px; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.18); background:rgba(0,0,0,0.4); color:#e8e8ec; font-size:13px;" />
+    <button id="load-btn" class="secondary">Load avatar</button>
     <button id="mic-btn">▶︎ Start mic lip-sync</button>
     <button id="nod-btn" class="secondary">Test head motion</button>
   </div>
 
   <script type="module">
-    // ─── EDIT THIS to your own Ready Player Me avatar ──────────────────────────
-    // Make one free at https://readyplayer.me , copy the .glb URL, and keep the
-    // query string below so it includes the viseme + ARKit morph targets.
-    const AVATAR_ID = "64bfa15f0e72c63d7c3934a6"; // a public RPM sample to start
-    const AVATAR_URL =
-      `https://models.readyplayer.me/${AVATAR_ID}.glb` +
-      `?morphTargets=ARKit,Oculus%20Visemes&textureAtlas=1024&lod=1`;
+    // ─── Avatar URL ────────────────────────────────────────────────────────────
+    // Make a free FULL-BODY avatar at https://readyplayer.me , copy its .glb URL,
+    // paste it in the box below (or append ?avatar=<url> to this page's URL).
+    // The viseme + ARKit morph targets are added automatically if missing.
+    const DEFAULT_AVATAR = "https://models.readyplayer.me/64bfa15f0e72c63d7c3934a6.glb";
+
+    function buildAvatarUrl(raw) {
+      let url = (raw || "").trim() || DEFAULT_AVATAR;
+      if (!/morphTargets=/.test(url)) {
+        url += (url.includes("?") ? "&" : "?") +
+               "morphTargets=ARKit,Oculus%20Visemes&textureAtlas=1024&lod=1";
+      }
+      return url;
+    }
+
+    const params = new URLSearchParams(location.search);
+    const AVATAR_URL = buildAvatarUrl(params.get("avatar"));
 
     const HEADAUDIO_BASE = "https://cdn.jsdelivr.net/gh/met4citizen/HeadAudio@main";
     // ───────────────────────────────────────────────────────────────────────────
+
+    // "Load avatar" → reload the page with the pasted URL as ?avatar=
+    document.getElementById("load-btn").addEventListener("click", () => {
+      const v = document.getElementById("avatar-url").value.trim();
+      if (!v) return;
+      location.search = "?avatar=" + encodeURIComponent(v);
+    });
+    document.getElementById("avatar-url").value = params.get("avatar") || "";
 
     const logEl = document.getElementById("log");
     const log = (msg, cls = "") => {
