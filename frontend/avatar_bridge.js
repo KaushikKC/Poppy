@@ -24,7 +24,16 @@ window.companionAvatar = {
     if (this._onState) this._onState(s);
   },
 
-  // kept for API parity; the 3D avatar carries its own look + identity
+  // chat.js calls this with the detected accent + gender. The 3D controller uses
+  // gender to pick a male vs female avatar (mirroring the speaker).
+  _accent: null,
+  _gender: null,
+  setIdentity(accent, gender) {
+    this._accent = accent;
+    this._gender = gender;
+    if (this._onIdentity) this._onIdentity(accent, gender);
+  },
+
+  // kept for API parity; the 3D avatar carries its own look
   setColors() {},
-  setIdentity() {},
 };
