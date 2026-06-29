@@ -11,7 +11,10 @@ body {
 /* ── Full-page 3D avatar stage ──────────────────────────────────────────── */
 #stage {
   position: fixed; inset: 0; z-index: 0; overflow: hidden;
-  background: radial-gradient(120% 90% at 50% 18%, #1a1726 0%, #0d0c14 60%, #08070c 100%);
+  background:
+    radial-gradient(60% 50% at 50% 30%, rgba(124,110,240,0.26), transparent 72%),
+    radial-gradient(80% 60% at 50% 118%, rgba(72,150,180,0.20), transparent 70%),
+    linear-gradient(165deg, #262247 0%, #181534 44%, #0e0d1a 100%);
 }
 /* TalkingHead injects its WebGL canvas into this container */
 #avatar3d { position: absolute; inset: 0; z-index: 1; }
