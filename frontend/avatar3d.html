@@ -73,6 +73,9 @@
       const { TalkingHead } = await import("talkinghead");
 
       head = new TalkingHead(document.getElementById("avatar"), {
+        // We never use TalkingHead's own TTS (lips come from HeadAudio), but the
+        // constructor insists on an endpoint — give it a dummy so it initializes.
+        ttsEndpoint: "/no-tts",
         lipsyncModules: ["en"],
         cameraView: "upper",
         avatarMood: "neutral",
