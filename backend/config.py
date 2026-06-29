@@ -60,5 +60,13 @@ GENDER_MIN_SECONDS = 0.4       # clips shorter than this are too short to trust
 
 TTS_CHUNK_MIN_CHARS = 15
 TTS_SENTENCE_BREAKS = frozenset(".!?")
-TTS_SOFT_BREAKS = frozenset(",;:")
-TTS_SOFT_BREAK_MIN_CHARS = 60
+TTS_SOFT_BREAKS = frozenset(",;:—")
+TTS_SOFT_BREAK_MIN_CHARS = 35
+# Hard cap: emit a chunk (at a word boundary) even with no punctuation, so a long
+# unbroken clause can't stall the whole reply's audio until the very end.
+TTS_CHUNK_MAX_CHARS = 110
+# The FIRST chunk is emitted aggressively so the voice starts while the text is
+# still being typed, instead of waiting for a full sentence/paragraph.
+TTS_FIRST_CHUNK_MIN_CHARS = 8
+TTS_FIRST_SOFT_MIN_CHARS = 12
+TTS_FIRST_CHUNK_MAX_CHARS = 45
