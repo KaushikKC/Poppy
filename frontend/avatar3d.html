@@ -47,14 +47,19 @@
 
   <script type="module">
     // ─── Avatar URL ────────────────────────────────────────────────────────────
-    // Make a free FULL-BODY avatar at https://readyplayer.me , copy its .glb URL,
-    // paste it in the box below (or append ?avatar=<url> to this page's URL).
-    // The viseme + ARKit morph targets are added automatically if missing.
-    const DEFAULT_AVATAR = "https://models.readyplayer.me/64bfa15f0e72c63d7c3934a6.glb";
+    // Ready Player Me shut down (Jan 2026), so we default to TalkingHead's own
+    // bundled demo avatar (brunette.glb — realistic, already viseme-rigged),
+    // served via CDN. Paste another GLB in the box, or append ?avatar=<url>.
+    // Other bundled options: avaturn.glb (realistic), vroid.glb (anime),
+    // avatarsdk.glb, mpfb.glb — same folder.
+    const DEFAULT_AVATAR =
+      "https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@1.5/avatars/brunette.glb";
 
     function buildAvatarUrl(raw) {
       let url = (raw || "").trim() || DEFAULT_AVATAR;
-      if (!/morphTargets=/.test(url)) {
+      // Only Ready Player Me-style URLs need the morphTargets query; pre-rigged
+      // GLBs already contain the viseme blendshapes.
+      if (/readyplayer\.me/.test(url) && !/morphTargets=/.test(url)) {
         url += (url.includes("?") ? "&" : "?") +
                "morphTargets=ARKit,Oculus%20Visemes&textureAtlas=1024&lod=1";
       }
