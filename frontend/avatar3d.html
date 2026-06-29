@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D Avatar — lip-sync test</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; }
+    html, body { height: 100%; background: #0b0b10; color: #e8e8ec;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    #avatar { position: fixed; inset: 0; }
+    #panel { position: fixed; left: 12px; bottom: 12px; right: 12px; z-index: 10;
+      display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    button { padding: 10px 16px; border: none; border-radius: 10px; cursor: pointer;
+      background: #7c6ef0; color: #fff; font-size: 14px; font-weight: 600; }
+    button.secondary { background: rgba(255,255,255,0.14); }
+    #log { position: fixed; top: 12px; left: 12px; right: 12px; max-height: 42vh; z-index: 10;
+      overflow: auto; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px; padding: 10px 12px; font: 12px/1.5 ui-monospace, monospace;
+      white-space: pre-wrap; backdrop-filter: blur(8px); }
+    .ok { color: #5ced73; } .err { color: #ff6b6b; } .info { color: #9fb4ff; }
+  </style>
+
+  <!-- Three.js + TalkingHead as ES modules (CDN for this test; we vendor locally later) -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js/+esm",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+      "talkinghead": "https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@1.5/modules/talkinghead.mjs"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="avatar"></div>
+
+  <div id="log">3D avatar lip-sync test — loading…</div>
+
+  <div id="panel">
+    <button id="mic-btn">▶︎ Start mic lip-sync</button>
+    <button id="nod-btn" class="secondary">Test head motion</button>
+  </div>
+
+  <script type="module">
+    // ─── EDIT THIS to your own Ready Player Me avatar ──────────────────────────
+    // Make one free at https://readyplayer.me , copy the .glb URL, and keep the
+    // query string below so it includes the viseme + ARKit morph targets.
+    const AVATAR_ID = "64bfa15f0e72c63d7c3934a6"; // a public RPM sample to start
+    const AVATAR_URL =
+      `https://models.readyplayer.me/${AVATAR_ID}.glb` +
+      `?morphTargets=ARKit,Oculus%20Visemes&textureAtlas=1024&lod=1`;
+
+    const HEADAUDIO_BASE = "https://cdn.jsdelivr.net/gh/met4citizen/HeadAudio@main";
+    // ───────────────────────────────────────────────────────────────────────────
+
+    const logEl = document.getElementById("log");
+    const log = (msg, cls = "") => {
+      const line = document.createElement("div");
+      if (cls) line.className = cls;
+      line.textContent = msg;
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+      console.log(msg);
+    };
+    window.addEventListener("error", (e) => log("window error: " + e.message, "err"));
+    window.addEventListener("unhandledrejection", (e) => log("promise rejected: " + (e.reason?.message || e.reason), "err"));
+
+    let head, headaudio;
+
+    try {
+      log("importing TalkingHead + three…", "info");
+      const { TalkingHead } = await import("talkinghead");
+
+      head = new TalkingHead(document.getElementById("avatar"), {
+        lipsyncModules: ["en"],
+        cameraView: "upper",
+        avatarMood: "neutral",
+        modelPixelRatio: Math.min(window.devicePixelRatio, 2),
+      });
+      log("TalkingHead created. Loading avatar GLB…", "info");
+
+      await head.showAvatar(
+        { url: AVATAR_URL, body: "F", avatarMood: "neutral", lipsyncLang: "en" },
+        (ev) => { if (ev.lengthComputable) log(`  …avatar ${(ev.loaded/ev.total*100).toFixed(0)}%`); }
+      );
+      log("✓ Avatar loaded & rendering. It should blink and look around.", "ok");
+    } catch (err) {
+      log("✗ Avatar failed to load: " + err.message, "err");
+      log("→ The sample avatar URL may be unavailable. Create your own at readyplayer.me and set AVATAR_ID.", "err");
+    }
+
+    // ── HeadAudio: real-time visemes from any audio signal ───────────────────────
+    async function initHeadAudio(ctx) {
+      const { HeadAudio } = await import(`${HEADAUDIO_BASE}/modules/headaudio.mjs`);
+      await ctx.audioWorklet.addModule(`${HEADAUDIO_BASE}/modules/headworklet.mjs`);
+      const ha = new HeadAudio(ctx, {
+        parameterData: { vadGateActiveDb: -45, vadGateInactiveDb: -65 },
+      });
+      await ha.loadModel(`${HEADAUDIO_BASE}/dist/model-en-mixed.bin`);
+      ha.onstarted = () => log("…speech detected", "info");
+      ha.onended   = () => log("…silence", "info");
+      ha.onvalue = (key, value) => {
+        if (head?.mtAvatar?.[key]) Object.assign(head.mtAvatar[key], { newvalue: value, needsUpdate: true });
+      };
+      // tick HeadAudio inside TalkingHead's render loop so morphs update each frame
+      if (head) head.opt.update = ha.update.bind(ha);
+      return ha;
+    }
+
+    document.getElementById("mic-btn").addEventListener("click", async (e) => {
+      try {
+        const ctx = head ? head.audioCtx : new AudioContext();
+        if (ctx.state === "suspended") await ctx.resume();
+        if (!headaudio) { log("initializing HeadAudio…", "info"); headaudio = await initHeadAudio(ctx); log("✓ HeadAudio ready", "ok"); }
+
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const src = ctx.createMediaStreamSource(stream);
+        src.connect(headaudio);
+        e.target.textContent = "🎙 Speak — lips should move";
+        e.target.disabled = true;
+        log("✓ Mic connected → talk and watch the avatar's mouth.", "ok");
+      } catch (err) {
+        log("✗ mic/HeadAudio error: " + err.message, "err");
+      }
+    });
+
+    document.getElementById("nod-btn").addEventListener("click", () => {
+      try { head?.playGesture?.("ok", 2); head?.lookAtCamera?.(500); log("nudged head motion", "info"); }
+      catch (err) { log("gesture error: " + err.message, "err"); }
+    });
+  </script>
+</body>
+</html>
