@@ -14,16 +14,47 @@ import { TalkingHead } from "talkinghead";
 
 const params = new URLSearchParams(location.search);
 const HEADAUDIO_BASE = "https://cdn.jsdelivr.net/gh/met4citizen/HeadAudio@main";
-const DEFAULT_AVATAR =
-  "https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@1.5/avatars/brunette.glb";
-// Ready Player Me shut down; default to TalkingHead's bundled avatar.
-// Override per-load with ?avatar=<glb-url>.
-const AVATAR_URL = (params.get("avatar") || "").trim() || DEFAULT_AVATAR;
+
+// Female + male avatars. Female defaults to TalkingHead's bundled brunette.glb
+// (Ready Player Me shut down). Drop your own GLBs at frontend/avatar/{female,male}.glb
+// — generate realistic ones from a photo at https://avaturn.me — or override per
+// load with ?avatarFemale=<url> / ?avatarMale=<url> / ?avatar=<url> (both).
+const AVATARS = {
+  female: (params.get("avatarFemale") || "").trim() ||
+    "https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@1.5/avatars/brunette.glb",
+  male: (params.get("avatarMale") || "").trim() || "avatar/male.glb",
+};
+const override = (params.get("avatar") || "").trim();
+if (override) { AVATARS.female = AVATARS.male = override; }
 
 const bridge = window.companionAvatar;
 let head = null;
 let headaudio = null;
 let wiring = false;
+let currentGender = "female";
+
+async function showFor(gender) {
+  const g = gender === "male" ? "male" : "female";
+  await head.showAvatar({
+    url: AVATARS[g], body: g === "male" ? "M" : "F",
+    avatarMood: "neutral", lipsyncLang: "en",
+  });
+  currentGender = g;
+}
+
+// Switch the avatar to match the detected speaker gender. Falls back to the
+// current avatar if the target GLB isn't available (e.g. no male.glb yet).
+async function switchGender(gender) {
+  const g = gender === "male" ? "male" : "female";
+  if (!head || g === currentGender) return;
+  try {
+    await showFor(g);
+    if (headaudio) head.opt.update = headaudio.update.bind(headaudio);
+    console.info("[avatar3d] switched to", g, "avatar");
+  } catch (e) {
+    console.warn(`[avatar3d] no ${g} avatar at ${AVATARS[g]} — keeping ${currentGender}.`, e);
+  }
+}
 
 async function init() {
   const container = document.getElementById("avatar3d");
@@ -39,9 +70,7 @@ async function init() {
       avatarMood: "neutral",
       modelPixelRatio: Math.min(window.devicePixelRatio, 2),
     });
-    await head.showAvatar({
-      url: AVATAR_URL, body: "F", avatarMood: "neutral", lipsyncLang: "en",
-    });
+    await showFor(bridge._gender === "male" ? "male" : "female");
     console.info("[avatar3d] avatar ready");
   } catch (e) {
     console.error("[avatar3d] failed to load avatar (needs internet for the CDN):", e);
@@ -51,6 +80,10 @@ async function init() {
   // wire audio → visemes now (or whenever chat.js provides the analyser)
   bridge._onAnalyser = wireHeadAudio;
   if (bridge._analyser) wireHeadAudio(bridge._analyser);
+
+  // follow the detected speaker gender (male/female avatar)
+  bridge._onIdentity = (_accent, gender) => switchGender(gender);
+  if (bridge._gender) switchGender(bridge._gender);
 }
 
 async function wireHeadAudio(analyser) {
