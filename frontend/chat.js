@@ -9,10 +9,10 @@ const transcript = document.getElementById("transcript");
 const statusDot  = document.getElementById("status-dot");
 
 const player = new AudioPlayer();
-// VideoAvatar drives the full-page video presence (idle ⇆ talking). It falls
-// back to a static poster until the clips are added. Only setState matters; the
-// other methods are no-ops kept for API parity with the old canvas avatar.
-const avatar = window.VideoAvatar ? new VideoAvatar() : null;
+// The 3D avatar (TalkingHead) lip-syncs to the voice in real time. chat.js talks
+// to the bridge (avatar_bridge.js); the ES-module controller (avatar3d.module.mjs)
+// taps the audio AnalyserNode via HeadAudio to drive the avatar's visemes.
+const avatar = window.companionAvatar || null;
 
 // Initialize persona picker; on change, update avatar colors and reset history
 PersonaPicker.init();
