@@ -67,6 +67,6 @@ TTS_SOFT_BREAK_MIN_CHARS = 35
 TTS_CHUNK_MAX_CHARS = 110
 # The FIRST chunk is emitted aggressively so the voice starts while the text is
 # still being typed, instead of waiting for a full sentence/paragraph.
-TTS_FIRST_CHUNK_MIN_CHARS = 8
-TTS_FIRST_SOFT_MIN_CHARS = 12
-TTS_FIRST_CHUNK_MAX_CHARS = 45
+TTS_FIRST_CHUNK_MIN_CHARS = 6
+TTS_FIRST_SOFT_MIN_CHARS = 8
+TTS_FIRST_CHUNK_MAX_CHARS = 28

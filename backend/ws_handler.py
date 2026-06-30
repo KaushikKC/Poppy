@@ -90,6 +90,10 @@ async def handle_chat(ws: WebSocket):
                     phrase = chunker.push(token)
                     if phrase:
                         tts_tasks.append(asyncio.create_task(tts_and_send(phrase)))
+                        # Yield so synthesis of this phrase starts now (in its
+                        # thread) rather than only after the whole text stream
+                        # ends — that's what makes the voice begin while typing.
+                        await asyncio.sleep(0)
 
                 remainder = chunker.flush()
                 if remainder:
