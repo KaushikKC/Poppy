@@ -35,6 +35,16 @@ def _get_pipeline(lang_code: str) -> KPipeline:
     return _pipelines[lang_code]
 
 
+def warmup() -> None:
+    """Pre-load the Kokoro model + default pipeline so the first real synthesis
+    isn't a cold start. That cold first call (model load + Metal warmup) is what
+    otherwise delays the first audio of the opening turn by several seconds."""
+    try:
+        synthesize_to_wav_bytes("Hello there.")
+    except Exception:
+        pass
+
+
 def synthesize_to_wav_bytes(
     text: str, accent: str | None = None, gender: str | None = None
 ) -> bytes:

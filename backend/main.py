@@ -26,6 +26,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.on_event("startup")
+async def _warmup_tts():
+    # Warm the Kokoro TTS model in the background so the first reply's audio
+    # starts fast instead of paying the cold model-load cost mid-conversation.
+    import tts
+    asyncio.create_task(asyncio.to_thread(tts.warmup))
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
