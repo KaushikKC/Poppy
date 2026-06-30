@@ -24,5 +24,4 @@ frontend/avatar/idle.mp4
 frontend/avatar/idle.webm
 frontend/avatar/talk.mp4
 frontend/avatar/talk.webm
-frontend/avatar/male.glb
-frontend/avatar/female.glb
+frontend/avatar/*.glb

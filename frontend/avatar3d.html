@@ -52,8 +52,9 @@
     // served via CDN. Paste another GLB in the box, or append ?avatar=<url>.
     // Other bundled options: avaturn.glb (realistic), vroid.glb (anime),
     // avatarsdk.glb, mpfb.glb — same folder.
-    const DEFAULT_AVATAR =
-      "https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@1.5/avatars/brunette.glb";
+    // Local, vendored avatars (avatar/brunette.glb, avatarsdk.glb, avaturn.glb,
+    // mpfb.glb). Preview any with ?avatar=avatar/<name>.glb
+    const DEFAULT_AVATAR = "avatar/brunette.glb";
 
     function buildAvatarUrl(raw) {
       let url = (raw || "").trim() || DEFAULT_AVATAR;

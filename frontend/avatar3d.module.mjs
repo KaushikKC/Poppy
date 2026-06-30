@@ -15,15 +15,13 @@ import { TalkingHead } from "talkinghead";
 const params = new URLSearchParams(location.search);
 const HEADAUDIO_BASE = "https://cdn.jsdelivr.net/gh/met4citizen/HeadAudio@main";
 
-// Female + male avatars, from TalkingHead's bundled set (Ready Player Me shut
-// down). Served via GitHub raw, which resolves the Git-LFS binaries with CORS.
-// Other choices to try: avaturn.glb, mpfb.glb. Drop your own at
-// frontend/avatar/{female,male}.glb (generate from a photo at https://avaturn.me),
-// or override per load with ?avatarFemale=<url> / ?avatarMale=<url> / ?avatar=<url>.
-const RAW = "https://github.com/met4citizen/TalkingHead/raw/main/avatars";
+// Female + male avatars, vendored locally in frontend/avatar/ (same-origin =
+// no CORS, works offline). Bundled choices to try: brunette, avatarsdk, avaturn,
+// mpfb. Drop your own (e.g. from https://avaturn.me) and override per load with
+// ?avatarFemale=<url> / ?avatarMale=<url> / ?avatar=<url>.
 const AVATARS = {
-  female: (params.get("avatarFemale") || "").trim() || `${RAW}/brunette.glb`,
-  male:   (params.get("avatarMale")   || "").trim() || `${RAW}/avatarsdk.glb`,
+  female: (params.get("avatarFemale") || "").trim() || "avatar/brunette.glb",
+  male:   (params.get("avatarMale")   || "").trim() || "avatar/avatarsdk.glb",
 };
 const override = (params.get("avatar") || "").trim();
 if (override) { AVATARS.female = AVATARS.male = override; }
