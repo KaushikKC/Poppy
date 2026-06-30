@@ -30,6 +30,14 @@ if (override) { AVATARS.female = AVATARS.male = override; }
 // detected speaker gender.
 const forcedGender = (params.get("gender") || "").trim().toLowerCase();
 
+// Some avatars rest with the head tilted down; correct the head pitch. Per-gender
+// default, tunable live with ?headTilt=<radians> (try 0.1, 0.2, -0.1).
+const headTilt = params.has("headTilt") ? parseFloat(params.get("headTilt")) : null;
+function baselineFor(g) {
+  const t = headTilt != null ? headTilt : (g === "male" ? 0.18 : 0);
+  return Number.isFinite(t) && t ? { headRotateX: t } : {};
+}
+
 const bridge = window.companionAvatar;
 let head = null;
 let headaudio = null;
@@ -41,8 +49,10 @@ async function showFor(gender) {
   await head.showAvatar({
     url: AVATARS[g], body: g === "male" ? "M" : "F",
     avatarMood: "neutral", lipsyncLang: "en",
+    baseline: baselineFor(g),
   });
   currentGender = g;
+  head.lookAhead?.(2000);   // settle into a forward-facing pose
 }
 
 // Switch the avatar to match the detected speaker gender. Falls back to the
