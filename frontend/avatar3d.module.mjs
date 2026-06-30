@@ -15,17 +15,22 @@ import { TalkingHead } from "talkinghead";
 const params = new URLSearchParams(location.search);
 const HEADAUDIO_BASE = "https://cdn.jsdelivr.net/gh/met4citizen/HeadAudio@main";
 
-// Female + male avatars. Female defaults to TalkingHead's bundled brunette.glb
-// (Ready Player Me shut down). Drop your own GLBs at frontend/avatar/{female,male}.glb
-// — generate realistic ones from a photo at https://avaturn.me — or override per
-// load with ?avatarFemale=<url> / ?avatarMale=<url> / ?avatar=<url> (both).
+// Female + male avatars, from TalkingHead's bundled set (Ready Player Me shut
+// down). Served via GitHub raw, which resolves the Git-LFS binaries with CORS.
+// Other choices to try: avaturn.glb, mpfb.glb. Drop your own at
+// frontend/avatar/{female,male}.glb (generate from a photo at https://avaturn.me),
+// or override per load with ?avatarFemale=<url> / ?avatarMale=<url> / ?avatar=<url>.
+const RAW = "https://github.com/met4citizen/TalkingHead/raw/main/avatars";
 const AVATARS = {
-  female: (params.get("avatarFemale") || "").trim() ||
-    "https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@1.5/avatars/brunette.glb",
-  male: (params.get("avatarMale") || "").trim() || "avatar/male.glb",
+  female: (params.get("avatarFemale") || "").trim() || `${RAW}/brunette.glb`,
+  male:   (params.get("avatarMale")   || "").trim() || `${RAW}/avatarsdk.glb`,
 };
 const override = (params.get("avatar") || "").trim();
 if (override) { AVATARS.female = AVATARS.male = override; }
+
+// Force a gender for testing (?gender=male|female); otherwise it follows the
+// detected speaker gender.
+const forcedGender = (params.get("gender") || "").trim().toLowerCase();
 
 const bridge = window.companionAvatar;
 let head = null;
@@ -45,6 +50,7 @@ async function showFor(gender) {
 // Switch the avatar to match the detected speaker gender. Falls back to the
 // current avatar if the target GLB isn't available (e.g. no male.glb yet).
 async function switchGender(gender) {
+  if (forcedGender) return; // a ?gender= override pins the avatar
   const g = gender === "male" ? "male" : "female";
   if (!head || g === currentGender) return;
   try {
@@ -70,7 +76,7 @@ async function init() {
       avatarMood: "neutral",
       modelPixelRatio: Math.min(window.devicePixelRatio, 2),
     });
-    await showFor(bridge._gender === "male" ? "male" : "female");
+    await showFor(forcedGender || (bridge._gender === "male" ? "male" : "female"));
     console.info("[avatar3d] avatar ready");
   } catch (e) {
     console.error("[avatar3d] failed to load avatar (needs internet for the CDN):", e);
