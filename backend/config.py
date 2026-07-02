@@ -33,7 +33,12 @@ CRISIS_ADDENDUM = (
     "reply short, caring, and human. Never provide any means or methods of self-harm."
 )
 
-WHISPER_MODEL = "small"
+# STT backend. "mlx" runs Whisper on the Apple-Silicon GPU (Metal) via mlx-whisper
+# — much faster than CPU on an M-series Mac. "faster" is the CPU CTranslate2 path
+# (faster-whisper), kept as a portable fallback and used automatically if MLX fails.
+WHISPER_BACKEND = "mlx"
+WHISPER_MLX_REPO = "mlx-community/whisper-small-mlx"  # Metal-optimized weights
+WHISPER_MODEL = "small"   # faster-whisper (CPU fallback) model size
 WHISPER_DEVICE = "cpu"
 WHISPER_COMPUTE = "int8"
 

@@ -26,19 +26,25 @@ from config import (
     ACCENT_MODEL_REPO,
     EMOTION_MODEL_REPO,
     KOKORO_REPO_ID,
+    WHISPER_BACKEND,
+    WHISPER_MLX_REPO,
     WHISPER_MODEL,
 )
 
 # faster-whisper pulls standard model names from this HF org.
 WHISPER_REPO_ID = f"Systran/faster-whisper-{WHISPER_MODEL}"
 
-# (label, hugging-face repo id) for presence checks.
+# (label, hugging-face repo id) for presence checks. The MLX (Metal) weights are
+# only needed when that backend is active; the CPU faster-whisper model is always
+# fetched so the fallback works offline too.
 REPOS = [
     ("Kokoro TTS", KOKORO_REPO_ID),
     ("Accent classifier", ACCENT_MODEL_REPO),
     ("Emotion classifier", EMOTION_MODEL_REPO),
-    ("Whisper STT", WHISPER_REPO_ID),
+    ("Whisper STT (CPU fallback)", WHISPER_REPO_ID),
 ]
+if WHISPER_BACKEND == "mlx":
+    REPOS.append(("Whisper STT (MLX/Metal)", WHISPER_MLX_REPO))
 
 OK = "\033[32mOK\033[0m"
 MISS = "\033[31mMISSING\033[0m"
@@ -92,14 +98,24 @@ def download() -> bool:
         print(f"  ! failed: {e}")
         ok = False
 
-    # Whisper (faster-whisper handles its own cache layout).
+    # Whisper (faster-whisper handles its own cache layout) — CPU fallback.
     try:
         from faster_whisper import download_model
-        print(f"→ Whisper STT ({WHISPER_MODEL}) …")
+        print(f"→ Whisper STT / CPU fallback ({WHISPER_MODEL}) …")
         download_model(WHISPER_MODEL)
     except Exception as e:
         print(f"  ! failed: {e}")
         ok = False
+
+    # Whisper MLX (Metal) weights — only when that backend is selected.
+    if WHISPER_BACKEND == "mlx":
+        try:
+            from huggingface_hub import snapshot_download
+            print(f"→ Whisper STT / MLX Metal ({WHISPER_MLX_REPO}) …")
+            snapshot_download(WHISPER_MLX_REPO)
+        except Exception as e:
+            print(f"  ! failed: {e}")
+            ok = False
 
     return ok
 
