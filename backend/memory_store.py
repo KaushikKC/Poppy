@@ -107,8 +107,13 @@ def extract_and_store(user_text: str) -> list[str]:
     return added
 
 
+# Only the most recent facts are injected into the prompt — enough for continuity
+# without ballooning the prefill (and slowing time-to-first-token) as memory grows.
+_PROMPT_FACTS = 15
+
+
 def as_prompt_block() -> str:
-    facts = _load()
+    facts = _load()[-_PROMPT_FACTS:]
     if not facts:
         return ""
     lines = "\n".join(f"- {f}" for f in facts)
