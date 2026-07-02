@@ -1,7 +1,15 @@
 OLLAMA_URL = "http://localhost:11434"
-OLLAMA_MODEL = "llama3.1:8b-instruct-q4_K_M"
+# 3B instruct model: much faster time-to-first-token than the 8B on an M3, with
+# only a small quality drop for short conversational replies. Swap back to
+# "llama3.1:8b-instruct-q4_K_M" if replies feel too shallow.
+OLLAMA_MODEL = "llama3.2:3b-instruct-q4_K_M"
 OLLAMA_CONTEXT_WINDOW = 4096
-MAX_HISTORY_TURNS = 10
+# Fewer history turns = smaller prefill each turn = faster first token. 6 turns
+# (~3 exchanges) keeps enough context for a companion chat.
+MAX_HISTORY_TURNS = 6
+# Keep the model resident in Ollama between turns so it never pays the cold
+# load again (-1 = never unload). Set as a request option in ollama_client.
+OLLAMA_KEEP_ALIVE = -1
 
 SYSTEM_PROMPT = (
     "You are a warm, friendly conversational companion. "

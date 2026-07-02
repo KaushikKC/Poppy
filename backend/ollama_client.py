@@ -1,7 +1,13 @@
 import httpx
 import json
 from typing import AsyncIterator
-from config import OLLAMA_URL, OLLAMA_MODEL, OLLAMA_CONTEXT_WINDOW, SYSTEM_PROMPT
+from config import (
+    OLLAMA_URL,
+    OLLAMA_MODEL,
+    OLLAMA_CONTEXT_WINDOW,
+    OLLAMA_KEEP_ALIVE,
+    SYSTEM_PROMPT,
+)
 
 
 def _build_messages(history: list[dict], user_text: str, system_prompt: str) -> list[dict]:
@@ -21,6 +27,7 @@ async def stream_reply(
         "model": OLLAMA_MODEL,
         "messages": messages,
         "stream": True,
+        "keep_alive": OLLAMA_KEEP_ALIVE,
         "options": {"num_ctx": OLLAMA_CONTEXT_WINDOW},
     }
 
@@ -36,3 +43,21 @@ async def stream_reply(
                     yield token
                 if data.get("done"):
                     break
+
+
+async def warmup() -> None:
+    """Preload the model into Ollama at startup so the first real turn doesn't pay
+    the cold model-load. Combined with keep_alive=-1 the model then stays resident."""
+    payload = {
+        "model": OLLAMA_MODEL,
+        "messages": [{"role": "user", "content": "hi"}],
+        "stream": False,
+        "keep_alive": OLLAMA_KEEP_ALIVE,
+        "options": {"num_ctx": OLLAMA_CONTEXT_WINDOW, "num_predict": 1},
+    }
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.post(f"{OLLAMA_URL}/api/chat", json=payload)
+            resp.raise_for_status()
+    except Exception:
+        pass
