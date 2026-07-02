@@ -27,11 +27,16 @@ app.add_middleware(
 )
 
 @app.on_event("startup")
-async def _warmup_tts():
-    # Warm the Kokoro TTS model in the background so the first reply's audio
-    # starts fast instead of paying the cold model-load cost mid-conversation.
+async def _warmup_models():
+    # Warm the heavy models in the background so the first turn is fast instead of
+    # paying cold-load costs mid-conversation: Kokoro TTS and the Ollama LLM (which
+    # then stays resident via keep_alive=-1).
     import tts
+    import ollama_client
+    import stt
     asyncio.create_task(asyncio.to_thread(tts.warmup))
+    asyncio.create_task(ollama_client.warmup())
+    asyncio.create_task(asyncio.to_thread(stt.warmup))
 
 
 @app.get("/health")
