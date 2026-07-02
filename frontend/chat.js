@@ -176,7 +176,54 @@ window.sendMessage = async function sendMessage(text) {
   currentReplyBubble = replyBubble;
   window._replyActive = true;
 
-  let accumulated = "";
+  // ── Paced text reveal ──────────────────────────────────────────────────────
+  // Ollama types the whole reply far faster than Kokoro can synthesize the first
+  // phrase, so dumping every token instantly makes the text finish before the
+  // voice even starts. Instead we buffer the tokens and reveal them at roughly
+  // speech rate, so the voice begins while only the first few words are on screen
+  // (the goal: "voice starts at the start of the typing").
+  const REVEAL_CPS       = 16;  // chars/sec once the voice is playing (~speech)
+  const REVEAL_CPS_PRE    = 9;  // slower trickle before the first audio arrives
+  const MAX_LEAD_CHARS   = 40;  // never get more than ~this far ahead of silence
+  let target = "";              // full text received so far
+  let shownF = 0;               // chars revealed (fractional accumulator)
+  let audioStarted = false;
+  let lastTick = 0;
+  let revealTimer = null;
+
+  function renderShown() {
+    replyBubble.textContent = target.slice(0, Math.floor(shownF));
+    transcript.scrollTop = transcript.scrollHeight;
+  }
+
+  function flushAll() {
+    shownF = target.length;
+    renderShown();
+    if (revealTimer) { clearInterval(revealTimer); revealTimer = null; }
+  }
+
+  function startReveal() {
+    if (revealTimer) return;
+    lastTick = performance.now();
+    revealTimer = setInterval(() => {
+      // Barge-in: this turn was superseded/closed — stop revealing its text.
+      if (ws !== currentWs) { clearInterval(revealTimer); revealTimer = null; return; }
+      const now = performance.now();
+      const dt = (now - lastTick) / 1000;
+      lastTick = now;
+      const cps = audioStarted ? REVEAL_CPS : REVEAL_CPS_PRE;
+      let next = shownF + cps * dt;
+      // Before the voice starts, don't outrun it: hold a small lead so the audio
+      // catches up within the first few words instead of trailing finished text.
+      if (!audioStarted) next = Math.min(next, MAX_LEAD_CHARS);
+      shownF = Math.min(next, target.length);
+      renderShown();
+      // Stop ticking once the LLM is done and all text is shown.
+      if (!replyBubble.classList.contains("streaming") && shownF >= target.length) {
+        clearInterval(revealTimer); revealTimer = null;
+      }
+    }, 40);
+  }
 
   player.onPlaybackStart(() => {
     if (window._turnStart) {
@@ -185,10 +232,13 @@ window.sendMessage = async function sendMessage(text) {
       showLatency(ms);
       console.info(`Latency (mic-stop → first audio): ${ms} ms`);
     }
+    audioStarted = true;
     setStatus("speaking");
     avatar?.setState("speaking");
   });
   player.onPlaybackEnd(() => {
+    // Voice finished — make sure no buffered text is left hidden behind it.
+    flushAll();
     if (!replyBubble.classList.contains("streaming")) {
       setStatus("idle");
       avatar?.setState("idle");
@@ -232,12 +282,14 @@ window.sendMessage = async function sendMessage(text) {
 
     } else if (msg.type === "token") {
       if (statusDot.title === "thinking") setStatus("thinking");
-      accumulated += msg.text;
-      replyBubble.textContent = accumulated;
-      transcript.scrollTop = transcript.scrollHeight;
+      target += msg.text;
+      startReveal();
 
     } else if (msg.type === "done") {
       replyBubble.classList.remove("streaming");
+      // The reveal loop keeps pacing the remaining text to the voice; if the
+      // audio already finished (or there is none), show the rest immediately.
+      if (!player.isPlaying()) flushAll();
       ws.close();
       endReply(ws);
       setInputLocked(false);
