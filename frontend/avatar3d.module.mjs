@@ -16,9 +16,13 @@ const params = new URLSearchParams(location.search);
 const HEADAUDIO_BASE = "https://cdn.jsdelivr.net/gh/met4citizen/HeadAudio@main";
 
 // Female + male avatars, vendored locally in frontend/avatar/ (same-origin =
-// no CORS, works offline). Bundled choices to try: brunette, avatarsdk, avaturn,
-// mpfb. Drop your own (e.g. from https://avaturn.me) and override per load with
-// ?avatarFemale=<url> / ?avatarMale=<url> / ?avatar=<url>.
+// no CORS, works offline). Of the bundled files only avatarsdk.glb is male
+// (brunette/avaturn/mpfb are all female). avatarsdk's rig rests with the head
+// tilted down; we lift it back with a negative headRotateX baseline (see below).
+// Ready Player Me shut down 2026-01-31; for a nicer male, make one at Avaturn
+// (https://avaturn.me), download the .glb (ARKit + Oculus visemes), drop it in
+// here, and pass ?avatarMale=avatar/<file>.glb.
+// Override per load with ?avatarFemale=<url> / ?avatarMale=<url> / ?avatar=<url>.
 const AVATARS = {
   female: (params.get("avatarFemale") || "").trim() || "avatar/brunette.glb",
   male:   (params.get("avatarMale")   || "").trim() || "avatar/avatarsdk.glb",
@@ -30,11 +34,14 @@ if (override) { AVATARS.female = AVATARS.male = override; }
 // detected speaker gender.
 const forcedGender = (params.get("gender") || "").trim().toLowerCase();
 
-// Some avatars rest with the head tilted down; correct the head pitch. Per-gender
-// default, tunable live with ?headTilt=<radians> (try 0.1, 0.2, -0.1).
+// The male avatarsdk.glb rests with its head tilted down. In TalkingHead a
+// POSITIVE headRotateX nods the head DOWN, so we lift it with a NEGATIVE baseline.
+// -0.40 was dialled in live as the value that faces avatarsdk forward; override
+// per load with ?headTilt=<radians> if a different male avatar needs another value.
+const MALE_HEAD_TILT = -0.40;
 const headTilt = params.has("headTilt") ? parseFloat(params.get("headTilt")) : null;
 function baselineFor(g) {
-  const t = headTilt != null ? headTilt : (g === "male" ? 0.18 : 0);
+  const t = headTilt != null ? headTilt : (g === "male" ? MALE_HEAD_TILT : 0);
   return Number.isFinite(t) && t ? { headRotateX: t } : {};
 }
 
@@ -84,7 +91,17 @@ async function init() {
       avatarMood: "neutral",
       modelPixelRatio: Math.min(window.devicePixelRatio, 2),
     });
-    await showFor(forcedGender || (bridge._gender === "male" ? "male" : "female"));
+    const want = forcedGender || (bridge._gender === "male" ? "male" : "female");
+    try {
+      await showFor(want);
+    } catch (e) {
+      // Initial avatar missing (e.g. male-rpm.glb not added yet) — don't leave a
+      // blank stage; fall back to the female so the app still shows someone.
+      if (want === "male") {
+        console.warn(`[avatar3d] male avatar at ${AVATARS.male} unavailable — falling back to female.`, e);
+        await showFor("female");
+      } else throw e;
+    }
     console.info("[avatar3d] avatar ready");
   } catch (e) {
     console.error("[avatar3d] failed to load avatar (needs internet for the CDN):", e);
