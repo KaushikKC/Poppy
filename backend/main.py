@@ -59,12 +59,18 @@ async def speech_to_text(
     if not data:
         raise HTTPException(status_code=400, detail="Empty audio file")
 
-    # Decode once, then transcribe and detect accent + gender + emotion from it.
+    # Decode once, then run transcription + accent/gender/emotion detection
+    # concurrently — they're independent and all read the same pcm, so running
+    # them in parallel threads makes the response as fast as the slowest one
+    # instead of the sum (transcript was previously stuck behind the classifiers).
     pcm = await asyncio.to_thread(audio_utils.decode_16k_mono, data)
-    transcript = await asyncio.to_thread(transcribe, pcm)
-    detected_accent = await asyncio.to_thread(accent_detect.tracker.update, pcm)
-    detected_gender = await asyncio.to_thread(gender_detect.tracker.update, pcm)
-    emotion, _ = await asyncio.to_thread(emotion_detect.detect, pcm)
+    transcript, detected_accent, detected_gender, emo = await asyncio.gather(
+        asyncio.to_thread(transcribe, pcm),
+        asyncio.to_thread(accent_detect.tracker.update, pcm),
+        asyncio.to_thread(gender_detect.tracker.update, pcm),
+        asyncio.to_thread(emotion_detect.detect, pcm),
+    )
+    emotion = emo[0]
 
     if not transcript:
         return JSONResponse({
