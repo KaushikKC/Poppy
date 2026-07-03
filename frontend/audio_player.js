@@ -48,8 +48,13 @@ class AudioPlayer {
     source.buffer = audioBuffer;
     source.connect(this._analyser);
 
+    // Start the very first chunk a bit later to build a small playout buffer, so
+    // a later chunk that synthesizes slightly slow doesn't leave an audible gap
+    // (the voice stuttering "in between"). Subsequent chunks chain gaplessly off
+    // _nextStart; if synthesis falls behind, they start ~immediately.
     const now = this._ctx.currentTime;
-    const startAt = Math.max(now + 0.05, this._nextStart);
+    const cushion = this._nextStart === 0 ? 0.5 : 0.02;
+    const startAt = Math.max(now + cushion, this._nextStart);
     source.start(startAt);
     this._nextStart = startAt + audioBuffer.duration;
 
