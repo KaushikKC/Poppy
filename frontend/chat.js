@@ -129,6 +129,7 @@ function endReply(ws) {
 window.interruptReply = function interruptReply() {
   if (!window._replyActive) return false;
   window._replyActive = false;
+  try { window._killReveal?.(); } catch {}  // freeze the paced text where it is
   try { player.stop(); } catch {}
   try { currentWs && currentWs.close(); } catch {}
   if (currentReplyBubble && currentReplyBubble.classList.contains("streaming")) {
@@ -176,18 +177,18 @@ window.sendMessage = async function sendMessage(text) {
   currentReplyBubble = replyBubble;
   window._replyActive = true;
 
-  // ── Paced text reveal ──────────────────────────────────────────────────────
-  // Ollama types the whole reply far faster than Kokoro can synthesize the first
-  // phrase, so dumping every token instantly makes the text finish before the
-  // voice even starts. Instead we buffer the tokens and reveal them at roughly
-  // speech rate, so the voice begins while only the first few words are on screen
-  // (the goal: "voice starts at the start of the typing").
-  const REVEAL_CPS       = 16;  // chars/sec once the voice is playing (~speech)
-  const REVEAL_CPS_PRE    = 9;  // slower trickle before the first audio arrives
-  const MAX_LEAD_CHARS   = 40;  // never get more than ~this far ahead of silence
-  let target = "";              // full text received so far
-  let shownF = 0;               // chars revealed (fractional accumulator)
-  let audioStarted = false;
+  // ── Paced text reveal ───────────────────────────────────────────────────────
+  // Ollama types the whole reply far faster than Kokoro can speak it, so we don't
+  // dump tokens on screen. We reveal them at a STEADY rate matched to Kokoro's
+  // speaking pace (~13 chars/sec, measured), which keeps the text continuous and
+  // naturally in sync with the voice from start to finish. (An earlier attempt to
+  // pace to the queued-audio length stalled, because the audio queues up far
+  // ahead of what's actually being spoken.)
+  const REVEAL_CPS   = 13;     // ~Kokoro speaking rate; steady = smooth + in sync
+  let target = "";             // full text received so far
+  let shownF = 0;              // chars revealed (fractional accumulator)
+  let llmDone = false;         // the LLM finished generating (all audio is sent)
+  let revealDead = false;      // barge-in / superseded — stop this turn's reveal
   let lastTick = 0;
   let revealTimer = null;
 
@@ -199,31 +200,36 @@ window.sendMessage = async function sendMessage(text) {
   function flushAll() {
     shownF = target.length;
     renderShown();
+  }
+
+  function killReveal() {
+    revealDead = true;
     if (revealTimer) { clearInterval(revealTimer); revealTimer = null; }
   }
 
   function startReveal() {
-    if (revealTimer) return;
+    if (revealTimer || revealDead) return;
     lastTick = performance.now();
     revealTimer = setInterval(() => {
-      // Barge-in: this turn was superseded/closed — stop revealing its text.
-      if (ws !== currentWs) { clearInterval(revealTimer); revealTimer = null; return; }
+      if (revealDead) { clearInterval(revealTimer); revealTimer = null; return; }
       const now = performance.now();
       const dt = (now - lastTick) / 1000;
       lastTick = now;
-      const cps = audioStarted ? REVEAL_CPS : REVEAL_CPS_PRE;
-      let next = shownF + cps * dt;
-      // Before the voice starts, don't outrun it: hold a small lead so the audio
-      // catches up within the first few words instead of trailing finished text.
-      if (!audioStarted) next = Math.min(next, MAX_LEAD_CHARS);
-      shownF = Math.min(next, target.length);
+
+      shownF = Math.min(shownF + REVEAL_CPS * dt, target.length);
       renderShown();
-      // Stop ticking once the LLM is done and all text is shown.
-      if (!replyBubble.classList.contains("streaming") && shownF >= target.length) {
+
+      // Finished: LLM done, all text shown, and the voice has fully played out.
+      if (llmDone && shownF >= target.length && !player.isPlaying()) {
         clearInterval(revealTimer); revealTimer = null;
+        setStatus("idle");
+        avatar?.setState("idle");
       }
     }, 40);
   }
+
+  // Let a barge-in stop this turn's reveal (frozen at whatever was shown).
+  window._killReveal = killReveal;
 
   player.onPlaybackStart(() => {
     if (window._turnStart) {
@@ -232,17 +238,8 @@ window.sendMessage = async function sendMessage(text) {
       showLatency(ms);
       console.info(`Latency (mic-stop → first audio): ${ms} ms`);
     }
-    audioStarted = true;
     setStatus("speaking");
     avatar?.setState("speaking");
-  });
-  player.onPlaybackEnd(() => {
-    // Voice finished — make sure no buffered text is left hidden behind it.
-    flushAll();
-    if (!replyBubble.classList.contains("streaming")) {
-      setStatus("idle");
-      avatar?.setState("idle");
-    }
   });
 
   ws.onopen = () => {
@@ -286,22 +283,21 @@ window.sendMessage = async function sendMessage(text) {
       startReveal();
 
     } else if (msg.type === "done") {
+      // "done" = the LLM finished generating (all audio is now sent); the voice
+      // may still play for many seconds. Mark it and let the audio-synced reveal
+      // loop finish the text and reset the avatar when the voice truly ends.
+      llmDone = true;
       replyBubble.classList.remove("streaming");
-      // The reveal loop keeps pacing the remaining text to the voice; if the
-      // audio already finished (or there is none), show the rest immediately.
-      if (!player.isPlaying()) flushAll();
       ws.close();
       endReply(ws);
       setInputLocked(false);
       input.focus();
-      // "done" means the LLM finished generating text — the audio is still
-      // playing out for many seconds after this. Keep the avatar speaking until
-      // the audio truly ends (onPlaybackEnd handles that). Only reset now if no
-      // audio is playing: a text-only reply, or a tiny reply whose audio already
-      // finished before this message arrived.
-      if (avatar && !player.isPlaying()) {
+      if (!player.isPlaying()) {
+        // Text-only reply, or the audio already finished — nothing to sync to.
+        flushAll();
+        killReveal();
         setStatus("idle");
-        avatar.setState("idle");
+        avatar?.setState("idle");
       }
 
     } else if (msg.type === "error") {
