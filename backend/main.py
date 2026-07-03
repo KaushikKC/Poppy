@@ -34,9 +34,15 @@ async def _warmup_models():
     import tts
     import ollama_client
     import stt
+    import accent_detect
+    import emotion_detect
     asyncio.create_task(asyncio.to_thread(tts.warmup))
     asyncio.create_task(ollama_client.warmup())
     asyncio.create_task(asyncio.to_thread(stt.warmup))
+    # Pre-load the wav2vec2 classifiers too, so the first /stt doesn't pay their
+    # (multi-second) lazy load on top of transcription.
+    asyncio.create_task(asyncio.to_thread(accent_detect._ensure_model))
+    asyncio.create_task(asyncio.to_thread(emotion_detect._ensure_model))
 
 
 @app.get("/health")
