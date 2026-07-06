@@ -13,7 +13,8 @@
 import { TalkingHead } from "talkinghead";
 
 const params = new URLSearchParams(location.search);
-const HEADAUDIO_BASE = "https://cdn.jsdelivr.net/gh/met4citizen/HeadAudio@main";
+// HeadAudio vendored locally (frontend/vendor/headaudio/) so lip-sync works offline.
+const HEADAUDIO_BASE = "/vendor/headaudio";
 
 // Female + male avatars, vendored locally in frontend/avatar/ (same-origin =
 // no CORS, works offline). Of the bundled files only avatarsdk.glb is male
@@ -83,6 +84,9 @@ async function init() {
 
   try {
     head = new TalkingHead(container, {
+      // Draco decoder vendored locally (TalkingHead defaults to a gstatic CDN);
+      // needed only for Draco-compressed GLBs, but keeps the app fully offline.
+      dracoDecoderPath: "/vendor/draco/",
       // we never use TalkingHead's own TTS (lips come from HeadAudio), but the
       // constructor requires an endpoint — give it a dummy so it initializes.
       ttsEndpoint: "/no-tts",
