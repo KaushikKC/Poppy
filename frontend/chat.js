@@ -9,6 +9,7 @@ const transcript = document.getElementById("transcript");
 const statusDot  = document.getElementById("status-dot");
 
 const player = new AudioPlayer();
+window._player = player; // ui.js taps the analyser to animate the voice EQ
 // The 3D avatar (TalkingHead) lip-syncs to the voice in real time. chat.js talks
 // to the bridge (avatar_bridge.js); the ES-module controller (avatar3d.module.mjs)
 // taps the audio AnalyserNode via HeadAudio to drive the avatar's visemes.
@@ -65,11 +66,23 @@ window.showPersonaSuggestion = function showPersonaSuggestion(suggestion) {
   }
 };
 
+// Identity chips are icon + label (<i class="chip-label">); we fill the label
+// and toggle .on so CSS can show/hide the whole chip. No emojis — the icons
+// live in index.html as inline SVGs.
+function setChip(id, text) {
+  const badge = document.getElementById(id);
+  if (!badge) return;
+  const label = badge.querySelector(".chip-label");
+  if (label) label.textContent = text || "";
+  badge.classList.toggle("on", !!text);
+}
+
 let _latencyTimer = null;
 function showLatency(ms) {
   const badge = document.getElementById("latency-badge");
   if (!badge) return;
-  badge.textContent = `${(ms / 1000).toFixed(2)}s`;
+  const label = badge.querySelector(".chip-label");
+  if (label) label.textContent = `${(ms / 1000).toFixed(2)}s`;
   badge.classList.add("visible");
   clearTimeout(_latencyTimer);
   _latencyTimer = setTimeout(() => badge.classList.remove("visible"), 3000);
@@ -85,31 +98,57 @@ function setStatus(state) {
 window._accent = window._accent || null;
 window.setAccent = function setAccent(accent) {
   window._accent = accent;
-  const badge = document.getElementById("accent-badge");
-  if (badge) badge.textContent = accent ? `🗣 ${accent}` : "";
+  setChip("accent-badge", accent);
   avatar?.setIdentity?.(window._accent, window._gender);
 };
 
 // Gender detected from the user's voice; sent with each message so the reply
 // uses the matching male/female voice. Sticky identity, like accent.
-const GENDER_GLYPH = { male: "♂", female: "♀" };
 window._gender = window._gender || null;
 window.setGender = function setGender(gender) {
   window._gender = gender;
-  const badge = document.getElementById("gender-badge");
-  if (badge) badge.textContent = gender ? `${GENDER_GLYPH[gender] ?? ""} ${gender}` : "";
+  setChip("gender-badge", gender);
   avatar?.setIdentity?.(window._accent, window._gender);
 };
 
 // Emotion detected from the voice; shapes the reply's tone. Momentary, so it's
 // consumed after one message (a later typed message has no emotion = neutral).
-const EMOJI = { happy: "😊", sad: "😔", angry: "😠", neutral: "😐" };
 window._emotion = window._emotion || null;
 window.setEmotion = function setEmotion(emotion) {
   window._emotion = emotion && emotion !== "neutral" ? emotion : null;
-  const badge = document.getElementById("emotion-badge");
-  if (badge) badge.textContent = emotion ? `${EMOJI[emotion] ?? ""} ${emotion}` : "";
+  setChip("emotion-badge", emotion);
 };
+
+// ── Voice adaptation toggle ───────────────────────────────────────────────────
+// When ON, /stt runs the accent/voice/mood classifiers and the reply adapts to how
+// you sound — but that adds a few seconds per turn. OFF (default) skips them for
+// fast replies with the default voice. mic.js reads window.detectionEnabled().
+let _detectionOn = false;
+window.detectionEnabled = () => _detectionOn;
+
+(function initAdaptToggle() {
+  const btn = document.getElementById("adapt-btn");
+  if (!btn) return;
+
+  function apply() {
+    btn.classList.toggle("on", _detectionOn);
+    btn.setAttribute("aria-pressed", _detectionOn ? "true" : "false");
+    if (!_detectionOn) {
+      // Clear any stale identity chips + values when adaptation is turned off.
+      window.setAccent?.(null);
+      window.setGender?.(null);
+      window.setEmotion?.(null);
+    }
+  }
+
+  btn.addEventListener("click", () => { _detectionOn = !_detectionOn; apply(); });
+
+  // Initialize from the server default so the UI matches the backend.
+  fetch(`${BACKEND}/settings`)
+    .then((r) => r.json())
+    .then((s) => { _detectionOn = !!s.detection; apply(); })
+    .catch(() => apply());
+})();
 
 // ── Barge-in ────────────────────────────────────────────────────────────────
 // The user can interrupt the assistant mid-reply: stop the audio, abort the
