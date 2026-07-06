@@ -1,3 +1,5 @@
+import os
+
 OLLAMA_URL = "http://localhost:11434"
 # 3B instruct model: much faster time-to-first-token than the 8B on an M3, with
 # only a small quality drop for short conversational replies. Swap back to
@@ -36,11 +38,29 @@ CRISIS_ADDENDUM = (
 # STT backend. "mlx" runs Whisper on the Apple-Silicon GPU (Metal) via mlx-whisper
 # — much faster than CPU on an M-series Mac. "faster" is the CPU CTranslate2 path
 # (faster-whisper), kept as a portable fallback and used automatically if MLX fails.
-WHISPER_BACKEND = "mlx"
-WHISPER_MLX_REPO = "mlx-community/whisper-small-mlx"  # Metal-optimized weights
-WHISPER_MODEL = "small"   # faster-whisper (CPU fallback) model size
-WHISPER_DEVICE = "cpu"
-WHISPER_COMPUTE = "int8"
+#
+# All four are overridable by env var so the model can be swapped without editing
+# code — e.g. for more speed:
+#     WHISPER_MLX_REPO=mlx-community/whisper-base.en-mlx   # ~2× faster, small accuracy drop
+#     WHISPER_MODEL=base.en
+# or for higher accuracy at similar speed:
+#     WHISPER_MLX_REPO=mlx-community/whisper-large-v3-turbo
+# After changing the MLX repo, run `python3 backend/download_models.py` once online
+# (run.sh refuses to start until every configured model is cached for offline use).
+WHISPER_BACKEND = os.getenv("WHISPER_BACKEND", "mlx")
+WHISPER_MLX_REPO = os.getenv("WHISPER_MLX_REPO", "mlx-community/whisper-small-mlx")
+# CPU fallback model. "small.en" (English-only) is a touch faster and more accurate
+# than multilingual "small" for our English-forced transcription, and is already cached.
+WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small.en")
+WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
+WHISPER_COMPUTE = os.getenv("WHISPER_COMPUTE", "int8")
+
+# Voice adaptation — the accent + gender + emotion classifiers (accent_detect.py,
+# gender_detect.py, emotion_detect.py). They run wav2vec2 models on every clip and
+# are the slowest part of /stt (several seconds), so they're OFF by default: the
+# transcript comes back in ~0.4s instead of ~3–4s. The header toggle turns them on
+# (the UI then sends detect=true) when the user wants the reply voice/tone to adapt.
+DETECTION_DEFAULT = os.getenv("DETECTION_DEFAULT", "0") == "1"
 
 # Multi-accent TTS (Kokoro). The companion replies in the speaker's detected
 # accent; voices are selected in accent.py and synthesized in tts.py.
