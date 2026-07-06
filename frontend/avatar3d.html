@@ -21,13 +21,13 @@
     .ok { color: #5ced73; } .err { color: #ff6b6b; } .info { color: #9fb4ff; }
   </style>
 
-  <!-- Three.js + TalkingHead as ES modules (CDN for this test; we vendor locally later) -->
+  <!-- Three.js + TalkingHead as ES modules, vendored locally (frontend/vendor/) — offline. -->
   <script type="importmap">
   {
     "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js/+esm",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
-      "talkinghead": "https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@1.7/modules/talkinghead.mjs"
+      "three": "/vendor/three/three.module.js",
+      "three/addons/": "/vendor/three/addons/",
+      "talkinghead": "/vendor/talkinghead/talkinghead.mjs"
     }
   }
   </script>
@@ -70,7 +70,7 @@
     const params = new URLSearchParams(location.search);
     const AVATAR_URL = buildAvatarUrl(params.get("avatar"));
 
-    const HEADAUDIO_BASE = "https://cdn.jsdelivr.net/gh/met4citizen/HeadAudio@main";
+    const HEADAUDIO_BASE = "/vendor/headaudio";  // vendored locally — offline
     // ───────────────────────────────────────────────────────────────────────────
 
     // "Load avatar" → reload the page with the pasted URL as ?avatar=
@@ -100,6 +100,7 @@
       const { TalkingHead } = await import("talkinghead");
 
       head = new TalkingHead(document.getElementById("avatar"), {
+        dracoDecoderPath: "/vendor/draco/",  // vendored locally — offline
         // We never use TalkingHead's own TTS (lips come from HeadAudio), but the
         // constructor insists on an endpoint — give it a dummy so it initializes.
         ttsEndpoint: "/no-tts",
