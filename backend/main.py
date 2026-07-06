@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from stt import transcribe
+from config import DETECTION_DEFAULT
 from ws_handler import handle_chat, clear_history as ws_clear_history
 import personas as persona_store
 import persona_suggest
@@ -50,27 +51,42 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/settings")
+async def settings():
+    # Frontend reads this on load to initialize the voice-adaptation toggle so the
+    # UI matches the server default.
+    return {"detection": DETECTION_DEFAULT}
+
+
 @app.post("/stt")
 async def speech_to_text(
     audio: UploadFile = File(...),
     persona: str = Form("friendly"),
+    detect: bool | None = Form(None),
 ):
     data = await audio.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty audio file")
 
-    # Decode once, then run transcription + accent/gender/emotion detection
-    # concurrently — they're independent and all read the same pcm, so running
-    # them in parallel threads makes the response as fast as the slowest one
-    # instead of the sum (transcript was previously stuck behind the classifiers).
+    do_detect = DETECTION_DEFAULT if detect is None else detect
+
     pcm = await asyncio.to_thread(audio_utils.decode_16k_mono, data)
-    transcript, detected_accent, detected_gender, emo = await asyncio.gather(
-        asyncio.to_thread(transcribe, pcm),
-        asyncio.to_thread(accent_detect.tracker.update, pcm),
-        asyncio.to_thread(gender_detect.tracker.update, pcm),
-        asyncio.to_thread(emotion_detect.detect, pcm),
-    )
-    emotion = emo[0]
+    if do_detect:
+        # Run transcription + accent/gender/emotion detection concurrently — they're
+        # independent and all read the same pcm, so parallel threads make the
+        # response as fast as the slowest branch (the classifiers) instead of the sum.
+        transcript, detected_accent, detected_gender, emo = await asyncio.gather(
+            asyncio.to_thread(transcribe, pcm),
+            asyncio.to_thread(accent_detect.tracker.update, pcm),
+            asyncio.to_thread(gender_detect.tracker.update, pcm),
+            asyncio.to_thread(emotion_detect.detect, pcm),
+        )
+        emotion = emo[0]
+    else:
+        # Detection off (default): skip the multi-second classifiers entirely and
+        # return just the transcript — the reply then uses the default voice + tone.
+        transcript = await asyncio.to_thread(transcribe, pcm)
+        detected_accent = detected_gender = emotion = None
 
     if not transcript:
         return JSONResponse({
