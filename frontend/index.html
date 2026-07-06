@@ -3,36 +3,74 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Private Companion</title>
+  <title>Poppys</title>
+  <link rel="icon" type="image/png" href="poppys-logo.png" />
   <link rel="stylesheet" href="style.css" />
 
-  <!-- Three.js + TalkingHead as ES modules (CDN for now; vendor locally later) -->
+  <!-- Three.js + TalkingHead as ES modules, vendored locally (frontend/vendor/)
+       so the app is fully offline — no CDN at runtime. -->
   <script type="importmap">
   {
     "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js/+esm",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
-      "talkinghead": "https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@1.7/modules/talkinghead.mjs"
+      "three": "/vendor/three/three.module.js",
+      "three/addons/": "/vendor/three/addons/",
+      "talkinghead": "/vendor/talkinghead/talkinghead.mjs"
     }
   }
   </script>
 </head>
 <body>
-  <!-- Full-page 3D avatar with real-time lip-sync (TalkingHead + HeadAudio) -->
+  <!-- Full-page 3D avatar with real-time lip-sync (TalkingHead + HeadAudio),
+       over an open-sky Poppys backdrop with drifting clouds -->
   <div id="stage">
+    <div id="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
     <div id="avatar3d"></div>
     <div id="stage-shade"></div>
   </div>
 
   <div id="app">
     <header>
-      <h1>Private Companion</h1>
-      <span id="status-dot" class="dot idle" title="idle"></span>
-      <span id="latency-badge" title="last response latency"></span>
-      <span id="accent-badge" title="detected accent"></span>
-      <span id="gender-badge" title="detected voice gender"></span>
-      <span id="emotion-badge" title="detected emotion"></span>
-      <button type="button" id="memory-btn" title="What I remember about you">🧠</button>
+      <div class="brand">
+        <img class="brand-mark" src="poppys-logo.png" alt="" aria-hidden="true" />
+        <h1>Poppys</h1>
+      </div>
+
+      <!-- live status: dot + label + voice EQ (ui.js keeps these in sync) -->
+      <div id="status-pill" class="idle">
+        <span id="status-dot" class="dot idle" title="idle"></span>
+        <span id="status-label">Ready</span>
+        <span id="status-eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+      </div>
+
+      <!-- identity chips: chat.js fills the labels and toggles .on -->
+      <div class="id-chips">
+        <span id="latency-badge" title="last response latency">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          <i class="chip-label"></i>
+        </span>
+        <span id="accent-badge" title="detected accent">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <i class="chip-label"></i>
+        </span>
+        <span id="gender-badge" title="detected voice">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <i class="chip-label"></i>
+        </span>
+        <span id="emotion-badge" title="detected mood">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01"/><path d="M15 9h.01"/></svg>
+          <i class="chip-label"></i>
+        </span>
+      </div>
+
+      <!-- Voice adaptation toggle: when on, Poppys detects accent/voice/mood from
+           your speech and adapts the reply (slower). Off = faster replies. -->
+      <button type="button" id="adapt-btn" title="Adapt voice to me (accent / voice / mood) — slower" aria-label="Toggle voice adaptation" aria-pressed="false">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z"/></svg>
+      </button>
+
+      <button type="button" id="memory-btn" title="What Poppys remembers about you" aria-label="What Poppys remembers about you">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      </button>
     </header>
 
     <div id="memory-panel" class="hidden"></div>
@@ -44,27 +82,38 @@
     <div id="stage-spacer"></div>
 
     <div id="transcript"></div>
+    <div id="hint">Tap the mic and just start talking</div>
 
     <form id="chat-form">
-      <button type="button" id="mic-btn" title="Click to record, click again to send">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+      <!-- mic.js swaps this button's className ("" / recording / transcribing),
+           so it carries no static classes — all styling hangs off the ID -->
+      <button type="button" id="mic-btn" title="Click to record, click again to send" aria-label="Record voice message">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.93V21h2v-2.07A7 7 0 0 0 19 12h-2z"/>
         </svg>
       </button>
-      <button type="button" id="vad-btn" title="Auto-listen">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <button type="button" id="vad-btn" title="Auto-listen" aria-label="Toggle auto-listen">
+        <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M12 3a9 9 0 0 0-9 9 9 9 0 0 0 9 9 9 9 0 0 0 9-9 9 9 0 0 0-9-9zm0 2a7 7 0 0 1 7 7 7 7 0 0 1-7 7 7 7 0 0 1-7-7 7 7 0 0 1 7-7zm0 3a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4zm0 2a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
         </svg>
       </button>
       <input
         id="user-input"
         type="text"
-        placeholder="Type or click mic…"
+        placeholder="Type a message or just speak…"
         autocomplete="off"
         autofocus
       />
-      <button type="submit" id="send-btn">Send</button>
-      <button type="button" id="clear-btn">Clear</button>
+      <button type="submit" id="send-btn" title="Send" aria-label="Send message">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z"/>
+        </svg>
+      </button>
+      <button type="button" id="clear-btn" title="Clear conversation" aria-label="Clear conversation">
+        <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
+        </svg>
+      </button>
     </form>
   </div>
 
@@ -75,6 +124,7 @@
   <script src="chat.js"></script>
   <script src="mic.js"></script>
   <script src="memory.js"></script>
+  <script src="ui.js"></script>
   <!-- 3D avatar controller (ES module, loads after the classic scripts) -->
   <script type="module" src="avatar3d.module.mjs"></script>
 </body>
