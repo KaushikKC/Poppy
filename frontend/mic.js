@@ -124,10 +124,14 @@ if (vadBtn) {
 async function transcribeAndSend(blob, mimeType) {
   window._turnStart = Date.now(); // latency timer starts here
 
+  const detectOn = window.detectionEnabled?.() ?? false;
   const ext      = mimeType.split(";")[0].split("/")[1] || "webm";
   const formData = new FormData();
   formData.append("audio", blob, `recording.${ext}`);
   formData.append("persona", PersonaPicker.current());
+  // Only ask the backend to run the (slower) accent/voice/mood classifiers when
+  // the user has turned voice adaptation on; off by default keeps /stt fast.
+  formData.append("detect", detectOn ? "true" : "false");
 
   setMicState("transcribing");
   let transcript = "";
@@ -139,9 +143,11 @@ async function transcribeAndSend(blob, mimeType) {
     if (data.suggestion && window.showPersonaSuggestion) {
       window.showPersonaSuggestion(data.suggestion);
     }
-    if (data.accent) window.setAccent?.(data.accent);    // identity, sticky
-    if (data.gender) window.setGender?.(data.gender);    // identity, sticky
-    window.setEmotion?.(data.emotion || "neutral");      // momentary, this clip
+    if (detectOn) {
+      if (data.accent) window.setAccent?.(data.accent);  // identity, sticky
+      if (data.gender) window.setGender?.(data.gender);  // identity, sticky
+      window.setEmotion?.(data.emotion || "neutral");    // momentary, this clip
+    }
   } catch (err) {
     console.error("STT error:", err);
     setMicState("idle");
