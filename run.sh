@@ -7,11 +7,15 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 HOST="127.0.0.1"
 PORT="8000"
 
-# 1. Ensure Ollama is reachable; it must be serving the LLM locally.
-if ! curl -s "http://localhost:11434/api/tags" >/dev/null 2>&1; then
-  echo "Ollama is not responding on http://localhost:11434"
-  echo "Start it first:  ollama serve   (or open the Ollama app)"
-  exit 1
+# 1. Ensure Ollama is reachable; it must be serving the LLM locally. Skipped when
+#    LLM_BACKEND=mlx, which runs the LLM in-process via MLX-LM (no Ollama).
+if [ "${LLM_BACKEND:-ollama}" != "mlx" ]; then
+  if ! curl -s "http://localhost:11434/api/tags" >/dev/null 2>&1; then
+    echo "Ollama is not responding on http://localhost:11434"
+    echo "Start it first:  ollama serve   (or open the Ollama app)"
+    echo "(Or run with LLM_BACKEND=mlx to use the in-process MLX-LM backend.)"
+    exit 1
+  fi
 fi
 
 # 2. Ensure the speech models are cached so the app can run with no network.
