@@ -9,7 +9,7 @@ os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 import numpy as np
 from kokoro import KModel, KPipeline
 
-from config import KOKORO_REPO_ID, KOKORO_SAMPLE_RATE
+from config import KOKORO_REPO_ID, KOKORO_SAMPLE_RATE, KOKORO_DEVICE
 from accent import voice_for
 
 # One language-blind model, shared across all accent pipelines (saves memory).
@@ -24,6 +24,10 @@ def _get_model() -> KModel:
     global _model
     if _model is None:
         _model = KModel(repo_id=KOKORO_REPO_ID)
+        # Optionally pin TTS to a specific device (e.g. "cpu") so it doesn't
+        # contend with the LLM on the GPU. Empty = leave Kokoro's own default.
+        if KOKORO_DEVICE:
+            _model = _model.to(KOKORO_DEVICE)
     return _model
 
 
