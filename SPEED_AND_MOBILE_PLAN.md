@@ -45,21 +45,33 @@ voice, and detection correctly applies from the second turn on. `detect=false` ~
 - **Future (P2 spike):** **Moonshine** — an ASR built for short real-time on-device use;
   could beat Whisper further. Would be a new backend alongside MLX/faster-whisper.
 
-### 1.3 Faster LLM path — **P1** ⬜
-- **Try MLX-LM instead of Ollama.** Apple's own framework is often 20–40% faster on
-  Apple Silicon for the same model, and pairs naturally with MLX-Whisper.
-- **Speculative decoding:** a tiny 0.5B draft model proposes tokens for the 3B to verify
-  — meaningful tokens/sec gain for conversational replies.
-- **Persistent prompt/KV cache:** keep the system prompt prefill cached so time-to-first-
-  token is near-zero every turn (we already trimmed history + memory to shrink prefill).
+### 1.3 Faster LLM path — **P1** ✅
+Built as an **opt-in** backend so the proven Ollama path stays the default — flip
+`LLM_BACKEND=mlx` (then `python3 backend/download_models.py` once) to use it.
+- **MLX-LM instead of Ollama** — `backend/mlx_llm.py` runs the model in-process on
+  Metal, streaming tokens to the asyncio loop from a worker thread. `backend/llm.py`
+  dispatches ollama vs mlx behind one `stream_reply`/`warmup` interface; `ws_handler`
+  and startup warmup call the dispatcher, so nothing else knows which is active.
+- **Speculative decoding** — optional `MLX_DRAFT_MODEL` (a tiny 1B) proposes tokens the
+  main 3B verifies in one pass. Empty by default; set it to enable.
+- **Persistent prompt/KV cache** — the KV of the unchanged conversation prefix (system
+  prompt + earlier turns) is kept between turns via `mlx_lm` prompt-cache trimming, so
+  each turn only prefills the newly-added suffix — near-zero time-to-first-token.
+  `MLX_PROMPT_CACHE=0` disables it.
 - Keep replies short (already capped at 2–4 sentences) — full-turn time scales with length.
+- `download_models.py` + `run.sh` handle the MLX weights / skip the Ollama preflight when
+  this backend is on. **Verified:** two-turn streaming + prompt-cache reuse on a tiny MLX
+  model; default Ollama path unchanged.
 
-### 1.4 Trim the audio start-up delay — **P1** ⬜
-- The initial playout buffer was enlarged to smooth first-chunk gaps; once STT + TTFT are
-  faster and steadier, **walk that buffer back down** — it directly pads latency.
-- Make the **first** TTS phrase tiny (break on the first comma/clause) so the very first
-  audio chunk plays almost immediately. (`TTS_FIRST_CHUNK_*` already exist to tune this.)
-- Optional: run Kokoro on CPU to remove GPU contention with the LLM (PRODUCTION_PLAN F2).
+### 1.4 Trim the audio start-up delay — **P1** ✅
+- **Walked the playout buffer back down** — `audio_player.js` first-chunk cushion 0.5s →
+  0.15s (named `FIRST_CHUNK_CUSHION`); it directly padded mic-stop → first-audio.
+- **First TTS phrase now tiny** — `TTS_FIRST_SOFT_MIN_CHARS` 8 → 4 so the first chunk
+  breaks on the first comma/clause (e.g. "Well," / "Sure,") instead of waiting for a
+  sentence or the 18-char cap. Verified against the phrase chunker.
+- **Kokoro-on-CPU option** — `KOKORO_DEVICE=cpu` moves TTS off the GPU to remove
+  contention with the (MLX) LLM (PRODUCTION_PLAN F2). Empty default keeps current
+  behavior; verified synthesis on CPU.
 
 ### 1.5 Target budget
 | Stage | Now | Target after 1.1–1.4 |
@@ -135,5 +147,6 @@ Pick **one** cross-platform runtime:
 - ✅ Already shipped: phrase-streaming, hot Ollama, Metal STT, warmed models.
 - ✅ **1.1** detection optional + non-blocking background detection (1.33s→~0.15s with adaptation on).
 - ✅ **1.2** STT default switched to `base.en` (~3× faster than small, same accuracy); env-swappable.
-- ⬜ Next: **1.3** MLX-LM / speculative decoding, **1.4** audio-buffer trim.
-- ⬜ Mobile: pick a runtime (recommend RN + llama.rn/whisper.rn) and build the 2.6 PoC.
+- ✅ **1.3** opt-in MLX-LM backend (`LLM_BACKEND=mlx`): speculative decoding + persistent prompt cache; Ollama stays default.
+- ✅ **1.4** first-chunk cushion 0.5s→0.15s, tiny first TTS phrase (break on first comma), optional Kokoro-on-CPU.
+- ⬜ Next: benchmark MLX vs Ollama end-to-end on the M3; then mobile — pick a runtime (recommend RN + llama.rn/whisper.rn) and build the 2.6 PoC.
