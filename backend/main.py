@@ -27,6 +27,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Background voice-detection tasks, kept referenced so the event loop doesn't
+# garbage-collect them mid-run (asyncio holds only weak refs to bare tasks).
+_detect_tasks: set = set()
+
+
+def _run_detection(pcm) -> None:
+    """Update the sticky accent/gender/emotion trackers from one clip. Runs in a
+    worker thread off the /stt response path, so it shapes the *next* turn's reply
+    instead of delaying this one. Best-effort: per-classifier errors are swallowed."""
+    for update in (
+        accent_detect.tracker.update,
+        gender_detect.tracker.update,
+        emotion_detect.tracker.update,
+    ):
+        try:
+            update(pcm)
+        except Exception as e:
+            print(f"[stt] background detection failed: {e}")
+
+
+def _schedule_detection(pcm) -> None:
+    task = asyncio.create_task(asyncio.to_thread(_run_detection, pcm))
+    _detect_tasks.add(task)
+    task.add_done_callback(_detect_tasks.discard)
+
+
 @app.on_event("startup")
 async def _warmup_models():
     # Warm the heavy models in the background so the first turn is fast instead of
@@ -71,21 +97,19 @@ async def speech_to_text(
     do_detect = DETECTION_DEFAULT if detect is None else detect
 
     pcm = await asyncio.to_thread(audio_utils.decode_16k_mono, data)
+    # Transcription is the only work on the response's critical path, so /stt stays
+    # ~0.4s whether or not adaptation is on.
+    transcript = await asyncio.to_thread(transcribe, pcm)
     if do_detect:
-        # Run transcription + accent/gender/emotion detection concurrently — they're
-        # independent and all read the same pcm, so parallel threads make the
-        # response as fast as the slowest branch (the classifiers) instead of the sum.
-        transcript, detected_accent, detected_gender, emo = await asyncio.gather(
-            asyncio.to_thread(transcribe, pcm),
-            asyncio.to_thread(accent_detect.tracker.update, pcm),
-            asyncio.to_thread(gender_detect.tracker.update, pcm),
-            asyncio.to_thread(emotion_detect.detect, pcm),
-        )
-        emotion = emo[0]
+        # Voice adaptation on: return the identity accumulated from prior turns
+        # (the trackers are sticky) and classify *this* clip in the background so it
+        # shapes the NEXT turn — never blocking this reply on the slow classifiers.
+        detected_accent = accent_detect.tracker.current
+        detected_gender = gender_detect.tracker.current
+        emotion = emotion_detect.tracker.current
+        _schedule_detection(pcm)
     else:
-        # Detection off (default): skip the multi-second classifiers entirely and
-        # return just the transcript — the reply then uses the default voice + tone.
-        transcript = await asyncio.to_thread(transcribe, pcm)
+        # Detection off (default): no classifiers at all — reply uses default voice/tone.
         detected_accent = detected_gender = emotion = None
 
     if not transcript:
