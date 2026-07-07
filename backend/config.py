@@ -39,19 +39,17 @@ CRISIS_ADDENDUM = (
 # — much faster than CPU on an M-series Mac. "faster" is the CPU CTranslate2 path
 # (faster-whisper), kept as a portable fallback and used automatically if MLX fails.
 #
-# All four are overridable by env var so the model can be swapped without editing
-# code — e.g. for more speed:
-#     WHISPER_MLX_REPO=mlx-community/whisper-base.en-mlx   # ~2× faster, small accuracy drop
-#     WHISPER_MODEL=base.en
-# or for higher accuracy at similar speed:
-#     WHISPER_MLX_REPO=mlx-community/whisper-large-v3-turbo
+# STT model. Default is base.en — English-only Whisper base, benchmarked ~3× faster
+# than small on an M3 (~0.10s vs ~0.30s per short clip) with equivalent accuracy on
+# conversational English. All four settings are env-overridable, e.g. for more
+# accuracy on noisier/accented speech (at ~3× the latency):
+#     WHISPER_MLX_REPO=mlx-community/whisper-small.en-mlx
+#     WHISPER_MODEL=small.en
 # After changing the MLX repo, run `python3 backend/download_models.py` once online
 # (run.sh refuses to start until every configured model is cached for offline use).
 WHISPER_BACKEND = os.getenv("WHISPER_BACKEND", "mlx")
-WHISPER_MLX_REPO = os.getenv("WHISPER_MLX_REPO", "mlx-community/whisper-small-mlx")
-# CPU fallback model. "small.en" (English-only) is a touch faster and more accurate
-# than multilingual "small" for our English-forced transcription, and is already cached.
-WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small.en")
+WHISPER_MLX_REPO = os.getenv("WHISPER_MLX_REPO", "mlx-community/whisper-base.en-mlx")
+WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base.en")  # faster-whisper CPU fallback
 WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
 WHISPER_COMPUTE = os.getenv("WHISPER_COMPUTE", "int8")
 
