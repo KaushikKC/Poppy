@@ -1,7 +1,7 @@
 import asyncio
 import uuid
 from fastapi import WebSocket, WebSocketDisconnect
-from ollama_client import stream_reply
+from llm import stream_reply
 from tts import synthesize_to_wav_bytes
 from phrase_chunker import PhraseChunker
 from config import MAX_HISTORY_TURNS, KOKORO_SAMPLE_RATE, SAFETY_ADDENDUM, CRISIS_ADDENDUM
