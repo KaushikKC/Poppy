@@ -86,6 +86,11 @@ DETECTION_DEFAULT = os.getenv("DETECTION_DEFAULT", "0") == "1"
 # accent; voices are selected in accent.py and synthesized in tts.py.
 KOKORO_REPO_ID = "hexgrad/Kokoro-82M"
 KOKORO_SAMPLE_RATE = 24000
+# Device Kokoro runs on. Empty = leave Kokoro's own default (GPU/Metal where
+# available). Set KOKORO_DEVICE=cpu to move TTS onto the CPU so it doesn't
+# contend with the LLM on the GPU — this can steady first-audio latency when the
+# MLX LLM backend is also on Metal (at some cost to raw synthesis speed).
+KOKORO_DEVICE = os.getenv("KOKORO_DEVICE", "")
 
 # Accent detection from the user's voice (accent_detect.py). A wav2vec2
 # classifier runs on each uploaded clip; results are smoothed (sticky) so the
