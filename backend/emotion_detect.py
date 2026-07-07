@@ -61,3 +61,32 @@ def detect(pcm: np.ndarray) -> tuple[str, float]:
     if conf < EMOTION_MIN_CONFIDENCE:
         return emotion_mod.NEUTRAL, conf
     return emotion_mod.map_raw(raw), conf
+
+
+class EmotionTracker:
+    """Holds the last detected emotion so background detection (off the /stt
+    critical path) can stash this clip's mood for the *next* turn's reply tone.
+
+    Emotion is momentary — no smoothing/majority vote like accent/gender — so this
+    is just a thread-safe last-value holder, defaulting to neutral.
+    """
+
+    def __init__(self):
+        self._current = emotion_mod.NEUTRAL
+        self._lock = threading.Lock()
+
+    def update(self, pcm: np.ndarray) -> str:
+        """Classify one clip and store the result; return it."""
+        emo, _ = detect(pcm)
+        with self._lock:
+            self._current = emo
+            return self._current
+
+    @property
+    def current(self) -> str:
+        with self._lock:
+            return self._current
+
+
+# Single-user local app: one shared holder for the whole process.
+tracker = EmotionTracker()
