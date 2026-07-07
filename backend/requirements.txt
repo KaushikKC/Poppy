@@ -4,6 +4,8 @@ websockets==15.0.1
 faster-whisper==1.2.1
 # Metal (Apple-Silicon GPU) STT backend; falls back to faster-whisper elsewhere.
 mlx-whisper>=0.4.3 ; platform_machine == "arm64" and sys_platform == "darwin"
+# Optional Metal (Apple-Silicon GPU) LLM backend; used only when LLM_BACKEND=mlx.
+mlx-lm>=0.31.3 ; platform_machine == "arm64" and sys_platform == "darwin"
 kokoro>=0.9.4  # multi-accent TTS; also needs system espeak-ng (brew install espeak-ng)
 # Accent + emotion detection run wav2vec2 classifiers via transformers/torch.
 transformers>=4.40
