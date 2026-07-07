@@ -15,38 +15,35 @@ Everything below is ordered by how much it moves that number. The phrase-by-phra
 streaming, hot Ollama, Metal STT, and warmed models are already done; these are the
 *next* tier.
 
-### 1.1 Take voice detection off the critical path — **P0** 🚧
-**Problem:** `/stt` runs the accent + gender + emotion classifiers (wav2vec2) on every
-clip. Even though they run *concurrently* with transcription, `asyncio.gather` waits
-for the **slowest** branch — the classifiers — so STT returns in ~3–4s instead of the
-~0.4s transcription actually takes. This is the single biggest latency source.
+### 1.1 Take voice detection off the critical path — **P0** ✅
+**Problem:** `/stt` ran the accent + gender + emotion classifiers (wav2vec2) on every
+clip. Even running *concurrently* with transcription, `asyncio.gather` waited for the
+**slowest** branch — the classifiers — so STT returned in ~1.3–4s instead of the ~0.1–0.4s
+transcription actually takes. This was the single biggest latency source.
 
-**Fix (being implemented now):** make detection **optional and off by default**.
-- New `DETECTION_DEFAULT = False` in `config.py`; `/stt` takes a `detect` flag.
-- When off: transcribe only → `/stt` returns in ~0.4s. **~3s saved per turn.**
-- When on: the classifiers run and the reply voice/tone adapts (the current behavior),
-  which the user opts into via a header toggle.
-- The reply pipeline already tolerates absent accent/gender/emotion (falls back to a
-  default voice + neutral tone in `ws_handler.py`), so nothing downstream breaks.
+**Done — two parts:**
+1. **Optional & off by default** — `DETECTION_DEFAULT` in `config.py`; `/stt` takes a
+   `detect` flag; a header ✨ toggle opts in. Off = transcribe only.
+2. **Never blocks, even when on** — transcription is the *only* thing on the response
+   critical path. When adaptation is on, `/stt` returns the identity accumulated from
+   prior turns (the accent/gender trackers are sticky; added an `EmotionTracker`) and
+   classifies *this* clip in a **background thread** (`_schedule_detection` in `main.py`),
+   so it shapes the **next** turn. (Covers PRODUCTION_PLAN **F1**.)
 
-**Later refinement (P1):** even when detection is *on*, don't block the transcript on it.
-Return the transcript immediately, run the classifiers in a background thread, and apply
-the detected identity to the **next** turn (the trackers are already sticky/stateful).
-That gives adaptation *and* full speed. (This is PRODUCTION_PLAN item **F1**.)
+**Measured:** `detect=true` went **1.33s → ~0.15s**; the first turn returns the default
+voice, and detection correctly applies from the second turn on. `detect=false` ~0.09s.
 
-### 1.2 Faster / swappable STT model — **P1** 🚧
-Transcription isn't the bottleneck once 1.1 lands (~0.4s), but there's headroom:
-- Make `WHISPER_BACKEND`, `WHISPER_MLX_REPO`, `WHISPER_MODEL` **env-overridable** so the
-  model can be swapped without editing code (being implemented now).
-- We force English (`language="en"`), so **English-only** models are a free win — same or
-  better accuracy, a bit faster. CPU fallback moved to the already-cached `small.en`.
-- **For more speed:** switch the MLX weights to `whisper-base.en` (74M, ~2× faster than
-  small) — accept a small accuracy drop — or to `whisper-large-v3-turbo` (fast decoder,
-  *higher* accuracy, ~1.6 GB RAM). Either requires `python3 backend/download_models.py`
-  once online, because `run.sh` gate-checks that models are cached.
-- **Best-in-class for on-device low latency (P2 spike):** **Moonshine** — an ASR built
-  specifically for short, real-time on-device use; markedly faster than Whisper on short
-  clips. Would be a new backend alongside MLX/faster-whisper.
+### 1.2 Faster / swappable STT model — **P1** ✅
+- `WHISPER_BACKEND`, `WHISPER_MLX_REPO`, `WHISPER_MODEL` are **env-overridable** — swap
+  models without editing code.
+- **Default switched to `base.en`** (English-only Whisper base). Benchmarked on an M3
+  over conversational clips: **base.en ~0.10s/clip vs small ~0.30s (~3×), equivalent
+  accuracy**; `small.en` ~0.30s (no speed gain over small); `turbo` ~1.17s (heavy encoder,
+  *slower* on short clips). CPU fallback also `base.en`.
+- Documented `small.en` as the one-env-var fallback for more accuracy on noisy/accented
+  speech. Both base.en weights (MLX + faster-whisper) are cached; `run.sh` gate passes.
+- **Future (P2 spike):** **Moonshine** — an ASR built for short real-time on-device use;
+  could beat Whisper further. Would be a new backend alongside MLX/faster-whisper.
 
 ### 1.3 Faster LLM path — **P1** ⬜
 - **Try MLX-LM instead of Ollama.** Apple's own framework is often 20–40% faster on
@@ -136,6 +133,7 @@ Pick **one** cross-platform runtime:
 
 ## Status snapshot
 - ✅ Already shipped: phrase-streaming, hot Ollama, Metal STT, warmed models.
-- 🚧 In progress (this pass): **1.1** detection optional/off-by-default, **1.2** swappable STT.
-- ⬜ Next: 1.1 background-detection refinement, 1.3 MLX-LM/spec-decoding, 1.4 audio trim.
+- ✅ **1.1** detection optional + non-blocking background detection (1.33s→~0.15s with adaptation on).
+- ✅ **1.2** STT default switched to `base.en` (~3× faster than small, same accuracy); env-swappable.
+- ⬜ Next: **1.3** MLX-LM / speculative decoding, **1.4** audio-buffer trim.
 - ⬜ Mobile: pick a runtime (recommend RN + llama.rn/whisper.rn) and build the 2.6 PoC.
