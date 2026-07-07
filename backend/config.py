@@ -13,6 +13,28 @@ MAX_HISTORY_TURNS = 6
 # load again (-1 = never unload). Set as a request option in ollama_client.
 OLLAMA_KEEP_ALIVE = -1
 
+# LLM backend. "ollama" (default) talks to the local Ollama server; "mlx" runs
+# the model in-process via MLX-LM on the Apple-Silicon GPU (Metal) — often
+# 20-40% faster on M-series and pairs naturally with MLX-Whisper. The MLX path
+# adds speculative decoding and a persistent prompt cache (near-zero
+# time-to-first-token). Opt in with LLM_BACKEND=mlx once the MLX weights are
+# cached (see download_models.py). Default stays Ollama so nothing changes
+# unless you ask for it.
+LLM_BACKEND = os.getenv("LLM_BACKEND", "ollama")
+# MLX-LM model repo (4-bit quantized), mirroring the 3B Ollama default.
+MLX_LM_MODEL = os.getenv("MLX_LM_MODEL", "mlx-community/Llama-3.2-3B-Instruct-4bit")
+# Optional draft model for speculative decoding: a tiny model proposes tokens the
+# main model verifies in a single pass — more tokens/sec for conversational
+# replies. Empty disables it; a 1B 4-bit pairs well with the 3B above, e.g.
+#     MLX_DRAFT_MODEL=mlx-community/Llama-3.2-1B-Instruct-4bit
+MLX_DRAFT_MODEL = os.getenv("MLX_DRAFT_MODEL", "")
+# Cap generated tokens per reply (replies are 2-4 sentences; bounds worst-case latency).
+MLX_MAX_TOKENS = int(os.getenv("MLX_MAX_TOKENS", "512"))
+# Persistent prompt cache: keep the KV of the unchanged conversation prefix
+# (system prompt + earlier turns) between turns, so each turn only prefills the
+# newly-added suffix — near-zero time-to-first-token. Disable with MLX_PROMPT_CACHE=0.
+MLX_PROMPT_CACHE = os.getenv("MLX_PROMPT_CACHE", "1") == "1"
+
 SYSTEM_PROMPT = (
     "You are a warm, friendly conversational companion. "
     "Keep replies concise — two to four sentences unless the user asks for more. "
