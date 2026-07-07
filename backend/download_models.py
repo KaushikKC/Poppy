@@ -14,7 +14,8 @@ Already-cached models are skipped, so it's safe to re-run. Pass --check to only
 verify (offline) that everything is present — this is what run.sh calls before
 starting, so the app never has to reach the network at runtime.
 
-(The LLM is served separately by Ollama and is not handled here.)
+(With the default Ollama backend the LLM is served separately and not handled
+here. When LLM_BACKEND=mlx, the MLX LLM weights are fetched too.)
 """
 
 import os
@@ -26,6 +27,9 @@ from config import (
     ACCENT_MODEL_REPO,
     EMOTION_MODEL_REPO,
     KOKORO_REPO_ID,
+    LLM_BACKEND,
+    MLX_DRAFT_MODEL,
+    MLX_LM_MODEL,
     WHISPER_BACKEND,
     WHISPER_MLX_REPO,
     WHISPER_MODEL,
@@ -45,6 +49,12 @@ REPOS = [
 ]
 if WHISPER_BACKEND == "mlx":
     REPOS.append(("Whisper STT (MLX/Metal)", WHISPER_MLX_REPO))
+# The MLX LLM weights are only needed when that backend is active (Ollama serves
+# the LLM otherwise and manages its own model store).
+if LLM_BACKEND == "mlx":
+    REPOS.append(("LLM (MLX/Metal)", MLX_LM_MODEL))
+    if MLX_DRAFT_MODEL:
+        REPOS.append(("LLM draft model (MLX/Metal)", MLX_DRAFT_MODEL))
 
 OK = "\033[32mOK\033[0m"
 MISS = "\033[31mMISSING\033[0m"
@@ -113,6 +123,19 @@ def download() -> bool:
             from huggingface_hub import snapshot_download
             print(f"→ Whisper STT / MLX Metal ({WHISPER_MLX_REPO}) …")
             snapshot_download(WHISPER_MLX_REPO)
+        except Exception as e:
+            print(f"  ! failed: {e}")
+            ok = False
+
+    # MLX LLM weights (+ optional draft model) — only when that backend is selected.
+    if LLM_BACKEND == "mlx":
+        try:
+            from huggingface_hub import snapshot_download
+            for label, repo in (("LLM", MLX_LM_MODEL), ("LLM draft", MLX_DRAFT_MODEL)):
+                if not repo:
+                    continue
+                print(f"→ {label} / MLX Metal ({repo}) …")
+                snapshot_download(repo)
         except Exception as e:
             print(f"  ! failed: {e}")
             ok = False
