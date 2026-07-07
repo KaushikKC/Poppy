@@ -52,8 +52,12 @@ class AudioPlayer {
     // a later chunk that synthesizes slightly slow doesn't leave an audible gap
     // (the voice stuttering "in between"). Subsequent chunks chain gaplessly off
     // _nextStart; if synthesis falls behind, they start ~immediately.
+    // The first-chunk cushion directly pads mic-stop → first-audio latency, so it
+    // is kept as small as playback stays smooth now that STT + TTFT are faster and
+    // the first TTS phrase is emitted tiny (see TTS_FIRST_* in config.py).
+    const FIRST_CHUNK_CUSHION = 0.15;
     const now = this._ctx.currentTime;
-    const cushion = this._nextStart === 0 ? 0.5 : 0.02;
+    const cushion = this._nextStart === 0 ? FIRST_CHUNK_CUSHION : 0.02;
     const startAt = Math.max(now + cushion, this._nextStart);
     source.start(startAt);
     this._nextStart = startAt + audioBuffer.duration;
