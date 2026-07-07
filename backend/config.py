@@ -119,7 +119,10 @@ TTS_SOFT_BREAK_MIN_CHARS = 35
 # unbroken clause can't stall the whole reply's audio until the very end.
 TTS_CHUNK_MAX_CHARS = 110
 # The FIRST chunk is emitted aggressively so the voice starts while the text is
-# still being typed, instead of waiting for a full sentence/paragraph.
+# still being typed, instead of waiting for a full sentence/paragraph. Kept tiny
+# so the very first audio plays almost immediately: it breaks on the first
+# comma/clause (soft break) after only a few characters — e.g. "Well," or
+# "Sure," — rather than holding out for a full sentence or the hard cap.
 TTS_FIRST_CHUNK_MIN_CHARS = 6
-TTS_FIRST_SOFT_MIN_CHARS = 8
-TTS_FIRST_CHUNK_MAX_CHARS = 20
+TTS_FIRST_SOFT_MIN_CHARS = 4
+TTS_FIRST_CHUNK_MAX_CHARS = 18
