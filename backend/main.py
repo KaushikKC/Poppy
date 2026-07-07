@@ -59,12 +59,12 @@ async def _warmup_models():
     # paying cold-load costs mid-conversation: Kokoro TTS and the Ollama LLM (which
     # then stays resident via keep_alive=-1).
     import tts
-    import ollama_client
+    import llm
     import stt
     import accent_detect
     import emotion_detect
     asyncio.create_task(asyncio.to_thread(tts.warmup))
-    asyncio.create_task(ollama_client.warmup())
+    asyncio.create_task(llm.warmup())
     asyncio.create_task(asyncio.to_thread(stt.warmup))
     # Pre-load the wav2vec2 classifiers too, so the first /stt doesn't pay their
     # (multi-second) lazy load on top of transcription.
