@@ -107,15 +107,29 @@ All first-run downloads with progress UI; never bundle weights in the store bina
     swap Bonsai in later. Don't build on a 1-day-old fork.
   - *Caution:* all numbers are self-reported, 1 day old. Trust after our own benchmark.
 
-### Hermes Agent (Nous Research) — ❌ not a fit
-Verified: an MIT-licensed open-source **agent platform** — connects AI to Telegram/
-Discord/Slack/WhatsApp/email, schedules tasks, browses, sandboxes. Its models come from
-the **Nous Portal cloud** (subscription, 300+ hosted models). It is an *orchestration
-product built around cloud inference* — the opposite of our "nothing leaves your
-device" promise — and it solves none of our actual problems (on-device inference,
-packaging, voice pipeline). Skip. (Distant-future idea only: its channel-integration
-pattern, e.g. "talk to your companion on WhatsApp," would break the privacy promise —
-note and ignore.)
+### Hermes Agent (Nous Research) — ❌ not a fit (but *not* for the reason first recorded)
+**Correction (2026-07-15):** an earlier draft of this doc said Hermes requires cloud
+inference. **That was wrong.** Hermes is MIT-licensed and runs against **Ollama,
+llama.cpp, LM Studio, vLLM, or any OpenAI-compatible endpoint** — the Nous Portal is
+one option among many. It could point at a local model. So "it breaks the privacy
+promise" is not a valid objection.
+
+The real disqualifier is **architectural, and it's harder**:
+- **It requires a ≥64,000-token context window and rejects smaller models at startup**
+  — its system prompt + tool schemas need that room. We run at **4,096** context, and
+  `MAX_HISTORY_TURNS=6` exists *specifically* to keep prefill small. Our measured
+  1.47s first-audio is a direct product of a tiny prompt. A 64k-context model on a
+  16 GB M3 is a different weight class (KV cache alone), and every tool schema in the
+  prompt is prefill time we'd pay on **every turn**. Adopting Hermes means giving up
+  the latency that *is* the product.
+- **It's the opposite product.** Hermes is a CLI agent for multi-step tool-calling,
+  skills, and channel gateways (Telegram/Discord/Slack). Poppys is a warm voice
+  companion for "calm daily check-ins rather than productivity pressure"
+  (PRODUCT_OVERVIEW §1). Multi-step agent loops and sub-1.5s conversational turns are
+  in direct tension.
+
+Verdict unchanged (skip), reasoning corrected. Worth revisiting **only** if Poppys ever
+grows a real tool-using/agentic mode, where its skill-learning loop would be prior art.
 
 ### LangChain — ❌ no for the core pipeline
 The "don't build everything ourselves" instinct is right, but LangChain is leverage in
