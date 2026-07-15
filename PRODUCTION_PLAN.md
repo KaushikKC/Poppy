@@ -37,12 +37,12 @@ The core gap: today it needs Python + a terminal. It must become a double-click 
 
 | # | Task | Pri | Status | Notes |
 |---|------|-----|--------|-------|
-| A1 | `.app` bundle via **py2app** | P0 | ⬜ | Wrap `desktop/launcher.py`. |
-| A2 | `Info.plist`: **`NSMicrophoneUsageDescription`** | P0 | ⬜ | Without this the mic is silently denied — the app is voice-first, so this is blocking. |
-| A3 | App icon (`.icns`) + name/version/`NSHighResolutionCapable` | P1 | ⬜ | |
-| A4 | Bundle Python runtime + heavy deps (torch, mlx, transformers) | P0 | ⬜ | The hard part. Fallback: a **venv-based installer** (script/pkg that creates the env) instead of one frozen binary. Decide early. |
-| A5 | **Ollama** dependency strategy | P0 | ⬜ | Can't easily embed. Options: (a) first-run guides install; (b) bundle the `ollama` binary + serve it ourselves. Recommend (b) for one-click. |
-| A6 | `espeak-ng` bundling | P1 | ⬜ | Kokoro needs it. Bundle the dylib or install via a first-run step. |
+| A1 | `.app` bundle via **PyInstaller** | P0 | 🚧 | `desktop/poppys.spec` + `build_app.sh` written (switched from py2app — better torch hooks). Build itself pending: needs ~15 GB free disk (had 7.6). |
+| A2 | `Info.plist`: **`NSMicrophoneUsageDescription`** | P0 | ✅ | In `poppys.spec` `info_plist`. |
+| A3 | App icon (`.icns`) + name/version/`NSHighResolutionCapable` | P1 | ✅ | `desktop/icons/poppys.icns` (note: logo is 846×998, slightly squashed — replace with square art before public release). |
+| A4 | Bundle Python runtime + heavy deps (torch, mlx, transformers) | P0 | 🚧 | Decided: PyInstaller one-dir, `collect_all` on ML libs; expect iteration on first build. |
+| A5 | **Ollama** dependency strategy | P0 | ✅ | Resolved by removing the dependency: packaged default is **LLM_BACKEND=mlx** (in-process Metal). Ollama stays as a power-user opt-in; preflight only checks it in that mode. Verified end-to-end 2026-07-15: first token 0.79s, **first audio 1.47s**, turn 2 TTFT 0.65s. |
+| A6 | `espeak-ng` bundling | P1 | ✅ | Already solved via pip: misaki loads the dylib from `espeakng-loader` — no system install. Preflight now checks the import, not brew. |
 | A7 | **Code signing** (Apple Developer ID) | P0 | ⬜ | Needs a paid Apple Developer account, else Gatekeeper blocks it. |
 | A8 | **Notarization** (Apple) | P0 | ⬜ | Required to open on other Macs without warnings. |
 | A9 | DMG / `.pkg` installer | P1 | ⬜ | Drag-to-Applications or guided installer. |
@@ -54,9 +54,9 @@ The core gap: today it needs Python + a terminal. It must become a double-click 
 
 | # | Task | Pri | Status | Notes |
 |---|------|-----|--------|-------|
-| B1 | Live setup screen with **re-check** button | P1 | ⬜ | Currently must quit/reopen; wire a `js_api` re-run. |
-| B2 | **Progress UI** for model pull + speech-model download | P0 | ⬜ | 2 GB+ downloads; a blank window looks hung. Stream progress. |
-| B3 | Guided / bundled **Ollama install** | P0 | ⬜ | Pairs with A5. |
+| B1 | Live setup screen with **re-check** button | P1 | 🚧 | Setup failures now render in-window with fixes; re-check still needs quit/reopen. |
+| B2 | **Progress UI** for model pull + speech-model download | P0 | ✅ | Launcher opens instantly with a live progress screen; downloads run in a subprocess with output streamed into the window, then it navigates to the app. |
+| B3 | Guided / bundled **Ollama install** | P0 | ✅ | Obsolete — no Ollama in the packaged app (see A5). |
 | B4 | Mic-permission priming + "denied" recovery screen | P1 | ⬜ | Explain, deep-link to System Settings. |
 | B5 | Settings screen (model, voice, persona defaults) | P2 | ⬜ | |
 
@@ -79,7 +79,7 @@ The core gap: today it needs Python + a terminal. It must become a double-click 
 ## Phase E — Observability & diagnostics  (P1)
 | # | Task | Pri | Status | Notes |
 |---|------|-----|--------|-------|
-| E1 | Rotating file logging (app + backend) | P1 | ⬜ | Today logs go to a terminal that won't exist in the `.app`. |
+| E1 | Rotating file logging (app + backend) | P1 | ✅ | `~/Library/Logs/Poppys/poppys.log` (2 MB × 5); uvicorn routed there; frozen app also captures stray prints. |
 | E2 | In-app diagnostics/health panel | P1 | ⬜ | Reuse `preflight` + live model status. |
 | E3 | Server-side timing metrics (TTFT / STT / TTS RTF) | P2 | ⬜ | Extend the existing latency badge. |
 | E4 | Local, privacy-preserving crash capture | P2 | ⬜ | No network — write to a local report. |
