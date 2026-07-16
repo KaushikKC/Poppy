@@ -166,7 +166,10 @@ function endReply(ws) {
 }
 
 window.interruptReply = function interruptReply() {
-  if (!window._replyActive) return false;
+  // Interruptible not just while the LLM streams, but through the whole voice
+  // playout: after "done" the reply is no longer _replyActive, yet the audio
+  // often keeps speaking for several seconds. Barging in then must still cut it.
+  if (!window._replyActive && !player.isPlaying()) return false;
   window._replyActive = false;
   try { window._killReveal?.(); } catch {}  // freeze the paced text where it is
   try { player.stop(); } catch {}
