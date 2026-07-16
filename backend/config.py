@@ -1,5 +1,7 @@
 import os
 
+import model_tier
+
 OLLAMA_URL = "http://localhost:11434"
 # 3B instruct model: much faster time-to-first-token than the 8B on an M3, with
 # only a small quality drop for short conversational replies. Swap back to
@@ -13,20 +15,24 @@ MAX_HISTORY_TURNS = 6
 # load again (-1 = never unload). Set as a request option in ollama_client.
 OLLAMA_KEEP_ALIVE = -1
 
-# LLM backend. "ollama" (default) talks to the local Ollama server; "mlx" runs
-# the model in-process via MLX-LM on the Apple-Silicon GPU (Metal) — often
-# 20-40% faster on M-series and pairs naturally with MLX-Whisper. The MLX path
-# adds speculative decoding and a persistent prompt cache (near-zero
-# time-to-first-token). Opt in with LLM_BACKEND=mlx once the MLX weights are
-# cached (see download_models.py). Default stays Ollama so nothing changes
-# unless you ask for it.
+# LLM backend:
+#   "ollama"   (default) — talks to the local Ollama server.
+#   "mlx"      — in-process via MLX-LM on the Apple-Silicon GPU (Metal). The macOS
+#                packaged default. Adds a persistent prompt cache (near-zero TTFT).
+#   "llamacpp" — in-process via llama.cpp on a GGUF model (CPU-first, optional GPU
+#                offload). The Windows packaged default; runs anywhere, no Apple/CUDA.
 LLM_BACKEND = os.getenv("LLM_BACKEND", "ollama")
-# MLX-LM model repo (4-bit quantized), mirroring the 3B Ollama default.
-MLX_LM_MODEL = os.getenv("MLX_LM_MODEL", "mlx-community/Llama-3.2-3B-Instruct-4bit")
+# MLX-LM model repo (4-bit Metal weights). Picked to fit the machine's RAM at first
+# run (model_tier: 8 GB→1B, 16 GB→3B, 32 GB→8B); MLX_LM_MODEL overrides.
+MLX_LM_MODEL = model_tier.mlx_model()
 # Optional draft model for speculative decoding: a tiny model proposes tokens the
-# main model verifies in a single pass — more tokens/sec for conversational
-# replies. Empty disables it; a 1B 4-bit pairs well with the 3B above, e.g.
-#     MLX_DRAFT_MODEL=mlx-community/Llama-3.2-1B-Instruct-4bit
+# main model verifies in a single pass — more tokens/sec for conversational replies.
+# OFF by default: benchmarking (2026-07-17) showed the 3B already streams ~45 tok/s,
+# ~12× the ~3-4 tok/s speaking pace, so a faster stream yields no felt gain, while a
+# draft model costs ~0.7 GB extra RAM (hurts 8 GB machines) and slightly raises TTFT
+# (the metric that actually shapes first-audio latency). Opt in on high-RAM machines
+# with e.g. MLX_DRAFT_MODEL=mlx-community/Llama-3.2-1B-Instruct-4bit — download_models.py
+# + preflight then fetch/verify it, and mlx_llm degrades gracefully if it's uncached.
 MLX_DRAFT_MODEL = os.getenv("MLX_DRAFT_MODEL", "")
 # Cap generated tokens per reply (replies are 2-4 sentences; bounds worst-case latency).
 MLX_MAX_TOKENS = int(os.getenv("MLX_MAX_TOKENS", "512"))
@@ -34,6 +40,21 @@ MLX_MAX_TOKENS = int(os.getenv("MLX_MAX_TOKENS", "512"))
 # (system prompt + earlier turns) between turns, so each turn only prefills the
 # newly-added suffix — near-zero time-to-first-token. Disable with MLX_PROMPT_CACHE=0.
 MLX_PROMPT_CACHE = os.getenv("MLX_PROMPT_CACHE", "1") == "1"
+
+# ── llama.cpp / GGUF backend (Windows + any CPU-only machine) ─────────────────
+# Used only when LLM_BACKEND=llamacpp. The GGUF twin of the MLX default, also
+# RAM-tiered (model_tier: 1B/3B/8B Q4_K_M). LLAMACPP_MODEL_REPO+FILE override.
+LLAMACPP_MODEL_REPO, LLAMACPP_MODEL_FILE = model_tier.gguf_model()
+# Context window — kept small so prefill stays cheap (matches OLLAMA_CONTEXT_WINDOW).
+LLAMACPP_N_CTX = int(os.getenv("LLAMACPP_N_CTX", "4096"))
+# GPU offload: number of layers to push onto a GPU. -1 = offload all (fast path on
+# a capable GPU); 0 = pure CPU (the safe universal default so 8 GB integrated-GPU
+# laptops still work). Auto-detected at load time unless set explicitly.
+LLAMACPP_N_GPU_LAYERS = os.getenv("LLAMACPP_N_GPU_LAYERS", "")  # "" = auto
+# Generation threads — default to the physical core count (best for llama.cpp).
+LLAMACPP_N_THREADS = os.getenv("LLAMACPP_N_THREADS", "")  # "" = physical cores
+# Cap generated tokens per reply (mirrors MLX_MAX_TOKENS).
+LLAMACPP_MAX_TOKENS = int(os.getenv("LLAMACPP_MAX_TOKENS", "512"))
 
 SYSTEM_PROMPT = (
     "You are a warm, friendly conversational companion. "
