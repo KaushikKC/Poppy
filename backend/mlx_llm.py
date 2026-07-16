@@ -49,7 +49,15 @@ def _load() -> None:
 
     _model, _tokenizer = load(MLX_LM_MODEL)
     if MLX_DRAFT_MODEL:
-        _draft_model, _ = load(MLX_DRAFT_MODEL)
+        # Speculative decoding is a speed bonus, never a requirement: if the draft
+        # model isn't cached or fails to load (low disk, offline first run), fall
+        # back to plain decoding rather than breaking the whole LLM path.
+        try:
+            _draft_model, _ = load(MLX_DRAFT_MODEL)
+        except Exception as e:
+            print(f"[llm] draft model unavailable ({e}); "
+                  f"continuing without speculative decoding.")
+            _draft_model = None
     _loaded = True
 
 
