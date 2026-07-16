@@ -51,14 +51,51 @@ def _free_gb() -> float:
     return shutil.disk_usage(Path.home()).free / 1e9
 
 
+# Bit-widths mainline MLX can dequantize. Sub-2-bit formats (1-bit / true ternary)
+# need the model author's custom kernels — e.g. PrismML's fork for Bonsai. Verified
+# 2026-07-16: mlx_lm.load on Bonsai-27B-mlx-1bit crashes with
+# "[quantize] The requested number of bits 1 is not supported."
+_MLX_SUPPORTED_BITS = {2, 3, 4, 5, 6, 8}
+
+
+def _mlx_loadable(repo: str) -> tuple[bool, str]:
+    """Fetch just config.json (tiny) and check the quantization bit-width is one
+    mainline MLX supports — so we don't download gigabytes of an unloadable model."""
+    import json
+    from huggingface_hub import hf_hub_download
+    try:
+        cfg_path = hf_hub_download(repo, "config.json")
+        cfg = json.loads(Path(cfg_path).read_text())
+    except Exception:
+        return True, ""  # no config to check → let load() try
+    q = cfg.get("quantization") or cfg.get("quantization_config") or {}
+    bits = q.get("bits")
+    if bits is not None and bits not in _MLX_SUPPORTED_BITS:
+        return False, (f"{bits}-bit quantization — mainline MLX supports only "
+                       f"{sorted(_MLX_SUPPORTED_BITS)}; needs the model's custom kernels/fork.")
+    return True, ""
+
+
 def bench(repo: str) -> dict | None:
     import mlx.core as mx
     from mlx_lm import load, stream_generate
 
+    loadable, why = _mlx_loadable(repo)
+    if not loadable:
+        print(f"  ✋ Skipping {repo}: {why}")
+        return None
+
     if not _cached(repo):
         free = _free_gb()
         print(f"  {repo} is not cached (free disk: {free:.1f} GB).")
-        est = 6.5 if "27" in repo else 2.5  # rough weight-size guess, GB
+        # Rough download-size guess (GB), per quantization variant.
+        low = repo.lower()
+        if "1bit" in low or "1-bit" in low:
+            est = 4.0            # 1-bit 27B ≈ 3.9 GB
+        elif "27" in repo:
+            est = 6.0            # ternary/2-bit 27B ≈ 5.9 GB
+        else:
+            est = 2.5            # ~3B 4-bit
         if free - est < MIN_FREE_GB_AFTER_DOWNLOAD:
             print(f"  ✋ Skipping: downloading (~{est:.0f} GB) would leave "
                   f"<{MIN_FREE_GB_AFTER_DOWNLOAD} GB free. Clear space first.")
