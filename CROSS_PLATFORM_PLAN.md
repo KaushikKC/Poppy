@@ -69,8 +69,8 @@ Kokoro means the *same branded voice* on mobile — previously an open question.
 
 | Device | Model | Why |
 |---|---|---|
-| Mac 16 GB+ (v1) | Llama-3.2-3B-Instruct-4bit (MLX) — today's default | shipped, tuned |
-| Mac 16 GB+ (v1.x) | **Ternary Bonsai-27B (MLX 2-bit, 5.9 GB)** — benchmark vs 3B | potentially much smarter companion, same RAM class |
+| Mac 16 GB+ (v1) | Llama-3.2-3B-Instruct-4bit (MLX) — today's default | shipped, tuned; 285ms TTFT, 46 tok/s, 2 GB |
+| Mac 32 GB+ / desktop (v1.x) | **Ternary Bonsai-27B (MLX 2-bit, 8 GB)** — verified loads on mainline MLX | "deep mode" toggle; 1.6s TTFT, 10.6 tok/s, 8 GB peak — too heavy as the 16 GB default |
 | Windows/Linux 16 GB | Llama-3.2-3B / Qwen 4-bit GGUF; Bonsai-27B GGUF where fast enough | GGUF universality |
 | Phone 8 GB+ (flagship) | Llama-3.2-3B-4bit GGUF (~2 GB) | proven on llama.rn today |
 | Phone 6–8 GB | Llama-3.2-1B-4bit GGUF | fits, still conversational |
@@ -105,24 +105,29 @@ All first-run downloads with progress UI; never bundle weights in the store bina
   - *Mobile:* wait for mainline llama.cpp/llama.rn kernel support; ship 1B/3B first,
     swap Bonsai in later. Don't build on a 1-day-old fork.
 
-- **Benchmark run 2026-07-16 (M3/16GB) — partial, one dead end confirmed:**
+- **Benchmark run 2026-07-16 (M3/16GB) — both variants now tested:**
   - **3B baseline** (`Llama-3.2-3B-Instruct-4bit`, our current default): median
-    **TTFT 297ms, 42 tok/s, 2.0 GB peak**, load 3.6s. Rock solid — this is the bar.
+    **TTFT 285ms, 46.6 tok/s, 2.0 GB peak**, load 1.4s. Rock solid — this is the bar.
   - **1-bit Bonsai** (`Bonsai-27B-mlx-1bit`): **does NOT run on our stack.** Downloaded
     (4.8 GB on disk, not the advertised 3.9), then `mlx_lm.load` crashed:
     `ValueError: [quantize] The requested number of bits 1 is not supported. The
     supported bits are 2, 3, 4, 5, 6 and 8.` Mainline MLX has no 1-bit kernel — the
     1-bit format **requires PrismML's fork**, confirming the caveat empirically. Weights
     deleted after (kept disk clean).
-  - **Ternary 2-bit** (`Ternary-Bonsai-27B-mlx-2bit`): **the one still-viable path** —
-    2-bit *is* in mainline MLX's supported list, so this may load without any fork. NOT
-    yet tested: it's a 5.9 GB download and the M3 only had 7 GB free (would leave ~1 GB
-    — unsafe). **Blocked on disk. Needs ~10 GB free to test safely.** Open question
-    that gates it: does mainline `mlx_lm` recognise the **Qwen3.6** architecture at all?
-  - *Takeaway:* the plan's "don't build on the 1-day-old fork" caution was right. Do not
-    ship Bonsai in Mac v1. Ship the proven 3B. Re-test ternary-2bit once disk allows; if
-    it loads and beats the 3B on quality without wrecking TTFT, promote it to a "deep
-    mode" toggle, not the default.
+  - **Ternary 2-bit** (`Ternary-Bonsai-27B-mlx-2bit`): **✅ WORKS on mainline MLX.**
+    Re-tested once disk allowed (7.9 GB cached). Mainline `mlx_lm` loads the Qwen3.6
+    architecture fine — no fork needed. Median **TTFT 1635ms, 10.6 tok/s, 7.99 GB peak**,
+    load 4.5s. Speed clears the ~8 tok/s speech bar comfortably. Caveats: TTFT is ~5.7×
+    the 3B's (a noticeable pause before the voice starts), the 8 GB peak is tight on a
+    16 GB Mac alongside Whisper + Kokoro/Chatterbox + avatar video, and the last prompt
+    of the run dropped to 2.5 tok/s (late-run memory pressure — a headroom yellow flag).
+  - *Takeaway:* the earlier "ship 3B" call rested only on the **1-bit** failing — but the
+    **2-bit is a live option**, not a dead end. Still **ship the 3B in Mac v1**: on a
+    16 GB Mac the 27B-2bit's latency + memory cost isn't worth it for a real-time voice
+    loop. Position 27B-2bit as a **"deep mode" toggle for 32 GB+ / desktop tier**, never
+    the 16 GB default — which lines up with the desktop-first Bonsai stance elsewhere in
+    this plan. Quality A/B (does 27B-2bit actually feel smarter as a companion?) is the
+    remaining open question before promoting it.
   - *Caution:* PrismML's headline numbers are self-reported; treat as unverified.
 
 ### Hermes Agent (Nous Research) — ❌ not a fit (but *not* for the reason first recorded)
@@ -170,11 +175,12 @@ the wrong layer:
 
 ### Phase 0 — Mac v1 (P0, unchanged) ⬜
 See PRODUCTION_PLAN Phase A/B. Plus one addition:
-- 🚧 **P0-a** Benchmark Bonsai-27B vs Llama-3.2-3B on the M3 (`scripts/benchmark_llm.py`).
-  Run 2026-07-16: 3B = **297ms TTFT, 42 tok/s, 2.0 GB** (the bar to beat). **1-bit Bonsai
-  won't load on mainline MLX** (needs PrismML's fork). **Ternary-2bit still untested —
-  blocked on disk** (needs ~10 GB free; had 7). **Decision: ship the 3B in v1.** Retest
-  ternary-2bit when disk allows. (Full write-up in the Bonsai section above.)
+- ✅ **P0-a** Benchmark Bonsai-27B vs Llama-3.2-3B on the M3 (`scripts/benchmark_llm.py`).
+  Run 2026-07-16: 3B = **285ms TTFT, 46.6 tok/s, 2.0 GB** (the bar to beat). **1-bit Bonsai
+  won't load on mainline MLX** (needs PrismML's fork). **Ternary-2bit ✅ loads on mainline
+  MLX** — 1635ms TTFT, 10.6 tok/s, 7.99 GB peak. **Decision: ship the 3B in v1;** 27B-2bit
+  is a viable "deep mode" for the 32 GB+/desktop tier, not the 16 GB default. Remaining:
+  quality A/B of 27B-2bit vs 3B. (Full write-up in the Bonsai section above.)
 
 ### Phase 1 — Mobile PoC gate (P0, 1 week, after v1 ships) ⬜
 - ⬜ RN skeleton: `llama.rn` + `whisper.rn` + `react-native-sherpa-onnx` (Kokoro).
