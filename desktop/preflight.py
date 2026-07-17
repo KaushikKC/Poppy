@@ -32,7 +32,16 @@ BACKEND = ROOT / "backend"
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
-from config import LLM_BACKEND, MLX_DRAFT_MODEL, MLX_LM_MODEL, OLLAMA_MODEL, OLLAMA_URL  # noqa: E402
+from config import (  # noqa: E402
+    LLM_BACKEND,
+    MLX_DRAFT_MODEL,
+    MLX_LM_MODEL,
+    LLAMACPP_MODEL_REPO,
+    LLAMACPP_MODEL_FILE,
+    OLLAMA_MODEL,
+    OLLAMA_URL,
+)
+import model_tier  # noqa: E402
 
 Notify = Optional[Callable[[str], None]]
 
@@ -96,6 +105,31 @@ def ensure_mlx_llm(auto_fix: bool = True, notify: Notify = None) -> bool:
             _say(notify, f"Language-model download failed: {e}")
             return False
     return all(_hf_cached(r) for r in repos)
+
+
+# ── llama.cpp / GGUF LLM (Windows / CPU packaged default) ────────────────────
+def _gguf_cached() -> bool:
+    from huggingface_hub import hf_hub_download
+    try:
+        hf_hub_download(LLAMACPP_MODEL_REPO, LLAMACPP_MODEL_FILE, local_files_only=True)
+        return True
+    except Exception:
+        return False
+
+
+def ensure_llamacpp_llm(auto_fix: bool = True, notify: Notify = None) -> bool:
+    if _gguf_cached():
+        return True
+    if not auto_fix:
+        return False
+    from huggingface_hub import hf_hub_download
+    _say(notify, f"Downloading the language model ({LLAMACPP_MODEL_FILE}) — one-time…")
+    try:
+        hf_hub_download(LLAMACPP_MODEL_REPO, LLAMACPP_MODEL_FILE)
+    except Exception as e:
+        _say(notify, f"Language-model download failed: {e}")
+        return False
+    return _gguf_cached()
 
 
 # ── Ollama (opt-in backend) ──────────────────────────────────────────────────
@@ -177,10 +211,20 @@ def run(auto_fix: bool = True, notify: Notify = None) -> Report:
     rep = Report()
 
     if LLM_BACKEND == "mlx":
+        _say(notify, model_tier.describe())
         _say(notify, "Checking the language model…")
         ok_llm = ensure_mlx_llm(auto_fix, notify)
         rep.add(Check(
             f"Language model ({MLX_LM_MODEL})", ok_llm, critical=True,
+            detail="" if ok_llm else "The language model isn't downloaded yet (needs internet once).",
+            fix="Connect to the internet and reopen the app.",
+        ))
+    elif LLM_BACKEND == "llamacpp":
+        _say(notify, model_tier.describe())
+        _say(notify, "Checking the language model…")
+        ok_llm = ensure_llamacpp_llm(auto_fix, notify)
+        rep.add(Check(
+            f"Language model ({LLAMACPP_MODEL_FILE})", ok_llm, critical=True,
             detail="" if ok_llm else "The language model isn't downloaded yet (needs internet once).",
             fix="Connect to the internet and reopen the app.",
         ))
