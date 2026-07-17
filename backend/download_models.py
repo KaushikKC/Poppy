@@ -28,6 +28,8 @@ from config import (
     EMOTION_MODEL_REPO,
     KOKORO_REPO_ID,
     LLM_BACKEND,
+    LLAMACPP_MODEL_REPO,
+    LLAMACPP_MODEL_FILE,
     MLX_DRAFT_MODEL,
     MLX_LM_MODEL,
     WHISPER_BACKEND,
@@ -70,6 +72,16 @@ def _present(repo_id: str) -> bool:
         return False
 
 
+def _gguf_present() -> bool:
+    """True if the single GGUF LLM file (llamacpp backend) is cached."""
+    from huggingface_hub import hf_hub_download
+    try:
+        hf_hub_download(LLAMACPP_MODEL_REPO, LLAMACPP_MODEL_FILE, local_files_only=True)
+        return True
+    except Exception:
+        return False
+
+
 def check() -> bool:
     """Verify every model is cached for offline use. Returns True if all present."""
     os.environ["HF_HUB_OFFLINE"] = "1"
@@ -79,6 +91,11 @@ def check() -> bool:
         ok = _present(repo)
         all_ok = all_ok and ok
         print(f"  [{OK if ok else MISS}] {label}  ({repo})")
+    # GGUF LLM is a single file (not a whole repo), so it's checked separately.
+    if LLM_BACKEND == "llamacpp":
+        ok = _gguf_present()
+        all_ok = all_ok and ok
+        print(f"  [{OK if ok else MISS}] LLM (GGUF/llama.cpp)  ({LLAMACPP_MODEL_FILE})")
     return all_ok
 
 
@@ -136,6 +153,16 @@ def download() -> bool:
                     continue
                 print(f"→ {label} / MLX Metal ({repo}) …")
                 snapshot_download(repo)
+        except Exception as e:
+            print(f"  ! failed: {e}")
+            ok = False
+
+    # GGUF LLM (single file) — only when the llama.cpp backend is selected.
+    if LLM_BACKEND == "llamacpp":
+        try:
+            from huggingface_hub import hf_hub_download
+            print(f"→ LLM / GGUF ({LLAMACPP_MODEL_REPO}/{LLAMACPP_MODEL_FILE}) …")
+            hf_hub_download(LLAMACPP_MODEL_REPO, LLAMACPP_MODEL_FILE)
         except Exception as e:
             print(f"  ! failed: {e}")
             ok = False
