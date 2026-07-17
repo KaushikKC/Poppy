@@ -47,22 +47,22 @@ the MLX design and the `node-llama-cpp`/GGUF direction already committed in `CRO
 Mac quality bar). Downloaded on first run exactly like the MLX weights.
 
 Tasks:
-- ⬜ **L1 (P0)** `llama_cpp_llm.py`: load once (module-global, `keep_alive`-equivalent), stream via
-  `create_chat_completion(stream=True)`, honor `MLX_MAX_TOKENS`/context config. Reuse `config.py`
-  prompt assembly and `MAX_HISTORY_TURNS` so latency tuning carries over unchanged.
-- ⬜ **L2 (P0)** Wire `LLM_BACKEND=llamacpp` into `llm.py` (third branch) + `preflight.py`
-  (`ensure_llamacpp_llm`: check the GGUF is cached, download if missing).
-- ⬜ **L3 (P0)** `config.py`: `LLAMACPP_MODEL_REPO` / `LLAMACPP_MODEL_FILE`, `n_ctx=4096`,
-  `n_gpu_layers` auto (see Speed §S3), `n_threads` = physical cores.
+- ✅ **L1 (P0)** `llama_cpp_llm.py` — resident model, threaded streaming via
+  `create_chat_completion(stream=True)`, honors `LLAMACPP_MAX_TOKENS`/`n_ctx`, mirrors `mlx_llm`'s
+  queue pattern. *(Code complete; not yet run on real Windows — see W9.)*
+- ✅ **L2 (P0)** `LLM_BACKEND=llamacpp` wired into `llm.py` (third branch) + `preflight.py`
+  (`ensure_llamacpp_llm`) + `download_models.py` (single-file GGUF check/download).
+- ✅ **L3 (P0)** `config.py`: `LLAMACPP_MODEL_REPO`/`_FILE` (RAM-tiered via `model_tier`), `n_ctx=4096`,
+  `n_gpu_layers` auto (offload-all when GPU-capable, CPU fallback on init failure), `n_threads` = physical cores.
 - ⬜ **L4 (P1)** **KV / prompt cache** across turns (llama.cpp `cache_prompt` / saved state) — the
   Windows equivalent of the MLX persistent-prompt-cache trick. This is what keeps turn-2+ TTFT
   near-zero; do not skip it, it *is* the fast feel.
-- ⬜ **L5 (P2)** Optional speculative decoding (1B draft GGUF) once the 3B path is proven — mirrors
-  `MLX_DRAFT_MODEL`.
-- ⬜ **L6 (P1)** `requirements-win.txt`: `llama-cpp-python` (CPU wheel default), `faster-whisper`,
-  torch (CPU), transformers, kokoro, `pywebview` unpinned from darwin. Keep `mlx-*` on their existing
-  `platform_machine==arm64 and sys_platform==darwin` markers so one requirements set still installs
-  cleanly on both.
+- ⬜ **L5 (P2)** Optional speculative decoding (1B draft GGUF) — **likely skip.** On the Mac/MLX side
+  it was evaluated 2026-07-17 and **left off**: the 3B already streams ~12× the speaking pace (45 tok/s),
+  so a faster stream isn't felt, while a draft costs RAM + slightly raises TTFT (see `PRODUCTION_PLAN` F4).
+  Same logic almost certainly applies to GGUF; measure before adding it rather than assuming a win.
+- ✅ **L6 (P1)** `backend/requirements-win.txt` — `llama-cpp-python` (CPU wheel default), `faster-whisper`,
+  torch (CPU), transformers, kokoro, `pywebview` unpinned from darwin, no `mlx-*`.
 
 > Backend parity check: run `scripts/benchmark_llm.py`-style timing on the GGUF path vs the MLX path
 > on the same prompts, so we know the Windows 3B feels the same as the Mac 3B before shipping.
@@ -93,10 +93,11 @@ Reuse the **same** `launcher.py` / `preflight.py` / FastAPI / frontend. Only the
 and the packaging/signing differ.
 
 ### 3a. Make the shell OS-aware — **P0**
-- ⬜ **W1 (P0)** Platform paths in `launcher.py` + `preflight.py`: logs to
-  `%LOCALAPPDATA%\Poppys\Logs` (not `~/Library/Logs`); use `platformdirs` to abstract both.
-- ⬜ **W2 (P0)** Default backends on Windows: `LLM_BACKEND=llamacpp`, `WHISPER_BACKEND=faster`
-  (already works — `stt.py` uses it as the fallback path today), `KOKORO_DEVICE=cpu`.
+- ✅ **W1 (P0)** Platform paths in `launcher.py` (`_log_dir()`): logs to `%LOCALAPPDATA%\Poppys\Logs`
+  on Windows, `~/Library/Logs/Poppys` on macOS. *(Kept it dependency-free rather than adding platformdirs.)*
+- ✅ **W2 (P0)** OS-aware default backend in `launcher.py`: `LLM_BACKEND` defaults to `mlx` on macOS,
+  `llamacpp` elsewhere. `WHISPER_BACKEND=faster` already the non-Apple fallback in `stt.py`. *(Still TODO:
+  force `KOKORO_DEVICE=cpu` on Windows.)*
 - ⬜ **W3 (P0)** **WebView2 runtime check** in preflight: it's preinstalled on Win11 and most Win10,
   but bundle the tiny Evergreen bootstrapper and offer a one-click install if absent (else pywebview
   shows a blank window).
@@ -104,10 +105,11 @@ and the packaging/signing differ.
   "denied" recovery screen with a deep link (`ms-settings:privacy-microphone`).
 
 ### 3b. Package — **P0**
-- ⬜ **W5 (P0)** `desktop/poppys_win.spec`: PyInstaller one-dir; `collect_all` on
-  `llama_cpp`, `faster_whisper`, `ctranslate2`, `kokoro`, `espeakng_loader`, `torch`, `transformers`,
-  `webview` (WebView2 backend). `console=False`. Icon `.ico` (convert from the logo).
-- ⬜ **W6 (P0)** `desktop/build_app_win.ps1`: disk guard + PyInstaller invoke (mirror `build_app.sh`).
+- ✅ **W5 (P0)** `desktop/poppys_win.spec` written: one-dir; `collect_all` on `llama_cpp`,
+  `faster_whisper`, `ctranslate2`, `kokoro`, `espeakng_loader`, `torch`, `transformers`, `webview`;
+  `console=False`. *(TODO before build: generate `desktop/icons/poppys.ico` from the logo.)*
+- ✅ **W6 (P0)** `desktop/build_app_win.ps1` written: disk guard + `requirements-win.txt` install +
+  PyInstaller invoke (mirrors `build_app.sh`). *(Not yet run — needs a Windows machine.)*
 - ⬜ **W7 (P0)** **Installer**: **Inno Setup** (simplest) or NSIS → a signed `PoppysSetup.exe` that
   installs to `%LOCALAPPDATA%\Programs\Poppys`, adds Start-menu + desktop shortcuts, and a clean
   uninstaller. (No admin rights needed — per-user install avoids UAC friction.)
@@ -142,9 +144,9 @@ protecting sub-1.5s turns). The Mac path already hits **1.47s first-audio**; Win
 - ⬜ **S6 (P1)** Keep the **aggressive first-chunk TTS** (`TTS_FIRST_CHUNK_*` in `config.py`): the
   voice starts on the first comma/clause (~4–6 chars) while text still streams. This is why first-
   *audio* beats first-*sentence* — platform-independent, already built.
-- ⬜ **S7 (P1)** **F1 from `PRODUCTION_PLAN`**: return the transcript immediately; run sticky
-  accent/gender detection off the critical path (updates next turn's voice, not this one). Biggest
-  remaining STT win, matters more on CPU-STT Windows.
+- ✅ **S7 (P1)** **F1 from `PRODUCTION_PLAN`** — done in `main.py` (`/stt` returns the transcript
+  immediately; `_schedule_detection` runs the classifiers in the background for the next turn).
+  Platform-independent, so this carries to Windows/CPU-STT for free.
 
 **GPU where it exists, never required**
 - ⬜ **S8 (P1)** **Auto GPU offload** for GGUF: detect a usable GPU and set `n_gpu_layers` accordingly;
@@ -164,9 +166,9 @@ first-audio **≤ 1.5s Mac / ≤ 2.5s mid Windows (CPU)**; turn-2 TTFT **≤ 0.7
 
 A companion runs for 30+ minutes; it must not break mid-conversation or choke a weak machine.
 
-- ⬜ **Q1 (P1)** **RAM → model tier** (`PRODUCTION_PLAN` D1, now cross-platform): 8 GB → 1B GGUF,
-  16 GB → 3B, 32 GB+ → offer the **Bonsai-27B "deep mode"** (2-bit MLX on Mac, GGUF on Win — verified
-  loadable, `CROSS_PLATFORM_PLAN`). Detect with `psutil`; pick at first run; let the user override.
+- ✅ **Q1 (P1)** **RAM → model tier** (`PRODUCTION_PLAN` D1) — `backend/model_tier.py`: psutil RAM →
+  1B/3B/8B for both MLX and GGUF, env + saved-file override, shown on first-run. *(Bonsai-27B "deep
+  mode" for 32 GB+ still a future add — the tier tops out at 8B for now.)*
 - ⬜ **Q2 (P1)** **Low-RAM / OOM guard** (`PRODUCTION_PLAN` C4): catch model-load OOM, drop to the
   smaller tier, tell the user plainly instead of crashing.
 - ⬜ **Q3 (P1)** **WebSocket auto-reconnect** (C2) + **surface backend errors in the UI** (C3): today a
