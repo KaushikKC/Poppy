@@ -15,9 +15,13 @@ still run against their own Ollama:  LLM_BACKEND=ollama python3 desktop/launcher
 import os
 import sys
 
-# Packaged default: run the LLM in-process on Apple-Silicon Metal via MLX-LM —
-# nothing else to install. Must be set before config/preflight are imported.
-os.environ.setdefault("LLM_BACKEND", "mlx")
+# Packaged default backend is OS-specific and must be set before config/preflight
+# are imported: macOS runs the LLM in-process on Apple-Silicon Metal via MLX-LM;
+# Windows (and any non-Apple machine) runs it via llama.cpp on a GGUF model
+# (CPU-first, optional GPU offload). Either way there's nothing else to install.
+os.environ.setdefault(
+    "LLM_BACKEND", "mlx" if sys.platform == "darwin" else "llamacpp"
+)
 
 import html
 import logging
@@ -50,7 +54,20 @@ import preflight
 
 HOST, PORT = "127.0.0.1", 8000
 APP_URL = f"http://{HOST}:{PORT}"
-LOG_DIR = Path.home() / "Library" / "Logs" / "Poppys"
+
+
+def _log_dir() -> Path:
+    """Per-OS log location (W1): %LOCALAPPDATA%\\Poppys\\Logs on Windows,
+    ~/Library/Logs/Poppys on macOS."""
+    if sys.platform == "win32":
+        base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+        return Path(base) / "Poppys" / "Logs"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Logs" / "Poppys"
+    return Path.home() / ".local" / "state" / "Poppys"  # Linux/other
+
+
+LOG_DIR = _log_dir()
 
 
 def _setup_logging() -> None:
