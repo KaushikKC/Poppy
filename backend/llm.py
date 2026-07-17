@@ -11,6 +11,8 @@ from config import LLM_BACKEND, SYSTEM_PROMPT
 
 if LLM_BACKEND == "mlx":
     import mlx_llm as _backend
+elif LLM_BACKEND == "llamacpp":
+    import llama_cpp_llm as _backend
 else:
     import ollama_client as _backend
 
