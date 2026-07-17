@@ -1,0 +1,33 @@
+# Windows / CPU install set for Poppys.
+#
+#   pip install -r backend/requirements-win.txt
+#
+# Differences from requirements.txt (macOS/Apple-Silicon):
+#   - LLM runs via llama.cpp on a GGUF model (llama-cpp-python) instead of MLX.
+#   - No mlx-* packages (Apple-Silicon only).
+#   - torch is the CPU build; STT uses faster-whisper (CPU int8) by default.
+#   - pywebview is unpinned from darwin so it installs on Windows (WebView2 backend).
+
+fastapi==0.115.0
+uvicorn==0.41.0
+websockets==15.0.1
+
+# LLM backend: llama.cpp on GGUF (CPU wheel by default). For a GPU accelerator,
+# install a GPU-enabled wheel instead (Vulkan works on NVIDIA/AMD/Intel; CUDA is
+# the NVIDIA fast path) — the app auto-offloads if the build supports it, else CPU.
+llama-cpp-python>=0.3.2
+
+# STT: CPU CTranslate2 Whisper (the built-in fallback path, default on Windows).
+faster-whisper==1.2.1
+
+kokoro>=0.9.4          # multi-accent TTS; espeak-ng ships via espeakng-loader (bundled DLL)
+transformers>=4.40     # accent + emotion wav2vec2 classifiers
+torch>=2.2             # CPU build on Windows
+numpy>=1.26
+httpx==0.28.1
+python-multipart==0.0.20
+cryptography==44.0.0
+psutil==7.2.2
+
+# Desktop app shell: native window via the Edge WebView2 runtime (built into Win10/11).
+pywebview>=6.0
