@@ -67,12 +67,12 @@ The core gap: today it needs Python + a terminal. It must become a double-click 
 | C2 | Frontend WebSocket auto-reconnect | P1 | ⬜ | Currently a dropped socket ends the turn. |
 | C3 | Surface backend errors in the UI | P1 | ⬜ | Some exceptions are swallowed today. |
 | C4 | Model/OOM handling on low RAM | P1 | ⬜ | Detect, fall back to a smaller model. |
-| C5 | Barge-in fix: `_replyActive` flips off at `done` while audio still plays | P2 | ⬜ | Speaking during playout may not cut off cleanly. |
+| C5 | Barge-in fix: `_replyActive` flips off at `done` while audio still plays | P2 | ✅ | Fixed 2026-07-17: `interruptReply` now also fires while `player.isPlaying()`, so barging in during voice playout cuts it off. (Not yet driven live in a browser.) |
 
 ## Phase D — Hardware adaptation  (P1)
 | # | Task | Pri | Status | Notes |
 |---|------|-----|--------|-------|
-| D1 | Detect RAM → pick model size (8 GB→1B/3B, 16 GB→3B, 32 GB→8B) | P1 | ⬜ | Currently hard-coded to 3B. |
+| D1 | Detect RAM → pick model size (8 GB→1B/3B, 16 GB→3B, 32 GB→8B) | P1 | ✅ | `backend/model_tier.py`: reads RAM (psutil), picks 1B/3B/8B per backend (MLX + GGUF), env + saved-file override. Wired into `config.py`, shown on the first-run screen (`preflight`). |
 | D2 | Detect Apple Silicon vs Intel → STT backend | P1 | ✅ (logic) | `WHISPER_BACKEND` + CPU fallback already handle this; just wire into setup. |
 | D3 | Thermal/pressure awareness (optional) | P2 | ⬜ | |
 
@@ -87,9 +87,10 @@ The core gap: today it needs Python + a terminal. It must become a double-click 
 ## Phase F — Performance polish  (P2)
 | # | Task | Pri | Status | Notes |
 |---|------|-----|--------|-------|
-| F1 | STT ~3-4s: decouple sticky accent/gender from the critical path | P1 | ⬜ | Return transcript immediately; update identity in background for next turn. |
+| F1 | STT ~3-4s: decouple sticky accent/gender from the critical path | P1 | ✅ | Done in `main.py`: `/stt` returns the transcript immediately (~0.4s); `_schedule_detection` runs the classifiers in a background thread to shape the *next* turn. |
 | F2 | Consider Kokoro on CPU to cut GPU contention with the LLM | P2 | ⬜ | Kokoro RTF ~0.18; test if it smooths first-2s gaps. |
 | F3 | Streaming/partial STT | P2 | ⬜ | Start the LLM before the full transcript. |
+| F4 | Speculative decoding (1B draft model, MLX) | P2 | ✅ (won't ship) | Evaluated 2026-07-17 and **left OFF by default**. Baseline 3B benchmarks at **45 tok/s, 288 ms TTFT** — ~12× the ~3-4 tok/s speaking pace, so a faster stream gives no felt gain, while a draft costs ~0.7 GB RAM (hurts 8 GB machines) and slightly raises TTFT. Kept as an env opt-in (`MLX_DRAFT_MODEL`); `mlx_llm._load` degrades gracefully if uncached. |
 
 ## Phase G — Testing & QA  (P1)
 | # | Task | Pri | Status | Notes |
