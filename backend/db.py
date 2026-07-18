@@ -1,8 +1,9 @@
 import sqlite3
 from datetime import datetime, timezone
-from pathlib import Path
 
-DB_PATH = Path(__file__).parent.parent / "companion.db"
+import paths
+
+DB_PATH = paths.user_data_dir() / "companion.db"
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS sessions (
