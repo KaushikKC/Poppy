@@ -11,10 +11,11 @@ attacker who already has full access to the user's account.
 import json
 import os
 import re
-from pathlib import Path
 from cryptography.fernet import Fernet, InvalidToken
 
-_ROOT = Path(__file__).parent.parent
+import paths
+
+_ROOT = paths.user_data_dir()
 _KEY_PATH = _ROOT / "companion.key"
 _DATA_PATH = _ROOT / "companion_memory.enc"
 _MAX_FACTS = 40
