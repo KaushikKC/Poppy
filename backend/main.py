@@ -1,5 +1,4 @@
 import asyncio
-from pathlib import Path
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, WebSocket
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,8 +14,9 @@ import accent_detect
 import gender_detect
 import emotion_detect
 import db
+import paths
 
-FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+FRONTEND_DIR = paths.bundle_root() / "frontend"
 
 app = FastAPI(title="Private Companion Backend")
 
