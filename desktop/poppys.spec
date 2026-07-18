@@ -14,7 +14,7 @@
 
 import os
 
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metadata
 
 ROOT = os.path.abspath(os.path.join(SPECPATH, ".."))
 
@@ -33,6 +33,14 @@ hiddenimports = [
 for pkg in (
     "espeakng_loader",   # bundled espeak-ng dylib + phoneme data (Kokoro's phonemizer)
     "misaki",            # Kokoro G2P (loads espeakng_loader at import)
+    "language_tags",     # misaki dep; ships JSON data (data/json/index.json) it reads at import
+    # language_tags validates the subtag registry via jsonschema → rfc3987_syntax →
+    # lark, each of which ships data files (schemas, .lark grammar) that must ride along.
+    "jsonschema",
+    "jsonschema_specifications",
+    "rfc3987_syntax",
+    "lark",
+    "num2words",         # misaki[en] number-to-words (locale data)
     "kokoro",
     "mlx",               # Metal kernels (libmlx.dylib + .metallib)
     "mlx_lm",
@@ -54,6 +62,25 @@ for pkg in (
     except Exception:
         pass  # optional pkg not installed (e.g. torchaudio) — fine
 
+# transformers loads model classes lazily (a custom _LazyModule), which PyInstaller's
+# static scan can't follow — so the model families we actually use must be named
+# explicitly or they're missing at runtime (e.g. "Could not import module 'AlbertModel'").
+#   albert   → Kokoro's text encoder (TTS)
+#   wav2vec2 → the accent + emotion classifiers
+for _model in ("albert", "wav2vec2"):
+    hiddenimports += collect_submodules(f"transformers.models.{_model}")
+
+# transformers' audio_utils reads importlib.metadata.version("torchcodec") at import
+# time (guarded by is_torchcodec_available(), which passes because the torchcodec
+# module rides along as a torch dep). If its dist-info metadata isn't bundled that
+# lookup raises PackageNotFoundError, which cascades and gets masked as
+# "Could not import module 'AlbertModel'". Ship the metadata. try/except so a build
+# machine without torchcodec (e.g. Windows/CPU) simply skips it.
+try:
+    datas += copy_metadata("torchcodec")
+except Exception:
+    pass
+
 a = Analysis(
     [os.path.join(SPECPATH, "launcher.py")],
     pathex=[os.path.join(ROOT, "backend"), SPECPATH],
@@ -62,6 +89,12 @@ a = Analysis(
     hiddenimports=hiddenimports,
     excludes=["tkinter", "matplotlib", "IPython", "jupyter", "pytest"],
     noarchive=False,
+    # transformers 5.x discovers its model classes (AlbertModel, Wav2Vec2…) by
+    # SCANNING its own source files at runtime (define_import_structure reads
+    # __file__'s directory). Collect it as real .py on disk — not bytecode in the
+    # archive — so that self-scan works in the frozen app. Without this it finds
+    # zero models: "Could not import module 'AlbertModel'".
+    module_collection_mode={"transformers": "py"},
 )
 pyz = PYZ(a.pure)
 
