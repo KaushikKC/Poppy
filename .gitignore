@@ -4,6 +4,10 @@ __pycache__/
 
 # personal, local-only reference notes (never committed)
 *.local.md
+
+# PyInstaller build artifacts
+build/
+dist/
 .env
 venv/
 .venv/
