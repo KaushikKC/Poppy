@@ -98,7 +98,7 @@ def ensure_mlx_llm(auto_fix: bool = True, notify: Notify = None) -> bool:
         return False
     from huggingface_hub import snapshot_download
     for repo in missing:
-        _say(notify, f"Downloading the language model ({repo}) — one-time, ~2 GB…")
+        _say(notify, f"Downloading the language model ({repo}), one-time, ~2 GB…")
         try:
             snapshot_download(repo)
         except Exception as e:
@@ -123,7 +123,7 @@ def ensure_llamacpp_llm(auto_fix: bool = True, notify: Notify = None) -> bool:
     if not auto_fix:
         return False
     from huggingface_hub import hf_hub_download
-    _say(notify, f"Downloading the language model ({LLAMACPP_MODEL_FILE}) — one-time…")
+    _say(notify, f"Downloading the language model ({LLAMACPP_MODEL_FILE}), one-time…")
     try:
         hf_hub_download(LLAMACPP_MODEL_REPO, LLAMACPP_MODEL_FILE)
     except Exception as e:
