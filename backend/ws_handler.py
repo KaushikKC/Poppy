@@ -9,6 +9,7 @@ import personas as persona_store
 import accent as accent_mod
 import safety
 import memory_store
+import companion
 import accent_detect
 import gender as gender_mod
 import gender_detect
@@ -52,7 +53,10 @@ async def handle_chat(ws: WebSocket):
             # remembered facts, with a stronger addendum if distress is detected.
             risk = safety.check(user_text)
             memory_block = await asyncio.to_thread(memory_store.as_prompt_block)
-            system_prompt = persona["system_prompt"] + SAFETY_ADDENDUM + memory_block
+            identity_block = await asyncio.to_thread(companion.as_prompt_block)
+            system_prompt = (
+                persona["system_prompt"] + identity_block + SAFETY_ADDENDUM + memory_block
+            )
             if risk["crisis"]:
                 system_prompt += CRISIS_ADDENDUM
                 await ws.send_json({"type": "safety", "resources": risk["resources"]})

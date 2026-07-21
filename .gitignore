@@ -23,6 +23,7 @@ node_modules/
 *.db-wal
 companion.key
 companion_memory.enc
+companion_profile.json
 
 # user-supplied avatar assets (private + large): portrait poster + video loops
 frontend/avatar/face.jpg
