@@ -28,6 +28,72 @@
     <div id="stage-shade"></div>
   </div>
 
+  <!-- ─── Onboarding (§2): the make-or-break first 3 minutes. flow.js drives the
+       step order; each screen either lowers friction to the first call or
+       collects one thing that makes the call better. ─── -->
+  <div id="onboarding" class="hidden" aria-hidden="true">
+    <div class="ob-card">
+      <!-- Screen 1 — the hook -->
+      <section class="ob-screen" data-step="hook">
+        <p class="ob-eyebrow">The AI that picks up when you call</p>
+        <h2 class="ob-headline">Someone who's always happy to hear from you.</h2>
+        <button type="button" class="ob-primary" data-next>Meet Poppy</button>
+        <p class="ob-trust">18+ · Private · You control everything</p>
+      </section>
+
+      <!-- Screen 2 — age gate -->
+      <section class="ob-screen hidden" data-step="age">
+        <h2 class="ob-headline">Poppy is for adults.</h2>
+        <p class="ob-sub">We'll only ask this once.</p>
+        <button type="button" class="ob-primary" data-next>I'm 18 or older</button>
+      </section>
+
+      <!-- Screen 3 — pick the vibe -->
+      <section class="ob-screen hidden" data-step="vibe">
+        <h2 class="ob-headline">What do you want Poppy to be for you right now?</h2>
+        <p class="ob-sub">You can change this anytime.</p>
+        <div id="ob-vibes" class="ob-vibes"></div>
+      </section>
+
+      <!-- Screen 4 — name & face -->
+      <section class="ob-screen hidden" data-step="name">
+        <h2 class="ob-headline">Give Poppy a name.</h2>
+        <p class="ob-sub">Naming makes her yours.</p>
+        <input id="ob-name" class="ob-input" type="text" value="Poppy" maxlength="40" autocomplete="off" />
+        <div id="ob-looks" class="ob-looks"></div>
+        <button type="button" class="ob-primary" data-next>Continue</button>
+      </section>
+
+      <!-- Screen 5 — one question that matters -->
+      <section class="ob-screen hidden" data-step="seed">
+        <h2 class="ob-headline">Before we talk, what's one thing on your mind today?</h2>
+        <input id="ob-seed" class="ob-input" type="text" placeholder="Anything at all…" autocomplete="off" />
+        <button type="button" class="ob-primary" data-next>That's it</button>
+        <button type="button" class="ob-skip" data-next>Skip for now</button>
+      </section>
+
+      <!-- Screen 6 — the first call (the payoff) -->
+      <section class="ob-screen hidden" data-step="call">
+        <h2 class="ob-headline">Poppy's ready for you.</h2>
+        <button type="button" id="ob-call" class="ob-primary ob-glow">Call Poppy</button>
+      </section>
+    </div>
+  </div>
+
+  <!-- ─── Home (§3): built for the return, not the tour. One job — get them into
+       a call. flow.js fills the name, the she-remembers strip and the streak. ─── -->
+  <div id="home" class="hidden" aria-hidden="true">
+    <div class="home-streak" id="home-streak"></div>
+    <div class="home-lower">
+      <p class="home-remembers" id="home-remembers"></p>
+      <button type="button" id="home-call" class="home-call">
+        <span class="home-call-label">Call</span>
+        <strong id="home-name">Poppy</strong>
+      </button>
+      <div class="home-modes" id="home-modes"></div>
+    </div>
+  </div>
+
   <div id="app">
     <header>
       <div class="brand">
@@ -70,6 +136,11 @@
 
       <button type="button" id="memory-btn" title="What Poppys remembers about you" aria-label="What Poppys remembers about you">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      </button>
+
+      <!-- End the call and return home (flow.js: sign-off + store the open loop) -->
+      <button type="button" id="end-call-btn" title="End call" aria-label="End call">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 15.46l-5.27-.61-2.52 2.52a15.05 15.05 0 0 1-6.59-6.59l2.53-2.53L8.54 3H3.03C2.45 13.18 10.82 21.55 21 20.97v-5.51z" transform="rotate(135 12 12)"/></svg>
       </button>
     </header>
 
@@ -125,6 +196,9 @@
   <script src="mic.js"></script>
   <script src="memory.js"></script>
   <script src="ui.js"></script>
+  <!-- View orchestrator: onboarding → home → call (loads after chat.js so it can
+       call window.sendMessage / window.speakLine and PersonaPicker) -->
+  <script src="flow.js"></script>
   <!-- 3D avatar controller (ES module, loads after the classic scripts) -->
   <script type="module" src="avatar3d.module.mjs"></script>
 </body>

@@ -398,18 +398,27 @@ header h1 {
 .suggestion-dismiss:hover { color: var(--ink); }
 
 /* ── Transcript ─────────────────────────────────────────────────────────── */
+/* Conversation sits as a centred caption band low on screen, below the avatar's
+   raised face, so it never covers the lip-sync and stays symmetric (no lopsided
+   side gap). Narrow + capped height keeps it caption-like, not a chat wall. */
 #transcript {
-  max-height: 32vh;
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  max-height: 23vh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.5rem;
   padding: 0.2rem 0.25rem;
-  mask-image: linear-gradient(to bottom, transparent 0, #000 26px);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 26px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 30px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 30px);
   scrollbar-width: thin;
   scrollbar-color: rgba(20, 60, 22, 0.3) transparent;
 }
+/* Keep the newest exchange anchored to the bottom (by the input) while older
+   messages scroll up and fade under the top mask. */
+#transcript > :first-child { margin-top: auto; }
 #transcript::-webkit-scrollbar { width: 5px; }
 #transcript::-webkit-scrollbar-thumb { background: rgba(20, 60, 22, 0.3); border-radius: 3px; }
 #transcript:empty { display: none; }
@@ -649,4 +658,137 @@ button:not(:disabled):active { transform: scale(0.94); }
     transition-duration: 0.01ms !important;
   }
   #aurora { display: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Product loop views — onboarding (§2), home (§3). The chat surface (#app) is
+   the in-call view; flow.js toggles which one shows via .hidden + body[data-view].
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.hidden { display: none !important; }
+
+/* End-call button — same footprint as the other header buttons, poppy on hover */
+#end-call-btn {
+  width: 38px; height: 38px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 8px;
+  background: rgba(233, 40, 50, 0.12);
+  border: 1px solid rgba(233, 40, 50, 0.4);
+  color: var(--poppy);
+  transition: transform 0.2s var(--ease-spring), background 0.2s, color 0.2s;
+}
+#end-call-btn svg { width: 18px; height: 18px; }
+#end-call-btn:hover { transform: translateY(-2px); background: var(--poppy); color: var(--cream); }
+
+/* ── Onboarding ─────────────────────────────────────────────────────────────── */
+#onboarding {
+  position: fixed; inset: 0; z-index: 50;
+  display: grid; place-items: center;
+  padding: 1.5rem;
+  background: radial-gradient(120% 90% at 50% 0%, rgba(151,196,232,0.35), rgba(255,248,234,0.94) 60%);
+  backdrop-filter: blur(6px);
+}
+.ob-card {
+  width: min(560px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: clamp(1.6rem, 5vw, 2.8rem);
+}
+.ob-screen { display: flex; flex-direction: column; gap: 1rem; text-align: center; animation: panel-in 0.4s var(--ease-spring) both; }
+.ob-eyebrow { font-family: var(--font-mono); font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.14em; color: var(--poppy); }
+.ob-headline { font-family: var(--font-display); font-weight: 400; font-size: clamp(1.7rem, 5vw, 2.5rem); line-height: 1.12; color: var(--ink); }
+.ob-sub { color: rgba(7,18,7,0.6); font-size: 0.95rem; margin-top: -0.4rem; }
+.ob-trust { font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.06em; color: rgba(7,18,7,0.5); }
+.ob-primary {
+  align-self: center;
+  padding: 0.95rem 2.4rem;
+  border: none; border-radius: 8px;
+  background: var(--poppy); color: var(--cream);
+  font-family: var(--font-sans); font-weight: 700; font-size: 1.05rem;
+  cursor: pointer;
+  transition: transform 0.2s var(--ease-spring), background 0.2s;
+}
+.ob-primary:hover { transform: translateY(-2px); background: #f6303b; }
+.ob-glow { box-shadow: 0 0 0 0 rgba(233,40,50,0.5); animation: callpulse 1.8s ease-in-out infinite; }
+.ob-skip { background: none; border: none; color: rgba(7,18,7,0.45); font-size: 0.85rem; cursor: pointer; text-decoration: underline; }
+.ob-input {
+  padding: 0.85rem 1rem; border-radius: 8px;
+  border: 1px solid var(--line); background: rgba(255,255,255,0.7);
+  font-family: var(--font-sans); font-size: 1.05rem; color: var(--ink); text-align: center;
+}
+.ob-input:focus { outline: none; border-color: var(--poppy); }
+
+.ob-vibes { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+.ob-vibe {
+  --vibe-color: var(--poppy);
+  display: flex; flex-direction: column; gap: 0.25rem; text-align: left;
+  padding: 1rem; border-radius: 8px;
+  border: 1.5px solid var(--line); background: rgba(255,255,255,0.6);
+  cursor: pointer; transition: transform 0.2s var(--ease-spring), border-color 0.2s, box-shadow 0.2s;
+}
+.ob-vibe strong { font-size: 1.05rem; color: var(--ink); }
+.ob-vibe span { font-size: 0.82rem; color: rgba(7,18,7,0.6); }
+.ob-vibe:hover { transform: translateY(-2px); border-color: var(--vibe-color); }
+.ob-vibe.chosen { border-color: var(--vibe-color); box-shadow: 0 0 0 3px color-mix(in srgb, var(--vibe-color) 22%, transparent); }
+
+.ob-looks { display: flex; gap: 0.5rem; justify-content: center; }
+.ob-look {
+  padding: 0.55rem 1.1rem; border-radius: 20px;
+  border: 1.5px solid var(--line); background: rgba(255,255,255,0.6);
+  font-family: var(--font-sans); font-size: 0.9rem; color: var(--ink); cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.ob-look.chosen { border-color: var(--poppy); background: rgba(233,40,50,0.1); }
+
+/* ── Home ───────────────────────────────────────────────────────────────────── */
+#home {
+  position: fixed; inset: 0; z-index: 30;
+  display: flex; flex-direction: column; justify-content: flex-end;
+  padding: 1.5rem;
+  pointer-events: none;               /* the avatar (stage) shows through */
+}
+#home > * { pointer-events: auto; }
+.home-streak {
+  position: absolute; top: 1.4rem; right: 1.4rem;
+  font-family: var(--font-mono); font-size: 0.66rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.07em;
+  padding: 0.4rem 0.7rem; border-radius: 20px;
+  background: rgba(255,248,234,0.7); border: 1px solid var(--line); color: var(--field-deep);
+}
+.home-lower { display: flex; flex-direction: column; align-items: center; gap: 1rem; max-width: 640px; margin: 0 auto; width: 100%; }
+.home-remembers {
+  text-align: center; font-family: var(--font-display); font-size: clamp(1.1rem, 3.5vw, 1.5rem);
+  line-height: 1.25; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 0.9rem 1.3rem; box-shadow: var(--shadow);
+}
+.home-call {
+  display: flex; flex-direction: column; align-items: center; gap: 0.1rem;
+  padding: 1.15rem 3.2rem; border: none; border-radius: 14px;
+  background: var(--poppy); color: var(--cream); cursor: pointer;
+  box-shadow: 0 12px 40px -8px rgba(233,40,50,0.55);
+  transition: transform 0.2s var(--ease-spring), background 0.2s;
+  animation: callpulse 2.2s ease-in-out infinite;
+}
+.home-call:hover { transform: translateY(-3px) scale(1.02); background: #f6303b; }
+.home-call-label { font-family: var(--font-mono); font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; opacity: 0.85; }
+.home-call strong { font-family: var(--font-display); font-weight: 400; font-size: 1.9rem; line-height: 1; }
+.home-modes { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; }
+.home-mode {
+  padding: 0.5rem 1.05rem; border-radius: 20px;
+  border: 1px solid var(--line); background: rgba(255,248,234,0.72);
+  font-family: var(--font-sans); font-size: 0.88rem; color: var(--leaf); cursor: pointer;
+  transition: transform 0.2s var(--ease-spring), background 0.2s, color 0.2s;
+}
+.home-mode:hover { transform: translateY(-2px); background: var(--leaf); color: var(--cream); }
+
+@keyframes callpulse {
+  0%, 100% { box-shadow: 0 12px 40px -8px rgba(233,40,50,0.55), 0 0 0 0 rgba(233,40,50,0.4); }
+  50%      { box-shadow: 0 12px 40px -8px rgba(233,40,50,0.55), 0 0 0 14px rgba(233,40,50,0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-call, .ob-glow { animation: none; }
 }

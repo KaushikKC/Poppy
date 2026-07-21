@@ -205,7 +205,77 @@ function setInputLocked(locked) {
   // while auto-listen is on, so leaving it enabled here is safe.
 }
 
+// Poppy speaks a line she initiates herself (opening line, sign-off) via the
+// "say" socket message — no user bubble, no LLM turn. The line is short and
+// already known, so it's revealed at once and the avatar lip-syncs to the audio.
+window.speakLine = function speakLine(text) {
+  if (!text) return;
+  const bubble = addBubble("assistant");
+  bubble.classList.add("streaming");
+  setStatus("thinking");
+
+  const ws = new WebSocket(`${WS_BACKEND}/ws/chat`);
+  ws.binaryType = "arraybuffer";
+  currentWs = ws;
+  currentReplyBubble = bubble;
+  window._replyActive = true;
+
+  player.onPlaybackStart(() => {
+    setStatus("speaking");
+    avatar?.setState("speaking");
+  });
+
+  function finish() {
+    setStatus("idle");
+    avatar?.setState("idle");
+  }
+
+  ws.onopen = () => ws.send(JSON.stringify({
+    type: "say",
+    text,
+    accent: window._accent || undefined,
+    gender: window._gender || undefined,
+  }));
+
+  ws.onmessage = async (event) => {
+    if (ws !== currentWs) return;
+    if (event.data instanceof ArrayBuffer) {
+      await player.enqueueWav(event.data.slice(0));
+      return;
+    }
+    const msg = JSON.parse(event.data);
+    if (msg.type === "config") {
+      player.setSampleRate(msg.sampleRate);
+      if (avatar && player.getAnalyser()) avatar.setAnalyser(player.getAnalyser());
+    } else if (msg.type === "token") {
+      bubble.textContent = msg.text;
+      transcript.scrollTop = transcript.scrollHeight;
+    } else if (msg.type === "done") {
+      bubble.classList.remove("streaming");
+      ws.close();
+      endReply(ws);
+      if (player.isPlaying()) {
+        // Reset the avatar to idle once the voice has fully played out.
+        const poll = setInterval(() => {
+          if (!player.isPlaying()) { clearInterval(poll); finish(); }
+        }, 200);
+      } else {
+        finish();
+      }
+    } else if (msg.type === "error") {
+      bubble.textContent = `Error: ${msg.message}`;
+      bubble.classList.remove("streaming");
+      ws.close();
+      endReply(ws);
+      finish();
+    }
+  };
+
+  ws.onerror = () => { if (ws === currentWs) { endReply(ws); finish(); } };
+};
+
 window.sendMessage = async function sendMessage(text) {
+  window._lastUserText = text; // becomes the open loop Poppy carries to next call
   addBubble("user", text);
   const replyBubble = addBubble("assistant");
   replyBubble.classList.add("streaming");
