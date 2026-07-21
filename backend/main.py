@@ -1,5 +1,5 @@
 import asyncio
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, WebSocket
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, WebSocket, Body
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -8,6 +8,8 @@ from config import DETECTION_DEFAULT
 from ws_handler import handle_chat, clear_history as ws_clear_history
 import personas as persona_store
 import persona_suggest
+import companion
+import opening
 import memory_store
 import audio_utils
 import accent_detect
@@ -135,6 +137,76 @@ async def websocket_chat(ws: WebSocket):
 @app.get("/personas")
 async def list_personas():
     return persona_store.ui_list()
+
+
+# ── Companion profile + call lifecycle (POPPY_PRODUCT_PLAYBOOK §2–§6) ──────────
+
+@app.get("/companion")
+async def get_companion():
+    """Full profile. `onboarded=false` tells the frontend to run onboarding."""
+    return await asyncio.to_thread(companion.profile)
+
+
+@app.post("/companion")
+async def onboard_companion(payload: dict = Body(...)):
+    """Complete onboarding: name Poppy, pick a vibe and a look (§2.3/§2.4)."""
+    return await asyncio.to_thread(
+        companion.create,
+        payload.get("companion_name", ""),
+        payload.get("vibe", "friend"),
+        payload.get("avatar", "avaturn"),
+    )
+
+
+@app.post("/companion/update")
+async def update_companion(payload: dict = Body(...)):
+    """Patch profile fields — vibe change, ritual pick, avatar swap (§6)."""
+    return await asyncio.to_thread(lambda: companion.update(**payload))
+
+
+@app.post("/call/open")
+async def open_call(payload: dict = Body(default={})):
+    """Start a call: roll the streak forward and return the line Poppy opens with.
+
+    `seed` (optional) is the onboarding "one thing on your mind" answer, used to
+    build the very first call's opener (§2.6)."""
+    seed = (payload or {}).get("seed")
+    profile = await asyncio.to_thread(companion.record_call)
+    line = await asyncio.to_thread(opening.compose, seed)
+    return {"opening": line, "profile": profile}
+
+
+@app.post("/call/close")
+async def close_call(payload: dict = Body(default={})):
+    """End a call: store the forward hook Poppy planted (§4). `open_loop` is the
+    thing she wants to follow up on next time."""
+    loop = (payload or {}).get("open_loop")
+    if loop:
+        await asyncio.to_thread(companion.add_open_loop, loop)
+    return {"ok": True}
+
+
+@app.get("/home")
+async def home():
+    """Everything the home screen needs in one call (§3): who Poppy is, the
+    "she remembers" callback strip, and the streak."""
+    profile = await asyncio.to_thread(companion.profile)
+    loop = await asyncio.to_thread(companion.latest_open_loop)
+    remembers = None
+    if loop:
+        remembers = f"Last time — {loop}"
+    else:
+        facts = await asyncio.to_thread(memory_store.recall)
+        if facts:
+            remembers = f"I remember: {facts[-1]}"
+    return {
+        "companion_name": profile.get("companion_name", "Poppy"),
+        "vibe": profile.get("vibe", "friend"),
+        "avatar": profile.get("avatar", "avaturn"),
+        "remembers": remembers,
+        "current_streak": profile.get("current_streak", 0),
+        "total_calls": profile.get("total_calls", 0),
+    }
 
 
 @app.get("/sessions")
