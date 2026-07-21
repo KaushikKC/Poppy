@@ -33,6 +33,40 @@ def _trim_history():
         del conversation_history[: len(conversation_history) - cap]
 
 
+async def _say(ws: WebSocket, text: str, accent: str, gender: str):
+    """Speak a line Poppy initiates herself (the opening line, an end-of-call
+    sign-off) — TTS + on-screen text, no LLM turn. Mirrors the chat path's
+    phrase-chunked streaming so the first audio still starts almost immediately."""
+    await ws.send_json({"type": "config", "sampleRate": KOKORO_SAMPLE_RATE})
+    chunker = PhraseChunker()
+    tts_tasks: list[asyncio.Task] = []
+
+    async def tts_and_send(phrase: str):
+        audio = await _synthesize(phrase, accent, gender)
+        await ws.send_bytes(audio)
+
+    try:
+        # Reveal the whole line up front (the text is already known), then stream
+        # its audio phrase by phrase.
+        await ws.send_json({"type": "token", "text": text})
+        for ch in text:
+            phrase = chunker.push(ch)
+            if phrase:
+                tts_tasks.append(asyncio.create_task(tts_and_send(phrase)))
+                await asyncio.sleep(0)
+        remainder = chunker.flush()
+        if remainder:
+            tts_tasks.append(asyncio.create_task(tts_and_send(remainder)))
+        if tts_tasks:
+            await asyncio.gather(*tts_tasks)
+        await ws.send_json({"type": "done"})
+    finally:
+        for t in tts_tasks:
+            if not t.done():
+                t.cancel()
+        await asyncio.gather(*tts_tasks, return_exceptions=True)
+
+
 async def handle_chat(ws: WebSocket):
     await ws.accept()
     session_id = str(uuid.uuid4())
@@ -41,6 +75,20 @@ async def handle_chat(ws: WebSocket):
     try:
         while True:
             msg = await ws.receive_json()
+
+            # Assistant-initiated speech (she speaks first, sign-off): TTS a given
+            # line with no LLM turn, in the user's sticky accent/gender.
+            if msg.get("type") == "say":
+                say_text = msg.get("text", "").strip()
+                if say_text:
+                    await _say(
+                        ws,
+                        say_text,
+                        accent_mod.normalize(msg.get("accent") or accent_detect.tracker.current),
+                        gender_mod.normalize(msg.get("gender") or gender_detect.tracker.current),
+                    )
+                continue
+
             if msg.get("type") != "chat":
                 continue
 
