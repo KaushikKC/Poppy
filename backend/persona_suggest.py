@@ -1,10 +1,12 @@
 """
-Lightweight, fully-offline persona suggester.
+Lightweight, fully-offline vibe suggester.
 
-Classifies the user's conversational *register* from the STT transcript
-(professional / playful / friendly) and proposes a matching persona. State
-accumulates across turns (a streaming EMA) so a suggestion only fires once there
-is enough evidence.
+Classifies the user's conversational *register* from the STT transcript and
+proposes a matching companion vibe (§2.3): a task-y, precise register suggests
+`partner` (a thinking partner), a high-energy register suggests `hype`, and the
+neutral baseline is `friend`. `calm` is a deliberate end-of-day mood, not a
+speaking register, so it's never auto-suggested. State accumulates across turns
+(a streaming EMA) so a suggestion only fires once there is enough evidence.
 
 This is text-based and unrelated to spoken-accent detection (see accent.py for
 the accent → TTS voice mapping and accent_detect.py for the audio classifier).
@@ -12,7 +14,8 @@ the accent → TTS voice mapping and accent_detect.py for the audio classifier).
 
 import re
 
-# Style signals per persona. Each is a set of lowercase cue tokens / patterns.
+# Style signals per register. Each is a set of lowercase cue tokens / patterns.
+# The register names below map to vibe keys in _score(): partner / hype / friend.
 _PROFESSIONAL_WORDS = {
     "please", "regarding", "schedule", "meeting", "report", "analysis",
     "summary", "deadline", "proposal", "review", "document", "request",
@@ -42,17 +45,25 @@ def _score(text: str) -> dict[str, float]:
     emojis   = len(_EMOJI_RE.findall(text))
     avg_len  = sum(len(t) for t in tokens) / n
 
-    professional = prof_hits / n
-    # longer average word length nudges toward professional register
+    partner = prof_hits / n
+    # longer average word length nudges toward the precise/thinking register
     if avg_len >= 5.0:
-        professional += 0.05
+        partner += 0.05
 
-    playful = (play_hits + exclaims + emojis * 2) / n
+    hype = (play_hits + exclaims + emojis * 2) / n
 
-    # friendly is the neutral baseline; it wins when neither signal is strong
-    friendly = 0.04
+    # friend is the neutral baseline; it wins when neither signal is strong
+    friend = 0.04
 
-    return {"professional": professional, "playful": playful, "friendly": friendly}
+    return {"partner": partner, "hype": hype, "friend": friend}
+
+
+# Human-readable reason shown on the suggestion chip, per suggestible vibe.
+_REASONS = {
+    "partner": "sounds like you want to think something through",
+    "hype": "you're bringing energy",
+    "friend": "sounds like you just want to talk",
+}
 
 
 class PersonaSuggester:
@@ -61,7 +72,7 @@ class PersonaSuggester:
     def __init__(self, alpha: float = 0.5, min_confidence: float = 0.08):
         self._alpha = alpha
         self._min_confidence = min_confidence
-        self._ema = {"professional": 0.0, "playful": 0.0, "friendly": 0.04}
+        self._ema = {"partner": 0.0, "hype": 0.0, "friend": 0.04}
         self._turns = 0
 
     def observe(self, text: str, current_persona: str) -> dict | None:
@@ -89,11 +100,11 @@ class PersonaSuggester:
         return {
             "persona": leader,
             "confidence": round(min(margin * 4, 1.0), 2),
-            "reason": f"your style sounds {leader}",
+            "reason": _REASONS.get(leader, "this might fit you better"),
         }
 
     def reset(self) -> None:
-        self._ema = {"professional": 0.0, "playful": 0.0, "friendly": 0.04}
+        self._ema = {"partner": 0.0, "hype": 0.0, "friend": 0.04}
         self._turns = 0
 
 
