@@ -248,13 +248,56 @@ def forget_all() -> None:
 
 # ── Prompt injection ───────────────────────────────────────────────────────────
 
-# Only the most recent facts are injected into the prompt — enough for continuity
-# without ballooning the prefill (and slowing time-to-first-token) as memory grows.
+# How many facts get injected into the prompt. A cap protects time-to-first-token:
+# the more facts in the prefill, the slower the first token, so we inject the *most
+# relevant* ones for this turn rather than simply the most recent (§3.5).
 _PROMPT_FACTS = 15
 
+# Common words carry no relevance signal; drop them before scoring overlap.
+_STOP = frozenset(
+    "i you a an the to of and or but is am are was were be been being do does did "
+    "have has had my me we us our your it its this that these those for on in at with "
+    "as so if then than out up down over just really also not no yes get got go going "
+    "about into from by he she they them his her their what when where who how why".split()
+)
 
-def as_prompt_block() -> str:
-    facts = recall()[-_PROMPT_FACTS:]
+
+def _tokens(s: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z0-9']+", s.lower()) if len(w) > 2 and w not in _STOP}
+
+
+def relevant(query: str | None, limit: int = _PROMPT_FACTS) -> list[str]:
+    """The facts most worth injecting for this turn (§3.5). Identity (`profile`)
+    facts are always pinned; the rest are ranked by lexical overlap with the current
+    message, with recency as the tiebreak, so a zero-match turn degrades gracefully
+    to 'most recent'. Returns fact texts, oldest-relevant first for stable prefills."""
+    recs = records()
+    if len(recs) <= limit:
+        return [r["text"] for r in recs]
+
+    q = _tokens(query or "")
+    index = {r["id"]: i for i, r in enumerate(recs)}
+
+    pinned = [r for r in recs if r["category"] == "profile"]
+    others = [r for r in recs if r["category"] != "profile"]
+    # Higher overlap first; ties (and the no-query case) fall back to most recent.
+    others.sort(key=lambda r: (len(q & _tokens(r["text"])), index[r["id"]]), reverse=True)
+
+    chosen, seen = [], set()
+    for r in pinned + others:
+        if r["id"] in seen:
+            continue
+        seen.add(r["id"])
+        chosen.append(r)
+        if len(chosen) >= limit:
+            break
+    # Re-sort the winners into original (chronological) order for a stable prefix.
+    chosen.sort(key=lambda r: index[r["id"]])
+    return [r["text"] for r in chosen]
+
+
+def as_prompt_block(query: str | None = None) -> str:
+    facts = relevant(query)
     if not facts:
         return ""
     lines = "\n".join(f"- {f}" for f in facts)

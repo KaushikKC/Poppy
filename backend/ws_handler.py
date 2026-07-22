@@ -100,7 +100,7 @@ async def handle_chat(ws: WebSocket):
             # Emotional-support framing: base persona + supportive addendum +
             # remembered facts, with a stronger addendum if distress is detected.
             risk = safety.check(user_text)
-            memory_block = await asyncio.to_thread(memory_store.as_prompt_block)
+            memory_block = await asyncio.to_thread(memory_store.as_prompt_block, user_text)
             identity_block = await asyncio.to_thread(companion.as_prompt_block)
             system_prompt = (
                 persona["system_prompt"] + identity_block + SAFETY_ADDENDUM + memory_block
