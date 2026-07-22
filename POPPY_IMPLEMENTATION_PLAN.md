@@ -69,10 +69,18 @@ logic and prompt/memory tuning. The one caveat that still holds: the *thin cloud
 (accounts, push, referrals, billing — D2) are inherently online, so their desktop
 versions are stubbed/local until mobile needs them for real.
 
-**Status (2026-07-21):** built and proven on desktop — the four companion vibes, the
-companion profile store (name/vibe/streak/open-loops), "she speaks first" opening-line
-composer, assistant-initiated speech over the socket, and the full onboarding → home →
-call → home flow. Next: memory-as-a-surface (§5, Phase 3) and rituals (§6, Phase 4).
+**Status (2026-07-22):** built and proven on desktop —
+- Phase 1/2 groundwork: the four companion vibes, the companion profile store
+  (name/vibe/streak/open-loops), "she speaks first" opening-line composer, assistant-
+  initiated speech over the socket, and the full onboarding → home → call → home flow.
+- Phase 3 (memory) **3.1–3.4 done**: typed categorized records replacing the flat string
+  list (with migration + Fernet + TTL); LLM candidate extraction (regex fallback) that
+  only *proposes*; the Save / Edit / Not now / Never-this-kind consent flow so nothing is
+  stored silently; and the categorized "what Poppy knows" screen with per-fact edit/delete
+  and "why?". A cache-free `llm.complete()` keeps extraction off the MLX chat prompt cache.
+
+Remaining in Phase 3: **3.5** relevance retrieval (still injecting last-15, not relevance-
+ranked) and **3.6** versioned personality. Then Phase 4 (rituals/streaks/notifications).
 
 ### D2. Inference stays on-device. A thin cloud carries identity only.
 
