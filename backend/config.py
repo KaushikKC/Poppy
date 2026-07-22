@@ -75,7 +75,15 @@ CRISIS_ADDENDUM = (
     " The user may be in serious emotional distress. Respond with warmth and calm. "
     "Acknowledge their pain without minimizing it, do not lecture, and gently "
     "encourage them to contact a crisis line or someone they trust. Keep your "
-    "reply short, caring, and human. Never provide any means or methods of self-harm."
+    "reply short, caring, and human. Never provide any means or methods of self-harm. "
+    "You are not a therapist and should gently say so if it matters, while staying present."
+)
+
+# Softer framing for the non-acute distress tier — support without alarm.
+DISTRESS_ADDENDUM = (
+    " The user sounds like they're having a hard time. Slow down, listen, and validate "
+    "what they're feeling without trying to fix it. If it feels right, gently suggest "
+    "leaning on someone they trust. Stay warm and unhurried."
 )
 
 # STT backend. "mlx" runs Whisper on the Apple-Silicon GPU (Metal) via mlx-whisper

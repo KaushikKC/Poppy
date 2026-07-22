@@ -4,7 +4,13 @@ from fastapi import WebSocket, WebSocketDisconnect
 from llm import stream_reply
 from tts import synthesize_to_wav_bytes
 from phrase_chunker import PhraseChunker
-from config import MAX_HISTORY_TURNS, KOKORO_SAMPLE_RATE, SAFETY_ADDENDUM, CRISIS_ADDENDUM
+from config import (
+    MAX_HISTORY_TURNS,
+    KOKORO_SAMPLE_RATE,
+    SAFETY_ADDENDUM,
+    CRISIS_ADDENDUM,
+    DISTRESS_ADDENDUM,
+)
 import personas as persona_store
 import accent as accent_mod
 import safety
@@ -105,9 +111,11 @@ async def handle_chat(ws: WebSocket):
             system_prompt = (
                 persona["system_prompt"] + identity_block + SAFETY_ADDENDUM + memory_block
             )
-            if risk["crisis"]:
+            if risk["level"] == "crisis":
                 system_prompt += CRISIS_ADDENDUM
                 await ws.send_json({"type": "safety", "resources": risk["resources"]})
+            elif risk["level"] == "distress":
+                system_prompt += DISTRESS_ADDENDUM
 
             # Adapt tone to how the user sounds this turn (momentary; neutral if
             # absent, e.g. typed messages).

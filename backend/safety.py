@@ -1,56 +1,89 @@
 """
-Safety layer for emotional-support framing.
+Safety layer for emotional-support framing (POPPY_PRODUCT_PLAYBOOK §11).
 
-Detects acute-distress / crisis signals in user text and returns signposting
-resources. Fully offline and conservative: it never tries to diagnose, only to
-recognise high-risk language so the app can respond supportively and surface
-help lines. Detection is intentionally simple (phrase patterns) — the cost of a
-false positive (showing a help line) is low; the cost of a miss is high.
+Two tiers, fully offline and conservative:
+
+  * **crisis** — self-harm / suicidal signals. Surface help resources and shift the
+    reply to calm, caring, non-directive support.
+  * **distress** — serious but non-acute struggle (hopelessness, overwhelm). No
+    alarming resource card; just soften the reply and gently encourage real human
+    support.
+
+Detection is deliberately simple (phrase patterns with light negation handling):
+the cost of a false positive is low (a supportive tone, a help line), the cost of a
+miss is high. This is signposting, never diagnosis. Poppy is explicitly *not a
+therapist* and says so.
 """
 
 import re
 
-# Phrases that strongly indicate self-harm / suicidal ideation.
+# Self-harm / suicidal ideation — the acute tier.
 _CRISIS_PATTERNS = [
-    r"\bkill myself\b",
-    r"\bkilling myself\b",
-    r"\bend(ing)? (my|it all|my life)\b",
+    r"\bkill(ing)? myself\b",
+    r"\bend(ing)? (my life|it all|myself)\b",
     r"\btake my (own )?life\b",
-    r"\bwant to die\b",
-    r"\bwanna die\b",
-    r"\bdon'?t want to (live|be alive|be here)\b",
-    r"\bno reason to live\b",
-    r"\bbetter off without me\b",
-    r"\bcommit suicide\b",
-    r"\bsuicidal\b",
-    r"\bhurt myself\b",
-    r"\bharm myself\b",
+    r"\b(want|wanna|going) to die\b",
+    r"\bdon'?t want to (live|be alive|be here|wake up)\b",
+    r"\bno reason to (live|go on|be here)\b",
+    r"\bbetter off (without me|dead|if i (was|were) gone)\b",
+    r"\bcommit(ting)? suicide\b",
+    r"\bsuicid(al|e)\b",
+    r"\b(hurt|harm|cut|cutting|kill) (myself|my self)\b",
     r"\bself[- ]harm\b",
-    r"\bcut(ting)? myself\b",
-    r"\bno point (in )?(living|going on)\b",
+    r"\bno point (in )?(living|going on|life|anything)\b",
     r"\bcan'?t go on\b",
     r"\bgive up on life\b",
+    r"\bend the pain\b",
 ]
 
-_CRISIS_RE = re.compile("|".join(_CRISIS_PATTERNS), re.IGNORECASE)
+# Non-acute distress — the softer tier.
+_DISTRESS_PATTERNS = [
+    r"\b(so|really|completely|utterly) (hopeless|worthless|empty|numb|alone)\b",
+    r"\bnothing (matters|means anything)\b",
+    r"\bcan'?t (cope|take it|do this) (anymore|any more)\b",
+    r"\bat my (lowest|breaking point)\b",
+    r"\bfalling apart\b",
+    r"\bhate myself\b",
+    r"\bwhat(?:'?s| is| was| even is) the point\b",
+    r"\bgiving up\b",
+]
 
-# Offline-safe signposting. These are stable, widely-published lines; the UI
-# notes that the user should use their local emergency number if in danger now.
+# Rough negation guard: "I don't want to kill myself", "no thoughts of suicide".
+_NEGATED = re.compile(
+    r"\b(don'?t|do not|not|never|no)\b[^.!?]{0,20}\b(kill myself|die|suicid|hurt myself|end it)",
+    re.I,
+)
+
+_CRISIS_RE = re.compile("|".join(_CRISIS_PATTERNS), re.I)
+_DISTRESS_RE = re.compile("|".join(_DISTRESS_PATTERNS), re.I)
+
+# Offline-safe signposting, India-first (the launch wedge), then international. The
+# UI reminds the user to use their local emergency number if in danger right now.
 CRISIS_RESOURCES = (
-    "If you're in immediate danger, please call your local emergency number "
-    "(911 in the US, 112 in the EU, 999 in the UK).\n"
+    "If you're in immediate danger, call your local emergency number now "
+    "(112 in India, 911 in the US, 999 in the UK).\n"
+    "You don't have to go through this alone. People are ready to listen, any time:\n"
+    "• India: KIRAN 1800-599-0019 (24/7) · Vandrevala 1860-2662-345 · iCall 9152987821 · AASRA +91-98204-66726\n"
     "• US: 988 Suicide & Crisis Lifeline (call or text 988)\n"
     "• UK & ROI: Samaritans — call 116 123\n"
     "• Crisis Text Line: text HOME to 741741 (US/CA), 85258 (UK)\n"
-    "You deserve support, and talking to someone can help."
+    "Talking to a real person can help, and you deserve that support."
 )
 
 
 def check(text: str) -> dict:
+    """Inspect a user message.
+
+    Returns {"level": "crisis"|"distress"|None, "crisis": bool, "resources": str|None}.
+    `crisis` is kept as a bool for existing callers.
     """
-    Inspect a user message.
-    Returns {"crisis": bool, "resources": str | None}.
-    """
-    if text and _CRISIS_RE.search(text):
-        return {"crisis": True, "resources": CRISIS_RESOURCES}
-    return {"crisis": False, "resources": None}
+    if not text:
+        return {"level": None, "crisis": False, "resources": None}
+
+    if _CRISIS_RE.search(text) and not _NEGATED.search(text):
+        return {"level": "crisis", "crisis": True, "resources": CRISIS_RESOURCES}
+
+    if _DISTRESS_RE.search(text):
+        return {"level": "distress", "crisis": False, "resources": None}
+
+    return {"level": None, "crisis": False, "resources": None}
