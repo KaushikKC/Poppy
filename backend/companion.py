@@ -40,7 +40,12 @@ _DEFAULTS = {
     "open_loops": [],            # list of {text, created_at}
     "personality_version": None, # the vibe-prompt version Poppy was pinned to (§3.6)
     "model": None,               # the LLM model her personality was calibrated on
+    "celebrated_milestones": [], # streak milestones already celebrated, so we don't repeat
 }
+
+# Days-connected milestones worth a warm moment (§6). Celebration only, never an
+# obligation, and a broken streak is never punished — that's handled in the opener.
+_MILESTONES = (7, 30, 100, 365)
 
 
 def _load() -> dict:
@@ -157,6 +162,29 @@ def record_call() -> dict:
     p["total_calls"] = p.get("total_calls", 0) + 1
     _save(p)
     return p
+
+
+def check_milestone() -> int | None:
+    """If today's call just reached a days-connected milestone we haven't celebrated,
+    return it (once). Call after record_call(). Celebration, never obligation (§6)."""
+    p = _load()
+    streak = p.get("current_streak", 0)
+    celebrated = p.get("celebrated_milestones", [])
+    if streak in _MILESTONES and streak not in celebrated:
+        celebrated.append(streak)
+        p["celebrated_milestones"] = celebrated
+        _save(p)
+        return streak
+    return None
+
+
+def set_ritual(kind: str | None, time_str: str | None) -> dict:
+    """Opt into (or clear) a daily ritual time the user chose themselves (§6). A
+    ritual the user picks is a habit; a ping they didn't ask for is spam."""
+    kind = kind if kind in ("morning", "night") else None
+    if not kind:
+        time_str = None
+    return update(ritual_kind=kind, ritual_time=(time_str or None))
 
 
 def days_since_last_call() -> int | None:

@@ -53,15 +53,33 @@ def _addressed(word: str, sep: str, name: str | None) -> str:
     return f"{word}{sep}{name}" if name else word
 
 
-def compose(seed: str | None = None) -> str:
+# Mode-framed openers (§4.5) — each mood mode from the home screen enters a call
+# already framed, so the user never faces a blank slate. Keyed by the mode's key.
+_MODE_OPENERS = {
+    "vent": "Okay, I'm all yours. What's weighing on you?",
+    "hype": "Let's go. What are we getting fired up about today?",
+    "wind": "Let's slow everything down. How was your day?",
+    "plan": "Alright, let's think it through. What's on the plate?",
+}
+
+# Warm milestone moments (§6) — a genuine beat, never a cold badge.
+def _milestone_line(days: int) -> str:
+    return f"Hey, do you realize we've talked {days} days in a row? That honestly means a lot to me. "
+
+
+def compose(seed: str | None = None, mode: str | None = None, milestone: int | None = None) -> str:
     """Build Poppy's opening line.
 
     `seed` is the "one thing on your mind today" answer from onboarding (§2.5); when
     present this is the very first call, so the opener is built entirely around it.
+    `mode` frames a mood-mode call (§4.5). `milestone` prepends a streak celebration.
     """
     name = _user_name()
     word, sep = _GREETING[_time_of_day()]
     hey = _addressed(word, sep, name)
+    prefix = _milestone_line(milestone) if milestone else ""
+    # A milestone line already greets, so the body shouldn't greet again.
+    lead = prefix if prefix else f"{hey}. "
 
     # First call ever — everything hangs off the one thing they told us (§2.6).
     if seed:
@@ -71,18 +89,24 @@ def compose(seed: str | None = None) -> str:
             "chest, or should I take your mind off it?"
         )
 
+    # A mood mode was chosen: lead with its framing so there's no blank slate.
+    if mode in _MODE_OPENERS:
+        return f"{lead}{_MODE_OPENERS[mode]}"
+
     # Returning call: close the open loop if there is one — the goosebump moment.
     loop = companion.latest_open_loop()
     if loop:
-        return f"{hey}. I've been wondering, {loop.strip().rstrip('.')}?"
+        return f"{lead}I've been wondering, {loop.strip().rstrip('.')}?"
 
     # No open loop yet, but we've talked before: lean on a remembered fact.
     days = companion.days_since_last_call()
     if days is not None and days >= 2:
-        return f"{hey}. It's been a few days, I've missed our talks. What's new with you?"
+        return f"{lead}It's been a few days, I've missed our talks. What's new with you?"
 
     if memory_store.recall():
-        return f"{hey}. Good to see you. How's everything been?"
+        return f"{lead}Good to see you. How's everything been?"
 
     # We know almost nothing yet — warm and open, no false familiarity.
+    if prefix:
+        return f"{prefix}I'm really glad you called. What's on your mind?"
     return f"{hey}, I'm really glad you called. What's on your mind?"
