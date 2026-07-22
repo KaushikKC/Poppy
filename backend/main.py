@@ -11,6 +11,7 @@ import persona_suggest
 import companion
 import opening
 import memory_store
+import memory_extract
 import audio_utils
 import accent_detect
 import gender_detect
@@ -225,8 +226,51 @@ async def export_session(session_id: str):
 
 @app.get("/memory")
 async def get_memory():
-    facts = await asyncio.to_thread(memory_store.recall)
-    return {"facts": facts}
+    """The typed records for the "What Poppy knows about you" screen (§5)."""
+    recs = await asyncio.to_thread(memory_store.records)
+    return {"records": recs, "categories": list(memory_store.CATEGORIES)}
+
+
+@app.post("/memory/extract")
+async def extract_memory(payload: dict = Body(...)):
+    """Propose (never store) candidate memories from what the user just said (§3.1).
+    The frontend turns these into "Want me to remember that?" consent prompts."""
+    candidates = await memory_extract.propose(payload.get("text", ""))
+    return {"candidates": candidates}
+
+
+@app.post("/memory/confirm")
+async def confirm_memory(payload: dict = Body(...)):
+    """Store a candidate the user approved (Save / Edit-then-Save) (§3.2)."""
+    rec = await asyncio.to_thread(
+        memory_store.remember,
+        payload.get("text", ""),
+        payload.get("category", "ongoing"),
+        payload.get("why"),
+        bool(payload.get("sensitive", False)),
+    )
+    return {"record": rec}
+
+
+@app.post("/memory/suppress")
+async def suppress_memory(payload: dict = Body(...)):
+    """"Never remember this kind" — stop proposing a whole category (§3.2)."""
+    await asyncio.to_thread(memory_store.suppress_category, payload.get("category", ""))
+    return {"ok": True}
+
+
+@app.patch("/memory/{fact_id}")
+async def edit_memory(fact_id: str, payload: dict = Body(...)):
+    rec = await asyncio.to_thread(memory_store.update, fact_id, payload.get("text", ""))
+    if not rec:
+        raise HTTPException(status_code=404, detail="Fact not found")
+    return {"record": rec}
+
+
+@app.delete("/memory/{fact_id}")
+async def delete_memory(fact_id: str):
+    deleted = await asyncio.to_thread(memory_store.delete, fact_id)
+    return {"deleted": deleted}
 
 
 @app.delete("/memory")

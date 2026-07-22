@@ -25,5 +25,17 @@ def stream_reply(
     return _backend.stream_reply(history, user_text, system_prompt)
 
 
+async def complete(user_text: str, system_prompt: str, max_tokens: int = 200) -> str:
+    """One-shot completion for side tasks (e.g. memory extraction). Backends that
+    keep an in-process prompt cache (MLX) provide a cache-free `complete`; others
+    fall back to collecting a fresh stream, which doesn't share the chat cache."""
+    if hasattr(_backend, "complete"):
+        return await _backend.complete(user_text, system_prompt, max_tokens=max_tokens)
+    chunks: list[str] = []
+    async for tok in _backend.stream_reply([], user_text, system_prompt):
+        chunks.append(tok)
+    return "".join(chunks)
+
+
 async def warmup() -> None:
     await _backend.warmup()

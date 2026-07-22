@@ -187,6 +187,30 @@ async def stream_reply(
         await task
 
 
+def _complete_blocking(user_text: str, system_prompt: str, max_tokens: int) -> str:
+    _load()
+    from mlx_lm import stream_generate
+
+    tokens = _build_prompt([], user_text, system_prompt)
+    out: list[str] = []
+    # Deliberately cache-free: a one-shot side task (e.g. memory extraction) must
+    # not touch the persistent chat prompt cache, or the next real turn loses its
+    # near-zero TTFT. Still take _gen_lock so it never runs concurrently with a
+    # reply on the single shared model.
+    with _gen_lock:
+        for resp in stream_generate(_model, _tokenizer, tokens, max_tokens=max_tokens):
+            if resp.text:
+                out.append(resp.text)
+            if resp.finish_reason is not None:
+                break
+    return "".join(out)
+
+
+async def complete(user_text: str, system_prompt: str, max_tokens: int = 200) -> str:
+    """One-shot, non-streaming, cache-free completion for side tasks."""
+    return await asyncio.to_thread(_complete_blocking, user_text, system_prompt, max_tokens)
+
+
 def _warmup_blocking() -> None:
     try:
         _load()
