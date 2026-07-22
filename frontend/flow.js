@@ -318,28 +318,93 @@
 
   // ── Call lifecycle (§4) ─────────────────────────────────────────────────────────
   async function startCall({ seed = "", vibe = null, mode = null } = {}) {
+    let r = {};
+    try {
+      r = await (await fetch(`${BACKEND}/call/open`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seed, mode }),
+      })).json();
+    } catch {}
+
+    // Abundance-moment upgrade prompt (§8). The backend only returns this when it's
+    // a non-vulnerable call over the fair free limit — it's impossible here otherwise.
+    if (r.paywall) {
+      showPaywall(r.paywall, { seed, vibe, mode });
+      return;
+    }
+
     if (vibe && window.PersonaPicker) window.PersonaPicker.select(vibe);
     const transcript = document.getElementById("transcript");
     if (transcript) transcript.innerHTML = "";
     window._lastUserText = "";
     setView("call");
 
-    let opening = "";
-    try {
-      const r = await (await fetch(`${BACKEND}/call/open`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ seed, mode }),
-      })).json();
-      opening = r.opening || "";
-      if (r.profile) profile = r.profile;
-      _callbackOffered = !!r.callback_offered;
-    } catch {}
+    const opening = r.opening || "";
+    if (r.profile) profile = r.profile;
+    _callbackOffered = !!r.callback_offered;
     _callStart = Date.now();
 
     // She speaks first (§4). A short beat so the view has settled and engines are
     // warm, then her voice opens the call.
     setTimeout(() => window.speakLine?.(opening), 350);
+  }
+
+  // ── Upgrade prompt (§8) — abundance framing, never shown at a vulnerable moment ──
+  const paywall = document.getElementById("paywall");
+
+  function showPaywall(ent, retry) {
+    const plus = (ent.tiers && ent.tiers.plus) || ent.tier || {};
+    paywall.innerHTML = "";
+    const card = document.createElement("div");
+    card.className = "paywall-card";
+
+    const eyebrow = document.createElement("p");
+    eyebrow.className = "paywall-eyebrow";
+    eyebrow.textContent = "You two talk a lot";
+    const head = document.createElement("h2");
+    head.className = "paywall-head";
+    head.textContent = "Go unlimited with Poppy Plus?";
+    const price = document.createElement("p");
+    price.className = "paywall-price";
+    price.textContent = plus.price || "";
+
+    const ul = document.createElement("ul");
+    ul.className = "paywall-features";
+    (plus.features || []).forEach((f) => {
+      const li = document.createElement("li");
+      li.textContent = f;
+      ul.appendChild(li);
+    });
+
+    const go = document.createElement("button");
+    go.type = "button";
+    go.className = "paywall-go";
+    go.textContent = "Go unlimited";
+    go.addEventListener("click", async () => {
+      try {
+        await fetch(`${BACKEND}/entitlement`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ plan: "plus" }),
+        });
+      } catch {}
+      paywall.classList.add("hidden");
+      startCall(retry); // now unlimited — dial straight in
+    });
+
+    const later = document.createElement("button");
+    later.type = "button";
+    later.className = "paywall-later";
+    later.textContent = "Maybe later";
+    later.addEventListener("click", () => {
+      paywall.classList.add("hidden");
+      setView("home");
+    });
+
+    card.append(eyebrow, head, price, ul, go, later);
+    paywall.appendChild(card);
+    paywall.classList.remove("hidden");
   }
 
   document.getElementById("end-call-btn")?.addEventListener("click", endCall);

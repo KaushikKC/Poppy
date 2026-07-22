@@ -888,3 +888,33 @@ button:not(:disabled):active { transform: scale(0.94); }
   font-family: var(--font-sans); font-weight: 700; font-size: 0.78rem;
 }
 .ritual-save:hover { background: var(--field-deep); }
+
+/* §8 — abundance-moment upgrade prompt (never shown at a vulnerable moment) */
+#paywall {
+  position: fixed; inset: 0; z-index: 60;
+  display: grid; place-items: center; padding: 1.5rem;
+  background: radial-gradient(120% 90% at 50% 0%, rgba(151,196,232,0.35), rgba(255,248,234,0.94) 60%);
+  backdrop-filter: blur(6px);
+}
+.paywall-card {
+  width: min(440px, 100%);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: var(--shadow); padding: clamp(1.6rem, 5vw, 2.4rem);
+  display: flex; flex-direction: column; gap: 0.7rem; text-align: center;
+  animation: panel-in 0.4s var(--ease-spring) both;
+}
+.paywall-eyebrow { font-family: var(--font-mono); font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; color: var(--poppy); }
+.paywall-head { font-family: var(--font-display); font-weight: 400; font-size: clamp(1.6rem, 4.5vw, 2.2rem); color: var(--ink); line-height: 1.1; }
+.paywall-price { font-family: var(--font-sans); font-weight: 700; color: var(--field-deep); }
+.paywall-features { list-style: none; display: flex; flex-direction: column; gap: 0.4rem; margin: 0.4rem 0; text-align: left; }
+.paywall-features li { position: relative; padding-left: 1.4rem; color: rgba(7,18,7,0.82); line-height: 1.45; }
+.paywall-features li::before { content: "✓"; position: absolute; left: 0; color: var(--meadow); font-weight: 800; }
+.paywall-go {
+  margin-top: 0.4rem; align-self: center;
+  padding: 0.9rem 2.4rem; border: none; border-radius: 8px;
+  background: var(--poppy); color: var(--cream); cursor: pointer;
+  font-family: var(--font-sans); font-weight: 700; font-size: 1.02rem;
+  transition: transform 0.2s var(--ease-spring), background 0.2s;
+}
+.paywall-go:hover { transform: translateY(-2px); background: #f6303b; }
+.paywall-later { background: none; border: none; color: rgba(7,18,7,0.5); cursor: pointer; font-size: 0.9rem; text-decoration: underline; }
