@@ -7,7 +7,13 @@ deps (e.g. mlx-lm) are never imported.
 """
 
 from typing import AsyncIterator
-from config import LLM_BACKEND, SYSTEM_PROMPT
+from config import (
+    LLM_BACKEND,
+    SYSTEM_PROMPT,
+    OLLAMA_MODEL,
+    MLX_LM_MODEL,
+    LLAMACPP_MODEL_FILE,
+)
 
 if LLM_BACKEND == "mlx":
     import mlx_llm as _backend
@@ -15,6 +21,16 @@ elif LLM_BACKEND == "llamacpp":
     import llama_cpp_llm as _backend
 else:
     import ollama_client as _backend
+
+
+def model_id() -> str:
+    """A stable label for the active model, so the companion can pin the exact
+    model its personality was calibrated on and notice when it changes (§3.6)."""
+    if LLM_BACKEND == "mlx":
+        return MLX_LM_MODEL
+    if LLM_BACKEND == "llamacpp":
+        return LLAMACPP_MODEL_FILE
+    return OLLAMA_MODEL
 
 
 def stream_reply(

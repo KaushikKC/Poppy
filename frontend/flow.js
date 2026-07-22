@@ -170,6 +170,8 @@
       streak.classList.add("hidden");
     }
 
+    renderPersonalityNotice();
+
     const modes = document.getElementById("home-modes");
     if (modes && !modes.dataset.built) {
       MODES.forEach((m) => {
@@ -182,6 +184,33 @@
       });
       modes.dataset.built = "1";
     }
+  }
+
+  // §3.6 — if Poppy's personality changed under the user (model/prompt update),
+  // tell them plainly rather than letting her shift silently.
+  async function renderPersonalityNotice() {
+    const box = document.getElementById("home-update");
+    if (!box) return;
+    let status = {};
+    try {
+      status = await (await fetch(`${BACKEND}/companion/personality`)).json();
+    } catch {}
+    if (!status.pending) {
+      box.classList.add("hidden");
+      return;
+    }
+    box.innerHTML = "";
+    const msg = document.createElement("span");
+    msg.textContent = "Poppy's had a small update since you two met. She's still her.";
+    const ok = document.createElement("button");
+    ok.type = "button";
+    ok.textContent = "Got it";
+    ok.addEventListener("click", async () => {
+      await fetch(`${BACKEND}/companion/personality/accept`, { method: "POST" }).catch(() => {});
+      box.classList.add("hidden");
+    });
+    box.append(msg, ok);
+    box.classList.remove("hidden");
   }
 
   document.getElementById("home-call")?.addEventListener("click", () => {

@@ -165,6 +165,19 @@ async def update_companion(payload: dict = Body(...)):
     return await asyncio.to_thread(lambda: companion.update(**payload))
 
 
+@app.get("/companion/personality")
+async def personality_status():
+    """Has Poppy's personality (vibe-prompt version or model) changed under the user
+    since she was created? Drives a deliberate 'Poppy's been updated' heads-up (§3.6)."""
+    return await asyncio.to_thread(companion.personality_status)
+
+
+@app.post("/companion/personality/accept")
+async def accept_personality():
+    """Re-pin to the current personality — the user chose to take the update."""
+    return await asyncio.to_thread(companion.accept_personality_update)
+
+
 @app.post("/call/open")
 async def open_call(payload: dict = Body(default={})):
     """Start a call: roll the streak forward and return the line Poppy opens with.

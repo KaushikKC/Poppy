@@ -38,6 +38,8 @@ _DEFAULTS = {
     "ritual_time": None,         # "HH:MM" the user opted into, or None
     "ritual_kind": None,         # "morning" | "night" | None
     "open_loops": [],            # list of {text, created_at}
+    "personality_version": None, # the vibe-prompt version Poppy was pinned to (§3.6)
+    "model": None,               # the LLM model her personality was calibrated on
 }
 
 
@@ -65,6 +67,13 @@ def is_onboarded() -> bool:
     return _load().get("onboarded", False)
 
 
+def _current_signature() -> tuple[int, str]:
+    """The personality version + model the app is running right now."""
+    import personas
+    import llm
+    return personas.PERSONALITY_VERSION, llm.model_id()
+
+
 def create(companion_name: str, vibe: str, avatar: str) -> dict:
     """Complete onboarding: name Poppy, pick a vibe and a look (§2.3/§2.4)."""
     p = _load()
@@ -75,6 +84,36 @@ def create(companion_name: str, vibe: str, avatar: str) -> dict:
     p["onboarded"] = True
     if not p["created_at"]:
         p["created_at"] = now
+    # Pin the personality this companion is calibrated on (§3.6).
+    p["personality_version"], p["model"] = _current_signature()
+    _save(p)
+    return p
+
+
+def personality_status() -> dict:
+    """Whether Poppy's personality (vibe-prompt version or model) has changed under
+    the user since they created her (§3.6). If it was never pinned (an older
+    profile), adopt the current signature silently — that's the baseline, not a
+    change worth alarming about."""
+    p = _load()
+    version, model = _current_signature()
+    if p.get("personality_version") is None:
+        p["personality_version"], p["model"] = version, model
+        _save(p)
+        return {"pending": False, "version": version, "model": model}
+
+    pending = p["personality_version"] != version or p.get("model") != model
+    return {
+        "pending": pending,
+        "pinned": {"version": p["personality_version"], "model": p.get("model")},
+        "current": {"version": version, "model": model},
+    }
+
+
+def accept_personality_update() -> dict:
+    """Re-pin to the current personality, deliberately (the user tapped Update)."""
+    p = _load()
+    p["personality_version"], p["model"] = _current_signature()
     _save(p)
     return p
 

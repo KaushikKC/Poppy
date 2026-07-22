@@ -13,6 +13,12 @@ then adds its own flavor on top. The `avatar` color dict shape is unchanged so t
 frontend's persona-driven theming keeps working.
 """
 
+# Bump this whenever the vibe prompts or COMPANION_CORE change in a way that would
+# alter Poppy's personality. The companion pins the version it was created on and
+# surfaces a deliberate heads-up on change rather than shifting silently (§3.6) —
+# the silent-personality-drift-after-an-update problem is the #1 Replika trust-killer.
+PERSONALITY_VERSION = 1
+
 # The taste layer (§10), shared by every vibe. This is who Poppy *is*, underneath
 # whichever stance the user picked.
 COMPANION_CORE = (
