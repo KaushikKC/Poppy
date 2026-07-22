@@ -12,6 +12,7 @@ import companion
 import opening
 import nudges
 import metrics
+import billing
 import memory_store
 import memory_extract
 import audio_utils
@@ -188,6 +189,13 @@ async def open_call(payload: dict = Body(default={})):
     `mode` frames a mood-mode call (§4.5). A newly-reached streak milestone (§6) is
     woven into the opener and returned so the UI can mark the moment."""
     data = payload or {}
+    # Trust-as-code (§8): a paywall may only appear at an abundance moment, never a
+    # vulnerable one. If it's due, signal it and do NOT open/record the call. A
+    # vulnerable call (vent/wind, or later a distress turn) always passes through.
+    if await asyncio.to_thread(billing.paywall_due, {"mode": data.get("mode")}):
+        ent = await asyncio.to_thread(billing.entitlement)
+        return {"paywall": ent}
+
     profile = await asyncio.to_thread(companion.record_call)
     milestone = await asyncio.to_thread(companion.check_milestone)
     line = await asyncio.to_thread(opening.compose, data.get("seed"), data.get("mode"), milestone)
@@ -243,6 +251,21 @@ async def close_call(payload: dict = Body(default={})):
         if data.get("callback_offered"):
             await asyncio.to_thread(db.record_event, "callback_landed")
     return {"ok": True, "meaningful": meaningful}
+
+
+@app.get("/entitlement")
+async def get_entitlement():
+    """Current tier, the fair daily-call budget, and how much is left (§8)."""
+    return await asyncio.to_thread(billing.entitlement)
+
+
+@app.post("/entitlement")
+async def set_entitlement(payload: dict = Body(...)):
+    """Change tier. On desktop this is a local stub; on mobile it's gated by the
+    store's purchase flow through the thin cloud (D2)."""
+    ent = await asyncio.to_thread(billing.set_plan, payload.get("plan", "free"))
+    await asyncio.to_thread(db.record_event, "plan_" + ent["plan"])
+    return ent
 
 
 @app.get("/metrics")

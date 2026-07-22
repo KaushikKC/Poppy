@@ -41,6 +41,7 @@ _DEFAULTS = {
     "personality_version": None, # the vibe-prompt version Poppy was pinned to (§3.6)
     "model": None,               # the LLM model her personality was calibrated on
     "celebrated_milestones": [], # streak milestones already celebrated, so we don't repeat
+    "plan": "free",              # entitlement tier: "free" | "plus" (§8)
 }
 
 # Days-connected milestones worth a warm moment (§6). Celebration only, never an
