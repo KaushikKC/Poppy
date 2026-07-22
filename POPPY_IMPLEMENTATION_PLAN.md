@@ -73,14 +73,16 @@ versions are stubbed/local until mobile needs them for real.
 - Phase 1/2 groundwork: the four companion vibes, the companion profile store
   (name/vibe/streak/open-loops), "she speaks first" opening-line composer, assistant-
   initiated speech over the socket, and the full onboarding → home → call → home flow.
-- Phase 3 (memory) **3.1–3.4 done**: typed categorized records replacing the flat string
-  list (with migration + Fernet + TTL); LLM candidate extraction (regex fallback) that
-  only *proposes*; the Save / Edit / Not now / Never-this-kind consent flow so nothing is
-  stored silently; and the categorized "what Poppy knows" screen with per-fact edit/delete
-  and "why?". A cache-free `llm.complete()` keeps extraction off the MLX chat prompt cache.
+- Phase 3 (memory) **complete**: typed categorized records replacing the flat string list
+  (with migration + Fernet + TTL); LLM candidate extraction (regex fallback) that only
+  *proposes*; the Save / Edit / Not now / Never-this-kind consent flow so nothing is stored
+  silently; the categorized "what Poppy knows" screen with per-fact edit/delete and "why?";
+  **relevance-ranked** fact injection (3.5, offline lexical scoring, identity pinned,
+  recency tiebreak, TTFT-capped); and **versioned personality** (3.6) that pins the vibe-
+  prompt version + model and surfaces a deliberate heads-up on drift. A cache-free
+  `llm.complete()` keeps extraction off the MLX chat prompt cache.
 
-Remaining in Phase 3: **3.5** relevance retrieval (still injecting last-15, not relevance-
-ranked) and **3.6** versioned personality. Then Phase 4 (rituals/streaks/notifications).
+Next: Phase 4 (rituals / gentle streaks / open-loop-driven notifications, §6).
 
 ### D2. Inference stays on-device. A thin cloud carries identity only.
 
