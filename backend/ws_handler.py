@@ -164,9 +164,9 @@ async def handle_chat(ws: WebSocket):
                     _db_save(session_id, "assistant", assistant_text),
                 )
 
-                # Capture any durable facts from this turn into encrypted memory.
-                await asyncio.to_thread(memory_store.extract_and_store, user_text)
-
+                # Memory is no longer captured silently here. Nothing durable is
+                # stored without consent (§5): after the turn the frontend calls
+                # /memory/extract to get candidates and asks the user to Save them.
                 await ws.send_json({"type": "done", "sessionId": session_id})
             finally:
                 # On barge-in the socket closes mid-stream; cancel any pending
