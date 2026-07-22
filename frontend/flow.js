@@ -21,6 +21,8 @@
   ];
 
   let profile = null;
+  let _callStart = 0;          // ms timestamp of the current call's connect
+  let _callbackOffered = false; // did this call's opener follow up on an open loop
 
   function setView(v) {
     onboarding.classList.toggle("hidden", v !== "onboarding");
@@ -331,7 +333,9 @@
       })).json();
       opening = r.opening || "";
       if (r.profile) profile = r.profile;
+      _callbackOffered = !!r.callback_offered;
     } catch {}
+    _callStart = Date.now();
 
     // She speaks first (§4). A short beat so the view has settled and engines are
     // warm, then her voice opens the call.
@@ -345,13 +349,19 @@
     const loop = (window._lastUserText || "").trim();
     // A warm sign-off with a forward hook — the open loop that pulls them back (§4).
     if (loop) window.speakLine?.("I'll be thinking about you. Tell me how it goes, okay?");
+    const durationS = _callStart ? (Date.now() - _callStart) / 1000 : 0;
     try {
       await fetch(`${BACKEND}/call/close`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ open_loop: loop || undefined }),
+        body: JSON.stringify({
+          open_loop: loop || undefined,
+          duration_s: durationS,
+          callback_offered: _callbackOffered,
+        }),
       });
     } catch {}
+    _callStart = 0;
     window._lastUserText = "";
     await loadHome();
     setTimeout(() => setView("home"), loop ? 600 : 0);

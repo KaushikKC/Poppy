@@ -18,6 +18,12 @@ CREATE TABLE IF NOT EXISTS turns (
     created_at TEXT NOT NULL,
     FOREIGN KEY (session_id) REFERENCES sessions(id)
 );
+CREATE TABLE IF NOT EXISTS events (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL,
+    value      REAL,
+    created_at TEXT NOT NULL
+);
 """
 
 
@@ -49,6 +55,24 @@ def get_turns(session_id: str) -> list[dict]:
         rows = conn.execute(
             "SELECT role, content, created_at FROM turns WHERE session_id=? ORDER BY id",
             (session_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def record_event(name: str, value: float | None = None) -> None:
+    """Append a product-analytics event. Deliberately content-free: a name, an
+    optional number, a timestamp — never any transcript text (§12 privacy)."""
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO events (name, value, created_at) VALUES (?, ?, ?)",
+            (name, value, datetime.now(timezone.utc).isoformat()),
+        )
+
+
+def get_events() -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT name, value, created_at FROM events ORDER BY id",
         ).fetchall()
     return [dict(r) for r in rows]
 

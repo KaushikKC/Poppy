@@ -11,6 +11,7 @@ import persona_suggest
 import companion
 import opening
 import nudges
+import metrics
 import memory_store
 import memory_extract
 import audio_utils
@@ -190,7 +191,19 @@ async def open_call(payload: dict = Body(default={})):
     profile = await asyncio.to_thread(companion.record_call)
     milestone = await asyncio.to_thread(companion.check_milestone)
     line = await asyncio.to_thread(opening.compose, data.get("seed"), data.get("mode"), milestone)
-    return {"opening": line, "profile": profile, "milestone": milestone}
+    # A "callback" is offered when the opener follows up on a stored open loop —
+    # not on the first-call seed or a mood-mode entry (§12 "she knows me" proxy).
+    callback_offered = bool(
+        not data.get("seed") and not data.get("mode")
+        and await asyncio.to_thread(companion.latest_open_loop)
+    )
+    await asyncio.to_thread(db.record_event, "call_started")
+    if callback_offered:
+        await asyncio.to_thread(db.record_event, "callback_offered")
+    return {
+        "opening": line, "profile": profile,
+        "milestone": milestone, "callback_offered": callback_offered,
+    }
 
 
 @app.post("/ritual")
@@ -198,6 +211,8 @@ async def set_ritual(payload: dict = Body(default={})):
     """Opt into (or clear) a daily ritual time the user picks themselves (§6)."""
     data = payload or {}
     prof = await asyncio.to_thread(companion.set_ritual, data.get("kind"), data.get("time"))
+    if prof.get("ritual_kind"):
+        await asyncio.to_thread(db.record_event, "ritual_set")
     return {"ritual_kind": prof.get("ritual_kind"), "ritual_time": prof.get("ritual_time")}
 
 
@@ -212,12 +227,29 @@ async def get_nudge():
 
 @app.post("/call/close")
 async def close_call(payload: dict = Body(default={})):
-    """End a call: store the forward hook Poppy planted (§4). `open_loop` is the
-    thing she wants to follow up on next time."""
-    loop = (payload or {}).get("open_loop")
+    """End a call: store the forward hook Poppy planted (§4) and log content-free
+    call metrics (§12). `duration_s` is the call length; a call is "meaningful" at
+    >= 60s (or if it saved a memory)."""
+    data = payload or {}
+    loop = data.get("open_loop")
     if loop:
         await asyncio.to_thread(companion.add_open_loop, loop)
-    return {"ok": True}
+
+    duration = float(data.get("duration_s") or 0)
+    meaningful = duration >= 60 or bool(data.get("saved_memory"))
+    await asyncio.to_thread(db.record_event, "call_ended", duration)
+    if meaningful:
+        await asyncio.to_thread(db.record_event, "meaningful_session", duration)
+        if data.get("callback_offered"):
+            await asyncio.to_thread(db.record_event, "callback_landed")
+    return {"ok": True, "meaningful": meaningful}
+
+
+@app.get("/metrics")
+async def get_metrics():
+    """The §12 dashboard, computed from content-free local events. Optimizes for
+    meaningful sessions + trust, never minutes-in-app (§5.5)."""
+    return await asyncio.to_thread(metrics.dashboard)
 
 
 @app.get("/home")
@@ -284,6 +316,8 @@ async def confirm_memory(payload: dict = Body(...)):
         payload.get("why"),
         bool(payload.get("sensitive", False)),
     )
+    if rec:
+        await asyncio.to_thread(db.record_event, "memory_saved")
     return {"record": rec}
 
 
@@ -299,12 +333,15 @@ async def edit_memory(fact_id: str, payload: dict = Body(...)):
     rec = await asyncio.to_thread(memory_store.update, fact_id, payload.get("text", ""))
     if not rec:
         raise HTTPException(status_code=404, detail="Fact not found")
+    await asyncio.to_thread(db.record_event, "memory_edited")
     return {"record": rec}
 
 
 @app.delete("/memory/{fact_id}")
 async def delete_memory(fact_id: str):
     deleted = await asyncio.to_thread(memory_store.delete, fact_id)
+    if deleted:
+        await asyncio.to_thread(db.record_event, "memory_deleted")
     return {"deleted": deleted}
 
 
