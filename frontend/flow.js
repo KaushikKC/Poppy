@@ -171,6 +171,7 @@
     }
 
     renderPersonalityNotice();
+    renderRitual(h);
 
     const modes = document.getElementById("home-modes");
     if (modes && !modes.dataset.built) {
@@ -179,7 +180,7 @@
         b.type = "button";
         b.className = "home-mode";
         b.textContent = m.label;
-        b.addEventListener("click", () => startCall({ vibe: m.vibe }));
+        b.addEventListener("click", () => startCall({ vibe: m.vibe, mode: m.key }));
         modes.appendChild(b);
       });
       modes.dataset.built = "1";
@@ -217,8 +218,104 @@
     startCall({ vibe: (profile && profile.vibe) || null });
   });
 
+  // ── Daily ritual (§6): the user picks a morning/night time; while the app is
+  // open we surface an earned, guardrailed nudge at that time. Real push when the
+  // app is closed is the thin-cloud/mobile piece (D2), stubbed on desktop. ──
+  let _ritualTimer = null;
+
+  function renderRitual(h) {
+    const box = document.getElementById("home-ritual");
+    if (!box) return;
+    box.innerHTML = "";
+    if (h.ritual_kind && h.ritual_time) {
+      const label = document.createElement("span");
+      label.textContent = `Your ${h.ritual_kind} check-in, ${h.ritual_time}`;
+      const change = document.createElement("button");
+      change.type = "button";
+      change.className = "ritual-link";
+      change.textContent = "change";
+      change.addEventListener("click", () => openRitualPicker(h));
+      box.append(label, change);
+      scheduleRitualReminder(h.ritual_time);
+    } else {
+      const set = document.createElement("button");
+      set.type = "button";
+      set.className = "ritual-link";
+      set.textContent = "Set a daily time with Poppy";
+      set.addEventListener("click", () => openRitualPicker(h));
+      box.appendChild(set);
+    }
+  }
+
+  function openRitualPicker(h) {
+    const box = document.getElementById("home-ritual");
+    box.innerHTML = "";
+    const kind = document.createElement("select");
+    kind.className = "ritual-kind";
+    [["morning", "Morning"], ["night", "Night"]].forEach(([v, t]) => {
+      const o = document.createElement("option");
+      o.value = v; o.textContent = t;
+      if (v === h.ritual_kind) o.selected = true;
+      kind.appendChild(o);
+    });
+    const time = document.createElement("input");
+    time.type = "time";
+    time.className = "ritual-time";
+    time.value = h.ritual_time || (kind.value === "night" ? "21:30" : "08:00");
+
+    const save = document.createElement("button");
+    save.type = "button";
+    save.className = "ritual-save";
+    save.textContent = "Save";
+    save.addEventListener("click", async () => {
+      if (window.Notification && Notification.permission === "default") {
+        try { await Notification.requestPermission(); } catch {}
+      }
+      await fetch(`${BACKEND}/ritual`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: kind.value, time: time.value }),
+      }).catch(() => {});
+      await loadHome();
+    });
+
+    const clear = document.createElement("button");
+    clear.type = "button";
+    clear.className = "ritual-link";
+    clear.textContent = "Turn off";
+    clear.addEventListener("click", async () => {
+      await fetch(`${BACKEND}/ritual`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: null }),
+      }).catch(() => {});
+      if (_ritualTimer) { clearTimeout(_ritualTimer); _ritualTimer = null; }
+      await loadHome();
+    });
+
+    box.append(kind, time, save, clear);
+  }
+
+  function scheduleRitualReminder(hhmm) {
+    if (_ritualTimer) clearTimeout(_ritualTimer);
+    const [h, m] = hhmm.split(":").map(Number);
+    const now = new Date();
+    const next = new Date();
+    next.setHours(h, m, 0, 0);
+    if (next <= now) next.setDate(next.getDate() + 1); // already passed today
+    _ritualTimer = setTimeout(async () => {
+      try {
+        const { text } = await (await fetch(`${BACKEND}/nudge`)).json();
+        if (window.Notification && Notification.permission === "granted") {
+          new Notification((profile && profile.companion_name) || "Poppy", { body: text });
+        }
+      } catch {}
+      scheduleRitualReminder(hhmm); // re-arm for tomorrow
+    }, next - now);
+  }
+
   // ── Call lifecycle (§4) ─────────────────────────────────────────────────────────
-  async function startCall({ seed = "", vibe = null } = {}) {
+  async function startCall({ seed = "", vibe = null, mode = null } = {}) {
     if (vibe && window.PersonaPicker) window.PersonaPicker.select(vibe);
     const transcript = document.getElementById("transcript");
     if (transcript) transcript.innerHTML = "";
@@ -230,7 +327,7 @@
       const r = await (await fetch(`${BACKEND}/call/open`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ seed }),
+        body: JSON.stringify({ seed, mode }),
       })).json();
       opening = r.opening || "";
       if (r.profile) profile = r.profile;
