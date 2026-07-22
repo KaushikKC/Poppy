@@ -268,6 +268,12 @@ async def set_entitlement(payload: dict = Body(...)):
     return ent
 
 
+@app.get("/referral")
+async def get_referral():
+    """The user's share code + copy for the referral loop (§7)."""
+    return await asyncio.to_thread(billing.referral)
+
+
 @app.get("/metrics")
 async def get_metrics():
     """The §12 dashboard, computed from content-free local events. Optimizes for

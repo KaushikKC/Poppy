@@ -42,6 +42,7 @@ _DEFAULTS = {
     "model": None,               # the LLM model her personality was calibrated on
     "celebrated_milestones": [], # streak milestones already celebrated, so we don't repeat
     "plan": "free",              # entitlement tier: "free" | "plus" (§8)
+    "referral_code": None,       # the user's share code (§7 growth loop B)
 }
 
 # Days-connected milestones worth a warm moment (§6). Celebration only, never an

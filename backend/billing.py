@@ -112,3 +112,19 @@ def set_plan(new_plan: str) -> dict:
     new_plan = new_plan if new_plan in TIERS else "free"
     companion.update(plan=new_plan)
     return entitlement()
+
+
+def referral() -> dict:
+    """A share code for the aligned-incentive referral loop (§7 loop B: 'give a
+    friend a week with Poppy, get a week yourself'). Local stub on desktop; real
+    redemption/attribution is a thin-cloud job (D2)."""
+    import uuid
+    p = companion.profile()
+    code = p.get("referral_code")
+    if not code:
+        code = "POPPY-" + uuid.uuid4().hex[:6].upper()
+        companion.update(referral_code=code)
+    return {
+        "code": code,
+        "message": "Give a friend a week of Poppy Plus, and get a week yourself.",
+    }

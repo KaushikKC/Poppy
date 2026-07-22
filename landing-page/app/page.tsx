@@ -267,19 +267,19 @@ export default function Home() {
                 </span>
               ))}
             </div> */}
-            {/* <p className={EYEBROW}>Private companion, character-first</p> */}
+            <p className={EYEBROW}>The AI that picks up when you call</p>
             <h1 className="m-0 max-w-[11ch] font-display text-[clamp(4.2rem,10.6vw,11.4rem)] font-normal leading-[0.82] text-[color:var(--cream)] max-[620px]:text-[clamp(3.5rem,18vw,5rem)]">
               Poppys
               <br />
-              <span className="text-[color:var(--poppy)]">your bloom companion</span>
+              <span className="text-[color:var(--poppy)]">the one who picks up</span>
             </h1>
             <p className="mt-[16px] w-[min(650px,100%)] text-[clamp(1rem,1.6vw,1.24rem)] leading-[1.58] text-[color:rgba(255,248,234,0.9)] max-[620px]:w-[min(330px,100%)] max-[620px]:text-[0.98rem]">
-              A calm AI companion for daily check-ins, gentle reminders, voice notes, and
-              small moments of emotional steadiness.
+              Not a chatbot you type at. A face that talks back in real time, remembers
+              you, and is genuinely happy to hear from you.
             </p>
             <div className="mt-[22px] flex flex-wrap gap-[10px]">
               <a className={PRIMARY} href="#modes">
-                Choose a mode
+                Meet Poppy
               </a>
               <button className={SECONDARY} type="button" onClick={handleBloomButtonClick}>
                 Bloom the mark
