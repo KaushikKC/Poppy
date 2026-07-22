@@ -90,7 +90,25 @@ versions are stubbed/local until mobile needs them for real.
   Notification reminder while the app is open. **Caveat:** push-when-closed is the thin-
   cloud/mobile piece (D2) and is deliberately stubbed — desktop only reminds while open.
 
-Next: Phase 5 (safety upgrade + privacy-preserving metrics, §11/§12).
+- Phase 5 (safety + metrics, §11/§12) **done**: safety.py upgraded to crisis/distress
+  tiers with negation handling and India-first help lines; honesty + point-back-to-real-
+  life rules strengthened in the prompt (PERSONALITY_VERSION → 2); and a privacy-preserving
+  metrics layer (`metrics.py` over a content-free `db.events` log) computing first-call-60s,
+  callback land rate, D1/D7/D30, ritual-set, meaningful-session rate, calls/week, and the
+  memory edit/delete trust rate — optimizing meaningful sessions, never minutes (§5.5).
+- Phase 6 (money + growth, §7/§8) **done on desktop**: two India-anchored tiers + a fair
+  free daily-call limit (`billing.py`), and the **paywall-timing guardrail** —
+  `can_show_paywall()` makes it a code-level impossibility to monetize a vent / wind-down /
+  distress / crisis moment (proven E2E: over-limit ordinary call → upgrade prompt, vent
+  call → connects). Referral-code stub (§7). Landing hero realigned to "The AI that picks
+  up when you call". Entitlement/billing is a local stub; StoreKit/Play Billing via the
+  thin cloud on mobile (D2). Deferred: shareable moment clips (needs media infra).
+
+Added `POPPY_DATA_DIR` override so tests never touch real local data.
+
+**Desktop MVP status: the full playbook loop (Phases 1–6) is built and proven on desktop.**
+Next real work is the mobile port (M0 gate onward) and the thin-cloud pieces (accounts,
+push-when-closed, real billing, referral redemption, shareable clips).
 
 ### D2. Inference stays on-device. A thin cloud carries identity only.
 
