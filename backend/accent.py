@@ -29,7 +29,7 @@ VOICES: dict[tuple[str, str], str] = {
     ("indian", "male"):     "hm_omega",
 }
 
-DEFAULT_ACCENT = "indian"
+DEFAULT_ACCENT = "american"
 DEFAULT_GENDER = "female"
 
 # The detector (dima806/english_accents_classification) knows more accents than
