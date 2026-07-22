@@ -792,3 +792,63 @@ button:not(:disabled):active { transform: scale(0.94); }
 @media (prefers-reduced-motion: reduce) {
   .home-call, .ob-glow { animation: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Memory as a product surface (§5): consent prompts + categorized knows-screen.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── "Want me to remember that?" consent prompts ─────────────────────────── */
+#memory-consent {
+  background: var(--panel);
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.8rem 0.95rem;
+  box-shadow: var(--shadow);
+}
+#memory-consent:not(.hidden) { animation: panel-in 0.35s var(--ease-spring) both; }
+.consent-head {
+  font-family: var(--font-display); font-size: 1.05rem; color: var(--leaf);
+  margin-bottom: 0.55rem;
+}
+.consent-row { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+.consent-text {
+  flex: 1 1 180px; min-width: 140px;
+  padding: 0.4rem 0.6rem; border-radius: 7px;
+  border: 1px solid var(--line); background: rgba(255,255,255,0.55);
+  font-family: var(--font-sans); font-size: 0.86rem; color: var(--ink);
+}
+.consent-text[readonly] { border-color: transparent; background: rgba(255,255,255,0.35); }
+.consent-text:focus { outline: none; border-color: var(--poppy); background: #fff; }
+.consent-row button {
+  padding: 0.34rem 0.7rem; border-radius: 7px; cursor: pointer;
+  font-family: var(--font-sans); font-size: 0.76rem; font-weight: 700;
+  border: 1px solid var(--line); background: rgba(255,248,234,0.6); color: var(--leaf);
+  transition: background 0.2s, color 0.2s, transform 0.15s;
+}
+.consent-row button:hover { transform: translateY(-1px); }
+.consent-save { background: var(--meadow) !important; border-color: var(--field-deep) !important; color: var(--cream) !important; }
+.consent-save:hover { background: var(--field-deep) !important; }
+.consent-never { color: rgba(7,18,7,0.45) !important; border-color: transparent !important; background: none !important; text-decoration: underline; }
+
+/* ── Categorized "what Poppy knows" rows ─────────────────────────────────── */
+.memory-cat {
+  font-family: var(--font-mono); font-size: 0.64rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.09em; color: var(--field-deep);
+  margin: 0.55rem 0 0.3rem;
+}
+.memory-item { display: flex; align-items: center; gap: 0.4rem; padding-left: 0 !important; }
+.memory-item::before { display: none !important; }
+.memory-text { flex: 1; color: rgba(7,18,7,0.85); line-height: 1.45; }
+.memory-why {
+  font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.04em;
+  color: rgba(7,18,7,0.4); cursor: help; text-decoration: underline dotted;
+}
+.memory-edit, .memory-del {
+  width: 24px; height: 24px; flex-shrink: 0; border-radius: 6px;
+  border: 1px solid var(--line); background: rgba(255,255,255,0.5);
+  font-size: 0.8rem; line-height: 1; cursor: pointer; color: rgba(7,18,7,0.6);
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.memory-edit:hover { background: var(--leaf); color: var(--cream); border-color: var(--leaf); }
+.memory-del:hover { background: var(--poppy); color: var(--cream); border-color: var(--poppy); }

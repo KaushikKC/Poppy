@@ -404,6 +404,9 @@ window.sendMessage = async function sendMessage(text) {
       endReply(ws);
       setInputLocked(false);
       input.focus();
+      // After the turn, ask what's worth remembering and offer to save it (§5).
+      // Off the reply path, and never stored without the user tapping Save.
+      window.proposeMemory?.(window._lastUserText);
       if (!player.isPlaying()) {
         // Text-only reply, or the audio already finished — nothing to sync to.
         flushAll();
