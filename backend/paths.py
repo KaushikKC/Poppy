@@ -32,7 +32,15 @@ def bundle_root() -> Path:
 def user_data_dir() -> Path:
     """Per-user writable dir for app data. In dev this is the repo root (so the
     existing companion.db / .key / .enc keep working); in the packaged app it's the
-    OS's per-user data location. Created if missing."""
+    OS's per-user data location. Created if missing.
+
+    Override with POPPY_DATA_DIR to point app data somewhere else — used to keep
+    tests and throwaway runs from touching real local data."""
+    override = os.environ.get("POPPY_DATA_DIR")
+    if override:
+        base = Path(override)
+        base.mkdir(parents=True, exist_ok=True)
+        return base
     if _FROZEN:
         if sys.platform == "darwin":
             base = Path.home() / "Library" / "Application Support" / "Poppys"
