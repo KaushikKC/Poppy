@@ -10,6 +10,7 @@ import personas as persona_store
 import persona_suggest
 import companion
 import opening
+import nudges
 import memory_store
 import memory_extract
 import audio_utils
@@ -182,12 +183,31 @@ async def accept_personality():
 async def open_call(payload: dict = Body(default={})):
     """Start a call: roll the streak forward and return the line Poppy opens with.
 
-    `seed` (optional) is the onboarding "one thing on your mind" answer, used to
-    build the very first call's opener (§2.6)."""
-    seed = (payload or {}).get("seed")
+    `seed` (optional) is the onboarding "one thing on your mind" answer (§2.6);
+    `mode` frames a mood-mode call (§4.5). A newly-reached streak milestone (§6) is
+    woven into the opener and returned so the UI can mark the moment."""
+    data = payload or {}
     profile = await asyncio.to_thread(companion.record_call)
-    line = await asyncio.to_thread(opening.compose, seed)
-    return {"opening": line, "profile": profile}
+    milestone = await asyncio.to_thread(companion.check_milestone)
+    line = await asyncio.to_thread(opening.compose, data.get("seed"), data.get("mode"), milestone)
+    return {"opening": line, "profile": profile, "milestone": milestone}
+
+
+@app.post("/ritual")
+async def set_ritual(payload: dict = Body(default={})):
+    """Opt into (or clear) a daily ritual time the user picks themselves (§6)."""
+    data = payload or {}
+    prof = await asyncio.to_thread(companion.set_ritual, data.get("kind"), data.get("time"))
+    return {"ritual_kind": prof.get("ritual_kind"), "ritual_time": prof.get("ritual_time")}
+
+
+@app.get("/nudge")
+async def get_nudge():
+    """The earned, guardrailed reminder copy in Poppy's voice (§6). Used for the
+    in-app ritual reminder (and, on mobile later, the scheduled push)."""
+    prof = await asyncio.to_thread(companion.profile)
+    text = await asyncio.to_thread(nudges.compose_nudge, prof.get("ritual_kind"))
+    return {"text": text}
 
 
 @app.post("/call/close")
@@ -220,6 +240,8 @@ async def home():
         "remembers": remembers,
         "current_streak": profile.get("current_streak", 0),
         "total_calls": profile.get("total_calls", 0),
+        "ritual_kind": profile.get("ritual_kind"),
+        "ritual_time": profile.get("ritual_time"),
     }
 
 
