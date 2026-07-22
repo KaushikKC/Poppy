@@ -82,7 +82,15 @@ versions are stubbed/local until mobile needs them for real.
   prompt version + model and surfaces a deliberate heads-up on drift. A cache-free
   `llm.complete()` keeps extraction off the MLX chat prompt cache.
 
-Next: Phase 4 (rituals / gentle streaks / open-loop-driven notifications, §6).
+- Phase 4 (habit loops, §6) **done on desktop**: the guilt-phrasing guardrail (`nudges.py`)
+  that blocks any dependency/longing copy and is the §14 moat enforced in code; earned
+  nudge copy built from the user's own open loop; gentle days-connected milestones
+  (7/30/100/365, celebrated once, no loss state) woven into the spoken opener; mood-mode
+  calls that open pre-framed (§4.5); and an opt-in ritual picker with an in-app Web-
+  Notification reminder while the app is open. **Caveat:** push-when-closed is the thin-
+  cloud/mobile piece (D2) and is deliberately stubbed — desktop only reminds while open.
+
+Next: Phase 5 (safety upgrade + privacy-preserving metrics, §11/§12).
 
 ### D2. Inference stays on-device. A thin cloud carries identity only.
 
