@@ -224,6 +224,25 @@ async def set_ritual(payload: dict = Body(default={})):
     return {"ritual_kind": prof.get("ritual_kind"), "ritual_time": prof.get("ritual_time")}
 
 
+@app.get("/ritual/due")
+async def ritual_due():
+    """Whether a ritual reminder is due right now, with the copy to show (§6). The
+    frontend polls this while on Home — a reliable in-app reminder that works even
+    where the webview blocks Web Notifications."""
+    due = await asyncio.to_thread(companion.ritual_due)
+    if not due.get("due"):
+        return {"due": False}
+    text = await asyncio.to_thread(nudges.compose_nudge, due.get("kind"))
+    return {"due": True, "kind": due.get("kind"), "text": text}
+
+
+@app.post("/ritual/dismiss")
+async def ritual_dismiss():
+    """Mark today's ritual reminder as handled so it stops showing (§6)."""
+    await asyncio.to_thread(companion.mark_reminded)
+    return {"ok": True}
+
+
 @app.get("/nudge")
 async def get_nudge():
     """The earned, guardrailed reminder copy in Poppy's voice (§6). Used for the

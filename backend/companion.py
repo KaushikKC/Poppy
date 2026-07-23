@@ -35,8 +35,9 @@ _DEFAULTS = {
     "current_streak": 0,
     "longest_streak": 0,
     "total_calls": 0,
-    "ritual_time": None,         # "HH:MM" the user opted into, or None
+    "ritual_time": None,         # "HH:MM" (local) the user opted into, or None
     "ritual_kind": None,         # "morning" | "night" | None
+    "last_reminded_date": None,  # local ISO date the ritual reminder last fired/was met
     "open_loops": [],            # list of {text, created_at}
     "personality_version": None, # the vibe-prompt version Poppy was pinned to (§3.6)
     "model": None,               # the LLM model her personality was calibrated on
@@ -162,6 +163,8 @@ def record_call() -> dict:
     p["last_call_date"] = today.isoformat()
     p["longest_streak"] = max(p.get("longest_streak", 0), p["current_streak"])
     p["total_calls"] = p.get("total_calls", 0) + 1
+    # Talking counts as meeting today's ritual, so the reminder won't nag afterwards.
+    p["last_reminded_date"] = datetime.now().date().isoformat()
     _save(p)
     return p
 
@@ -186,7 +189,33 @@ def set_ritual(kind: str | None, time_str: str | None) -> dict:
     kind = kind if kind in ("morning", "night") else None
     if not kind:
         time_str = None
-    return update(ritual_kind=kind, ritual_time=(time_str or None))
+    # A freshly set/changed ritual can fire again today, so clear the "met" mark.
+    return update(ritual_kind=kind, ritual_time=(time_str or None), last_reminded_date=None)
+
+
+def ritual_due() -> dict:
+    """Is a ritual reminder due right now? True once the local clock passes the
+    chosen time and the ritual hasn't been met (talked or dismissed) today. Uses
+    local time throughout, so it can't drift against the user's clock (§6)."""
+    p = _load()
+    kind, t = p.get("ritual_kind"), p.get("ritual_time")
+    if not kind or not t:
+        return {"due": False}
+    try:
+        hh, mm = (int(x) for x in t.split(":"))
+    except (ValueError, AttributeError):
+        return {"due": False}
+    now = datetime.now()
+    if (now.hour, now.minute) < (hh, mm):
+        return {"due": False}  # not yet today
+    if p.get("last_reminded_date") == now.date().isoformat():
+        return {"due": False}  # already met/dismissed today
+    return {"due": True, "kind": kind, "time": t}
+
+
+def mark_reminded() -> None:
+    """Record that today's ritual reminder was shown/dismissed, so it won't nag."""
+    update(last_reminded_date=datetime.now().date().isoformat())
 
 
 def days_since_last_call() -> int | None:

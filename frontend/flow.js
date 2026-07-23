@@ -174,6 +174,7 @@
 
     renderPersonalityNotice();
     renderRitual(h);
+    checkRitualDue();
 
     const modes = document.getElementById("home-modes");
     if (modes && !modes.dataset.built) {
@@ -220,10 +221,18 @@
     startCall({ vibe: (profile && profile.vibe) || null });
   });
 
-  // ── Daily ritual (§6): the user picks a morning/night time; while the app is
-  // open we surface an earned, guardrailed nudge at that time. Real push when the
-  // app is closed is the thin-cloud/mobile piece (D2), stubbed on desktop. ──
+  // ── Daily ritual (§6): the user picks a morning/night time. The reminder is
+  // surfaced two ways: a reliable in-app banner polled from the backend (works
+  // everywhere, including the packaged webview), and a Web Notification where the
+  // environment supports it. Push when the app is CLOSED is thin-cloud/mobile (D2).
   let _ritualTimer = null;
+
+  const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+  function fmt12(hhmm) {
+    const [h, m] = hhmm.split(":").map(Number);
+    const ap = h >= 12 ? "PM" : "AM";
+    return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${ap}`;
+  }
 
   function renderRitual(h) {
     const box = document.getElementById("home-ritual");
@@ -231,19 +240,20 @@
     box.innerHTML = "";
     if (h.ritual_kind && h.ritual_time) {
       const label = document.createElement("span");
-      label.textContent = `Your ${h.ritual_kind} check-in, ${h.ritual_time}`;
+      label.className = "ritual-current";
+      label.textContent = `${cap(h.ritual_kind)} check-in at ${fmt12(h.ritual_time)}`;
       const change = document.createElement("button");
       change.type = "button";
       change.className = "ritual-link";
-      change.textContent = "change";
+      change.textContent = "Change";
       change.addEventListener("click", () => openRitualPicker(h));
       box.append(label, change);
-      scheduleRitualReminder(h.ritual_time);
+      scheduleWebNotification(h.ritual_time);
     } else {
       const set = document.createElement("button");
       set.type = "button";
       set.className = "ritual-link";
-      set.textContent = "Set a daily time with Poppy";
+      set.textContent = "+ Set a daily time with Poppy";
       set.addEventListener("click", () => openRitualPicker(h));
       box.appendChild(set);
     }
@@ -252,23 +262,33 @@
   function openRitualPicker(h) {
     const box = document.getElementById("home-ritual");
     box.innerHTML = "";
-    const kind = document.createElement("select");
-    kind.className = "ritual-kind";
-    [["morning", "Morning"], ["night", "Night"]].forEach(([v, t]) => {
-      const o = document.createElement("option");
-      o.value = v; o.textContent = t;
-      if (v === h.ritual_kind) o.selected = true;
-      kind.appendChild(o);
-    });
+    let chosenKind = h.ritual_kind || "morning";
+
+    const kinds = document.createElement("div");
+    kinds.className = "ritual-kinds";
     const time = document.createElement("input");
     time.type = "time";
     time.className = "ritual-time";
-    time.value = h.ritual_time || (kind.value === "night" ? "21:30" : "08:00");
+    time.value = h.ritual_time || "08:00";
+
+    [["morning", "Morning"], ["night", "Night"]].forEach(([v, t]) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "ritual-kind-btn" + (v === chosenKind ? " active" : "");
+      b.textContent = t;
+      b.addEventListener("click", () => {
+        chosenKind = v;
+        kinds.querySelectorAll(".ritual-kind-btn").forEach((x) => x.classList.remove("active"));
+        b.classList.add("active");
+        if (!h.ritual_time) time.value = v === "night" ? "21:30" : "08:00";
+      });
+      kinds.appendChild(b);
+    });
 
     const save = document.createElement("button");
     save.type = "button";
     save.className = "ritual-save";
-    save.textContent = "Save";
+    save.textContent = "Save reminder";
     save.addEventListener("click", async () => {
       if (window.Notification && Notification.permission === "default") {
         try { await Notification.requestPermission(); } catch {}
@@ -276,9 +296,10 @@
       await fetch(`${BACKEND}/ritual`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: kind.value, time: time.value }),
+        body: JSON.stringify({ kind: chosenKind, time: time.value }),
       }).catch(() => {});
       await loadHome();
+      checkRitualDue();
     });
 
     const clear = document.createElement("button");
@@ -295,16 +316,50 @@
       await loadHome();
     });
 
-    box.append(kind, time, save, clear);
+    const editor = document.createElement("div");
+    editor.className = "ritual-editor";
+    editor.append(kinds, time, save);
+    box.append(editor, clear);
   }
 
-  function scheduleRitualReminder(hhmm) {
+  // The reliable path: ask the backend if a reminder is due and show an in-app
+  // banner. Polled every minute while on Home, so it appears right at the set time.
+  async function checkRitualDue() {
+    const box = document.getElementById("home-reminder");
+    if (!box || document.body.dataset.view !== "home") return;
+    let due = {};
+    try { due = await (await fetch(`${BACKEND}/ritual/due`)).json(); } catch {}
+    if (!due.due) { box.classList.add("hidden"); return; }
+    box.innerHTML = "";
+    const msg = document.createElement("span");
+    msg.className = "reminder-text";
+    msg.textContent = due.text || "Time for your check-in with Poppy.";
+    const call = document.createElement("button");
+    call.type = "button";
+    call.className = "reminder-call";
+    call.textContent = "Call now";
+    call.addEventListener("click", () => { box.classList.add("hidden"); startCall({}); });
+    const later = document.createElement("button");
+    later.type = "button";
+    later.className = "reminder-later";
+    later.textContent = "Later";
+    later.addEventListener("click", async () => {
+      await fetch(`${BACKEND}/ritual/dismiss`, { method: "POST" }).catch(() => {});
+      box.classList.add("hidden");
+    });
+    box.append(msg, call, later);
+    box.classList.remove("hidden");
+  }
+  setInterval(checkRitualDue, 60000);
+
+  // Bonus path where supported: a real OS notification at the set time.
+  function scheduleWebNotification(hhmm) {
     if (_ritualTimer) clearTimeout(_ritualTimer);
     const [h, m] = hhmm.split(":").map(Number);
     const now = new Date();
     const next = new Date();
     next.setHours(h, m, 0, 0);
-    if (next <= now) next.setDate(next.getDate() + 1); // already passed today
+    if (next <= now) next.setDate(next.getDate() + 1);
     _ritualTimer = setTimeout(async () => {
       try {
         const { text } = await (await fetch(`${BACKEND}/nudge`)).json();
@@ -312,7 +367,8 @@
           new Notification((profile && profile.companion_name) || "Poppy", { body: text });
         }
       } catch {}
-      scheduleRitualReminder(hhmm); // re-arm for tomorrow
+      checkRitualDue();
+      scheduleWebNotification(hhmm);
     }, next - now);
   }
 
