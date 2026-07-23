@@ -41,6 +41,14 @@ for pkg in (
     "rfc3987_syntax",
     "lark",
     "num2words",         # misaki[en] number-to-words (locale data)
+    # misaki[en]'s G2P runs a spaCy pipeline (spacy.load("en_core_web_sm")). If the
+    # model isn't bundled it tries to DOWNLOAD it at runtime (misaki/en.py:500) and
+    # then fails to load it in the frozen app → spaCy E050. Bundle spaCy, its Cython
+    # backend (thinc/blis), and the English model package itself.
+    "spacy",
+    "thinc",
+    "blis",
+    "en_core_web_sm",
     "kokoro",
     "mlx",               # Metal kernels (libmlx.dylib + .metallib)
     "mlx_lm",
@@ -80,6 +88,17 @@ try:
     datas += copy_metadata("torchcodec")
 except Exception:
     pass
+
+# spaCy decides "is this model installed?" via importlib.metadata.distribution(name)
+# (spacy.util.is_package), and it wires up pipeline factories/architectures through
+# entry points read from dist metadata. PyInstaller drops that metadata by default,
+# so without this spaCy re-downloads en_core_web_sm on every run and can't load it.
+# Ship the dist-info for the model and the packages that register spaCy entry points.
+for _dist in ("en_core_web_sm", "spacy", "thinc", "spacy-legacy"):
+    try:
+        datas += copy_metadata(_dist)
+    except Exception:
+        pass
 
 a = Analysis(
     [os.path.join(SPECPATH, "launcher.py")],
