@@ -350,7 +350,11 @@
     box.append(msg, call, later);
     box.classList.remove("hidden");
   }
-  setInterval(checkRitualDue, 60000);
+  setInterval(checkRitualDue, 30000);
+  // Timers are throttled/suspended while the window is backgrounded, so also
+  // re-check the moment the app regains focus or becomes visible again.
+  window.addEventListener("focus", checkRitualDue);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) checkRitualDue(); });
 
   // Bonus path where supported: a real OS notification at the set time.
   function scheduleWebNotification(hhmm) {

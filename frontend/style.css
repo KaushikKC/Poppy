@@ -920,6 +920,13 @@ button:not(:disabled):active { transform: scale(0.94); }
 .paywall-later { background: none; border: none; color: rgba(7,18,7,0.5); cursor: pointer; font-size: 0.9rem; text-decoration: underline; }
 
 /* §6 — improved ritual picker + reliable in-app reminder banner */
+/* Readable over the avatar stage (which can be light or dark): a cream pill,
+   not bare dark-green text that vanishes against the background. */
+.home-ritual .ritual-current,
+.home-ritual > .ritual-link {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+  padding: 0.4rem 0.9rem; box-shadow: var(--shadow);
+}
 .ritual-current { font-weight: 600; color: var(--leaf); }
 .ritual-editor {
   display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; justify-content: center;

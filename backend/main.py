@@ -11,6 +11,7 @@ import persona_suggest
 import companion
 import opening
 import nudges
+import notify
 import metrics
 import billing
 import memory_store
@@ -57,6 +58,29 @@ def _schedule_detection(pcm) -> None:
     task = asyncio.create_task(asyncio.to_thread(_run_detection, pcm))
     _detect_tasks.add(task)
     task.add_done_callback(_detect_tasks.discard)
+
+
+async def _ritual_notifier_loop():
+    """Fire the daily ritual reminder as a native OS notification the moment it's
+    due (§6). Runs in the always-on backend, so it works even when the app window
+    is backgrounded and its JS timers are suspended — the in-app banner alone isn't
+    reliable there. Fires once per day; the in-app banner still greets on open."""
+    while True:
+        try:
+            due = await asyncio.to_thread(companion.ritual_due)
+            if due.get("due") and await asyncio.to_thread(companion.should_notify):
+                prof = await asyncio.to_thread(companion.profile)
+                text = await asyncio.to_thread(nudges.compose_nudge, due.get("kind"))
+                await asyncio.to_thread(notify.send, prof.get("companion_name", "Poppy"), text)
+                await asyncio.to_thread(companion.mark_notified)
+        except Exception as e:
+            print(f"[ritual] notifier loop error: {e}")
+        await asyncio.sleep(30)
+
+
+@app.on_event("startup")
+async def _start_ritual_notifier():
+    asyncio.create_task(_ritual_notifier_loop())
 
 
 @app.on_event("startup")

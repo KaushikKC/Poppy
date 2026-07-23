@@ -37,7 +37,8 @@ _DEFAULTS = {
     "total_calls": 0,
     "ritual_time": None,         # "HH:MM" (local) the user opted into, or None
     "ritual_kind": None,         # "morning" | "night" | None
-    "last_reminded_date": None,  # local ISO date the ritual reminder last fired/was met
+    "last_reminded_date": None,  # local ISO date the ritual was met (talked/dismissed)
+    "last_notified_date": None,  # local ISO date the native OS reminder last fired
     "open_loops": [],            # list of {text, created_at}
     "personality_version": None, # the vibe-prompt version Poppy was pinned to (§3.6)
     "model": None,               # the LLM model her personality was calibrated on
@@ -189,8 +190,11 @@ def set_ritual(kind: str | None, time_str: str | None) -> dict:
     kind = kind if kind in ("morning", "night") else None
     if not kind:
         time_str = None
-    # A freshly set/changed ritual can fire again today, so clear the "met" mark.
-    return update(ritual_kind=kind, ritual_time=(time_str or None), last_reminded_date=None)
+    # A freshly set/changed ritual can fire again today, so clear both marks.
+    return update(
+        ritual_kind=kind, ritual_time=(time_str or None),
+        last_reminded_date=None, last_notified_date=None,
+    )
 
 
 def ritual_due() -> dict:
@@ -214,8 +218,20 @@ def ritual_due() -> dict:
 
 
 def mark_reminded() -> None:
-    """Record that today's ritual reminder was shown/dismissed, so it won't nag."""
+    """Record that today's ritual reminder was met (talked/dismissed), so the in-app
+    banner won't nag."""
     update(last_reminded_date=datetime.now().date().isoformat())
+
+
+def should_notify() -> bool:
+    """Whether the native OS reminder still needs to fire today. Separate from the
+    in-app 'met' mark so the notification fires once, yet the banner still greets
+    the user in-app when they open the window."""
+    return _load().get("last_notified_date") != datetime.now().date().isoformat()
+
+
+def mark_notified() -> None:
+    update(last_notified_date=datetime.now().date().isoformat())
 
 
 def days_since_last_call() -> int | None:
