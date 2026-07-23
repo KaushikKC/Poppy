@@ -117,9 +117,14 @@ KOKORO_REPO_ID = "hexgrad/Kokoro-82M"
 KOKORO_SAMPLE_RATE = 24000
 # Device Kokoro runs on. Empty = leave Kokoro's own default (GPU/Metal where
 # available). Set KOKORO_DEVICE=cpu to move TTS onto the CPU so it doesn't
-# contend with the LLM on the GPU — this can steady first-audio latency when the
-# MLX LLM backend is also on Metal (at some cost to raw synthesis speed).
-KOKORO_DEVICE = os.getenv("KOKORO_DEVICE", "")
+# contend with the LLM on the GPU.
+#
+# Default to CPU whenever the LLM is on Metal (LLM_BACKEND=mlx — the packaged app's
+# default): the LLM and Kokoro would otherwise both hit the GPU while the first TTS
+# phrase synthesizes mid-generation, and that contention intermittently STALLS
+# synthesis (text keeps streaming, the voice hangs). Kokoro is tiny (82M) so CPU is
+# plenty fast, and it makes first-audio steady. Override with KOKORO_DEVICE.
+KOKORO_DEVICE = os.getenv("KOKORO_DEVICE", "cpu" if LLM_BACKEND == "mlx" else "")
 
 # Accent detection from the user's voice (accent_detect.py). A wav2vec2
 # classifier runs on each uploaded clip; results are smoothed (sticky) so the

@@ -24,9 +24,24 @@ import db
 
 conversation_history: list[dict] = []
 
+# A single phrase's synthesis must never be able to hang the whole turn. If it
+# stalls past this (GPU contention, a pathological phrase), we skip that phrase's
+# audio and let the reply finish rather than leaving the voice frozen mid-reply.
+TTS_TIMEOUT_S = 15.0
+
 
 async def _synthesize(text: str, accent: str, gender: str) -> bytes:
     return await asyncio.to_thread(synthesize_to_wav_bytes, text, accent, gender)
+
+
+async def _synthesize_safe(text: str, accent: str, gender: str) -> bytes:
+    """Synthesize one phrase, but never raise or hang the turn: on timeout or error
+    return empty bytes (that phrase just gets no audio)."""
+    try:
+        return await asyncio.wait_for(_synthesize(text, accent, gender), TTS_TIMEOUT_S)
+    except Exception as e:
+        print(f"[tts] synth skipped for phrase ({e!r}): {text[:40]!r}")
+        return b""
 
 
 async def _db_save(session_id: str, role: str, content: str) -> None:
@@ -48,8 +63,9 @@ async def _say(ws: WebSocket, text: str, accent: str, gender: str):
     tts_tasks: list[asyncio.Task] = []
 
     async def tts_and_send(phrase: str):
-        audio = await _synthesize(phrase, accent, gender)
-        await ws.send_bytes(audio)
+        audio = await _synthesize_safe(phrase, accent, gender)
+        if audio:
+            await ws.send_bytes(audio)
 
     try:
         # Reveal the whole line up front (the text is already known), then stream
@@ -138,8 +154,9 @@ async def handle_chat(ws: WebSocket):
             full_reply: list[str] = []
 
             async def tts_and_send(phrase: str):
-                audio = await _synthesize(phrase, reply_accent, reply_gender)
-                await ws.send_bytes(audio)
+                audio = await _synthesize_safe(phrase, reply_accent, reply_gender)
+                if audio:
+                    await ws.send_bytes(audio)
 
             tts_tasks: list[asyncio.Task] = []
             try:
