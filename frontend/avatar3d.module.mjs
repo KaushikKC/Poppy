@@ -58,6 +58,9 @@ async function showFor(gender) {
     url: AVATARS[g], body: g === "male" ? "M" : "F",
     avatarMood: "neutral", lipsyncLang: "en",
     baseline: baselineFor(g),
+    // Frame like a video call: head + shoulders, face high in the upper-centre,
+    // so the companion reads as present and the lip-sync is clearly visible.
+    cameraView: "upper",
   });
   currentGender = g;
   head.lookAhead?.(2000);   // settle into a forward-facing pose
