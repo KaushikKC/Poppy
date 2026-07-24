@@ -11,14 +11,10 @@ from config import (
     CRISIS_ADDENDUM,
     DISTRESS_ADDENDUM,
 )
-import personas as persona_store
-import accent as accent_mod
 import safety
 import memory_store
 import companion
-import accent_detect
-import gender as gender_mod
-import gender_detect
+import characters
 import emotion as emotion_mod
 import db
 
@@ -30,15 +26,15 @@ conversation_history: list[dict] = []
 TTS_TIMEOUT_S = 15.0
 
 
-async def _synthesize(text: str, accent: str, gender: str) -> bytes:
-    return await asyncio.to_thread(synthesize_to_wav_bytes, text, accent, gender)
+async def _synthesize(text: str, accent: str, voice: str) -> bytes:
+    return await asyncio.to_thread(synthesize_to_wav_bytes, text, accent, None, voice)
 
 
-async def _synthesize_safe(text: str, accent: str, gender: str) -> bytes:
-    """Synthesize one phrase, but never raise or hang the turn: on timeout or error
-    return empty bytes (that phrase just gets no audio)."""
+async def _synthesize_safe(text: str, accent: str, voice: str) -> bytes:
+    """Synthesize one phrase in the character's voice, but never raise or hang the
+    turn: on timeout or error return empty bytes (that phrase just gets no audio)."""
     try:
-        return await asyncio.wait_for(_synthesize(text, accent, gender), TTS_TIMEOUT_S)
+        return await asyncio.wait_for(_synthesize(text, accent, voice), TTS_TIMEOUT_S)
     except Exception as e:
         print(f"[tts] synth skipped for phrase ({e!r}): {text[:40]!r}")
         return b""
@@ -54,8 +50,8 @@ def _trim_history():
         del conversation_history[: len(conversation_history) - cap]
 
 
-async def _say(ws: WebSocket, text: str, accent: str, gender: str):
-    """Speak a line Poppy initiates herself (the opening line, an end-of-call
+async def _say(ws: WebSocket, text: str, accent: str, voice: str):
+    """Speak a line the companion initiates herself (the opening line, an end-of-call
     sign-off) — TTS + on-screen text, no LLM turn. Mirrors the chat path's
     phrase-chunked streaming so the first audio still starts almost immediately."""
     await ws.send_json({"type": "config", "sampleRate": KOKORO_SAMPLE_RATE})
@@ -63,7 +59,7 @@ async def _say(ws: WebSocket, text: str, accent: str, gender: str):
     tts_tasks: list[asyncio.Task] = []
 
     async def tts_and_send(phrase: str):
-        audio = await _synthesize_safe(phrase, accent, gender)
+        audio = await _synthesize_safe(phrase, accent, voice)
         if audio:
             await ws.send_bytes(audio)
 
@@ -99,16 +95,12 @@ async def handle_chat(ws: WebSocket):
             msg = await ws.receive_json()
 
             # Assistant-initiated speech (she speaks first, sign-off): TTS a given
-            # line with no LLM turn, in the user's sticky accent/gender.
+            # line with no LLM turn, in the CHARACTER's own voice.
             if msg.get("type") == "say":
                 say_text = msg.get("text", "").strip()
                 if say_text:
-                    await _say(
-                        ws,
-                        say_text,
-                        accent_mod.normalize(msg.get("accent") or accent_detect.tracker.current),
-                        gender_mod.normalize(msg.get("gender") or gender_detect.tracker.current),
-                    )
+                    char = characters.get((await asyncio.to_thread(companion.profile)).get("character", "poppy"))
+                    await _say(ws, say_text, char["accent"], char["voice"])
                 continue
 
             if msg.get("type") != "chat":
@@ -118,14 +110,17 @@ async def handle_chat(ws: WebSocket):
             if not user_text:
                 continue
 
-            persona = persona_store.get(msg.get("persona", ""))
-            # Emotional-support framing: base persona + supportive addendum +
+            # The chosen character is the personality + voice. (Mood modes frame the
+            # opener; the character itself stays constant.)
+            profile = await asyncio.to_thread(companion.profile)
+            char = characters.get(profile.get("character", "poppy"))
+            # Emotional-support framing: character personality + supportive addendum +
             # remembered facts, with a stronger addendum if distress is detected.
             risk = safety.check(user_text)
             memory_block = await asyncio.to_thread(memory_store.as_prompt_block, user_text)
             identity_block = await asyncio.to_thread(companion.as_prompt_block)
             system_prompt = (
-                persona["system_prompt"] + identity_block + SAFETY_ADDENDUM + memory_block
+                char["system_prompt"] + identity_block + SAFETY_ADDENDUM + memory_block
             )
             if risk["level"] == "crisis":
                 system_prompt += CRISIS_ADDENDUM
@@ -139,14 +134,10 @@ async def handle_chat(ws: WebSocket):
             if tone:
                 system_prompt = f"{system_prompt} {tone}"
 
-            # Reply in the user's accent + gender: use client-supplied values if
-            # any, otherwise the latest detected from their voice (both sticky).
-            reply_accent = accent_mod.normalize(
-                msg.get("accent") or accent_detect.tracker.current
-            )
-            reply_gender = gender_mod.normalize(
-                msg.get("gender") or gender_detect.tracker.current
-            )
+            # The companion speaks in the character's own fixed voice (their identity),
+            # not the user's detected voice.
+            reply_accent = char["accent"]
+            reply_voice = char["voice"]
 
             await ws.send_json({"type": "config", "sampleRate": KOKORO_SAMPLE_RATE})
 
@@ -154,7 +145,7 @@ async def handle_chat(ws: WebSocket):
             full_reply: list[str] = []
 
             async def tts_and_send(phrase: str):
-                audio = await _synthesize_safe(phrase, reply_accent, reply_gender)
+                audio = await _synthesize_safe(phrase, reply_accent, reply_voice)
                 if audio:
                     await ws.send_bytes(audio)
 

@@ -50,10 +50,16 @@ def warmup() -> None:
 
 
 def synthesize_to_wav_bytes(
-    text: str, accent: str | None = None, gender: str | None = None
+    text: str, accent: str | None = None, gender: str | None = None,
+    voice: str | None = None,
 ) -> bytes:
-    """Synthesize `text` in the given accent + gender, return WAV bytes (24 kHz mono)."""
-    lang_code, voice = voice_for(accent, gender)
+    """Synthesize `text`, return WAV bytes (24 kHz mono). An explicit `voice` (a
+    character's own Kokoro voice) wins; otherwise the voice is chosen from accent +
+    gender. The Kokoro language code is the voice's first letter (a/b/h)."""
+    if voice:
+        lang_code = voice[0]
+    else:
+        lang_code, voice = voice_for(accent, gender)
 
     with _lock:
         pipeline = _get_pipeline(lang_code)
