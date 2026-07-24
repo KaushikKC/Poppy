@@ -36,6 +36,11 @@ _loaded = False
 # driven by two turns at once. We only ever generate a single reply at a time.
 _gen_lock = threading.Lock()
 
+# Set while a user reply is waiting for the model. Background side tasks (memory
+# extraction via complete()) poll this and bail out early so the reply never waits
+# behind them — the reply always has priority over housekeeping.
+_reply_pending = threading.Event()
+
 # Persistent prompt cache plus the token ids currently held in it, for prefix reuse.
 _prompt_cache = None
 _cached_tokens: list[int] = []
@@ -125,6 +130,7 @@ def _generate_sync(tokens: list[int], emit: Callable[[tuple], None]) -> None:
 
     try:
         with _gen_lock:
+            _reply_pending.clear()  # we hold the model now; extraction may resume after
             kwargs: dict = {"max_tokens": MLX_MAX_TOKENS}
             if _draft_model is not None:
                 kwargs["draft_model"] = _draft_model
@@ -171,6 +177,9 @@ async def stream_reply(
     def emit(item: tuple) -> None:
         loop.call_soon_threadsafe(q.put_nowait, item)
 
+    # Announce a reply is waiting so any in-flight background extraction yields the
+    # model quickly instead of making the user wait for its full run.
+    _reply_pending.set()
     task = asyncio.create_task(asyncio.to_thread(_generate_sync, tokens, emit))
     try:
         while True:
@@ -203,6 +212,10 @@ def _complete_blocking(user_text: str, system_prompt: str, max_tokens: int) -> s
                 out.append(resp.text)
             if resp.finish_reason is not None:
                 break
+            # A user reply is waiting for the model — abandon this side task now and
+            # give it up. Extraction is best-effort; a fast reply is not.
+            if _reply_pending.is_set():
+                break
     return "".join(out)
 
 
@@ -216,15 +229,44 @@ def _warmup_blocking() -> None:
         _load()
         from mlx_lm import stream_generate
 
-        tokens = _build_prompt([], "hi", SYSTEM_PROMPT)
-        for _ in stream_generate(_model, _tokenizer, tokens, max_tokens=1):
-            break
+        # Prime with the default vibe's stable system prompt (persona core + safety
+        # framing) so the cache matches what a real first turn actually sends.
+        try:
+            import personas
+            from config import SAFETY_ADDENDUM
+            sys_prompt = personas.get(personas.DEFAULT_PERSONA)["system_prompt"] + SAFETY_ADDENDUM
+        except Exception:
+            sys_prompt = SYSTEM_PROMPT
+
+        tokens = _build_prompt([], "hi", sys_prompt)
+
+        if not MLX_PROMPT_CACHE:
+            for _ in stream_generate(_model, _tokenizer, tokens, max_tokens=1):
+                break
+            return
+
+        # Warm Metal kernels AND prime the persistent prompt cache with the system-
+        # prompt prefix, so the FIRST real turn only prefills the user's message
+        # instead of the whole system prompt (near-zero time-to-first-token from
+        # turn one, not just turn two).
+        from mlx_lm.models.cache import trim_prompt_cache, can_trim_prompt_cache
+        with _gen_lock:
+            prompt = _prepare_cache(tokens)
+            generated = 0
+            for _ in stream_generate(
+                _model, _tokenizer, prompt, prompt_cache=_prompt_cache, max_tokens=1
+            ):
+                generated += 1
+                break
+            # Drop the one generated token so the cache holds exactly the prompt prefix.
+            if generated and can_trim_prompt_cache(_prompt_cache):
+                trim_prompt_cache(_prompt_cache, generated)
     except Exception:
         pass
 
 
 async def warmup() -> None:
-    """Load the MLX model and compile Metal kernels once at startup so the first
-    real turn doesn't pay the cold start. Uses no prompt cache, so it leaves the
-    persistent cache untouched."""
+    """Load the MLX model, compile Metal kernels, and prime the persistent prompt
+    cache with the stable system-prompt prefix — so even the first real turn skips
+    the full system-prompt prefill and starts generating almost immediately."""
     await asyncio.to_thread(_warmup_blocking)
