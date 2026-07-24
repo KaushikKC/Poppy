@@ -275,6 +275,9 @@ window.speakLine = function speakLine(text) {
 };
 
 window.sendMessage = async function sendMessage(text) {
+  // The user's speaking again — cancel any pending memory extraction so it never
+  // fires mid-conversation and steals the model from this reply.
+  clearTimeout(window._memProposeTimer);
   window._lastUserText = text; // becomes the open loop Poppy carries to next call
   addBubble("user", text);
   const replyBubble = addBubble("assistant");
@@ -405,8 +408,13 @@ window.sendMessage = async function sendMessage(text) {
       setInputLocked(false);
       input.focus();
       // After the turn, ask what's worth remembering and offer to save it (§5).
-      // Off the reply path, and never stored without the user tapping Save.
-      window.proposeMemory?.(window._lastUserText);
+      // Debounced: only run once the user has actually PAUSED (2.5s with no new
+      // message), so the extraction pass never competes with an active
+      // back-and-forth for the on-device model. sendMessage() cancels it the
+      // moment the user speaks again.
+      clearTimeout(window._memProposeTimer);
+      const _memText = window._lastUserText;
+      window._memProposeTimer = setTimeout(() => window.proposeMemory?.(_memText), 2500);
       if (!player.isPlaying()) {
         // Text-only reply, or the audio already finished — nothing to sync to.
         flushAll();
