@@ -48,23 +48,14 @@
         <button type="button" class="ob-primary" data-next>I'm 18 or older</button>
       </section>
 
-      <!-- Screen 3 — pick the vibe -->
-      <section class="ob-screen hidden" data-step="vibe">
-        <h2 class="ob-headline">What do you want Poppy to be for you right now?</h2>
-        <p class="ob-sub">You can change this anytime.</p>
-        <div id="ob-vibes" class="ob-vibes"></div>
+      <!-- Screen 3 — choose your companion (the character) -->
+      <section class="ob-screen hidden" data-step="character">
+        <h2 class="ob-headline">Choose your companion.</h2>
+        <p class="ob-sub">Each one has their own voice and personality. You can switch anytime.</p>
+        <div id="ob-characters" class="ob-characters"></div>
       </section>
 
-      <!-- Screen 4 — name & face -->
-      <section class="ob-screen hidden" data-step="name">
-        <h2 class="ob-headline">Give Poppy a name.</h2>
-        <p class="ob-sub">Naming makes her yours.</p>
-        <input id="ob-name" class="ob-input" type="text" value="Poppy" maxlength="40" autocomplete="off" />
-        <div id="ob-looks" class="ob-looks"></div>
-        <button type="button" class="ob-primary" data-next>Continue</button>
-      </section>
-
-      <!-- Screen 5 — one question that matters -->
+      <!-- Screen 4 — one question that matters -->
       <section class="ob-screen hidden" data-step="seed">
         <h2 class="ob-headline">Before we talk, what's one thing on your mind today?</h2>
         <input id="ob-seed" class="ob-input" type="text" placeholder="Anything at all…" autocomplete="off" />
@@ -72,10 +63,10 @@
         <button type="button" class="ob-skip" data-next>Skip for now</button>
       </section>
 
-      <!-- Screen 6 — the first call (the payoff) -->
+      <!-- Screen 5 — the first call (the payoff) -->
       <section class="ob-screen hidden" data-step="call">
-        <h2 class="ob-headline">Poppy's ready for you.</h2>
-        <button type="button" id="ob-call" class="ob-primary ob-glow">Call Poppy</button>
+        <h2 class="ob-headline" id="ob-ready">Ready when you are.</h2>
+        <button type="button" id="ob-call" class="ob-primary ob-glow">Start the call</button>
       </section>
     </div>
   </div>

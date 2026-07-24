@@ -33,6 +33,13 @@
     document.body.dataset.view = v;
   }
 
+  // Point the 3D avatar at a character's gender (loads the male/female model).
+  function setAvatarGender(gender) {
+    const g = gender === "male" ? "male" : "female";
+    window._gender = g;
+    window.companionAvatar?.setIdentity?.(null, g);
+  }
+
   // ── Boot ────────────────────────────────────────────────────────────────────
   async function boot() {
     try {
@@ -41,6 +48,7 @@
       profile = { onboarded: false };
     }
     if (profile.onboarded) {
+      setAvatarGender(profile.gender);
       await loadHome();
       setView("home");
     } else {
@@ -51,9 +59,8 @@
   // ── Onboarding (§2) ───────────────────────────────────────────────────────────
   const ob = {
     step: "hook",
-    order: ["hook", "age", "vibe", "name", "seed", "call"],
-    vibe: "friend",
-    avatar: "avaturn",
+    order: ["hook", "age", "character", "seed", "call"],
+    character: "poppy",
     name: "Poppy",
     seed: "",
   };
@@ -73,59 +80,39 @@
   async function startOnboarding() {
     setView("onboarding");
     showStep("hook");
-    await renderVibeCards();
-    renderLooks();
+    await renderCharacterCards();
   }
 
-  async function renderVibeCards() {
-    const box = document.getElementById("ob-vibes");
+  async function renderCharacterCards() {
+    const box = document.getElementById("ob-characters");
     if (!box) return;
-    let vibes = [];
+    let cast = [];
     try {
-      vibes = await (await fetch(`${BACKEND}/personas`)).json();
+      cast = await (await fetch(`${BACKEND}/characters`)).json();
     } catch {
-      vibes = [];
+      cast = [];
     }
     box.innerHTML = "";
-    vibes.forEach((v) => {
+    cast.forEach((c) => {
       const card = document.createElement("button");
       card.type = "button";
-      card.className = "ob-vibe";
-      card.style.setProperty("--vibe-color", v.avatar.outline);
-      card.innerHTML = `<strong>${v.name}</strong><span>${v.description}</span>`;
+      card.className = "ob-character";
+      card.style.setProperty("--char-color", c.color.outline);
+      card.innerHTML =
+        `<span class="ob-char-orb" style="background:${c.color.gradient}"></span>` +
+        `<strong>${c.name}</strong>` +
+        `<span class="ob-char-meta">${c.gender === "male" ? "He" : "She"} · ${c.tagline}</span>`;
       card.addEventListener("click", () => {
-        ob.vibe = v.key;
-        box.querySelectorAll(".ob-vibe").forEach((c) => c.classList.remove("chosen"));
+        ob.character = c.key;
+        ob.name = c.name;
+        box.querySelectorAll(".ob-character").forEach((x) => x.classList.remove("chosen"));
         card.classList.add("chosen");
-        setTimeout(nextStep, 220); // let the selection register, then advance
+        setAvatarGender(c.gender);
+        const ready = document.getElementById("ob-ready");
+        if (ready) ready.textContent = `${c.name} is ready when you are.`;
+        setTimeout(nextStep, 260); // let the selection register, then advance
       });
       box.appendChild(card);
-    });
-  }
-
-  // A few looks to choose from (§4). The choice is stored on the profile; the
-  // live 3D model swap is a later enhancement, so today this sets the accent look.
-  const LOOKS = [
-    { id: "avaturn", label: "Look 1" },
-    { id: "brunette", label: "Look 2" },
-    { id: "avatarsdk", label: "Look 3" },
-  ];
-
-  function renderLooks() {
-    const box = document.getElementById("ob-looks");
-    if (!box) return;
-    box.innerHTML = "";
-    LOOKS.forEach((l, i) => {
-      const chip = document.createElement("button");
-      chip.type = "button";
-      chip.className = "ob-look" + (i === 0 ? " chosen" : "");
-      chip.textContent = l.label;
-      chip.addEventListener("click", () => {
-        ob.avatar = l.id;
-        box.querySelectorAll(".ob-look").forEach((c) => c.classList.remove("chosen"));
-        chip.classList.add("chosen");
-      });
-      box.appendChild(chip);
     });
   }
 
@@ -136,16 +123,16 @@
 
   // The first call — completes onboarding, then dials straight in (§2.6).
   document.getElementById("ob-call")?.addEventListener("click", async () => {
-    ob.name = (document.getElementById("ob-name")?.value || "Poppy").trim() || "Poppy";
     ob.seed = (document.getElementById("ob-seed")?.value || "").trim();
     try {
       profile = await (await fetch(`${BACKEND}/companion`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companion_name: ob.name, vibe: ob.vibe, avatar: ob.avatar }),
+        body: JSON.stringify({ character: ob.character }),
       })).json();
+      setAvatarGender(profile.gender);
     } catch {}
-    startCall({ seed: ob.seed, vibe: ob.vibe });
+    startCall({ seed: ob.seed });
   });
 
   // Capture the seed as they type so it survives the "That's it" tap.
@@ -159,6 +146,7 @@
     try {
       h = await (await fetch(`${BACKEND}/home`)).json();
     } catch {}
+    if (h.gender) setAvatarGender(h.gender);
     document.getElementById("home-name").textContent = h.companion_name || "Poppy";
     const remembers = document.getElementById("home-remembers");
     remembers.textContent = h.remembers || "";
@@ -395,6 +383,7 @@
     }
 
     if (vibe && window.PersonaPicker) window.PersonaPicker.select(vibe);
+    if (profile && profile.gender) setAvatarGender(profile.gender);
     const transcript = document.getElementById("transcript");
     if (transcript) transcript.innerHTML = "";
     window._lastUserText = "";
