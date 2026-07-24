@@ -27,9 +27,12 @@ _MAX_OPEN_LOOPS = 10
 
 _DEFAULTS = {
     "onboarded": False,
-    "companion_name": "Poppy",   # what the user named Poppy (§4)
-    "vibe": "friend",            # chosen vibe key (§2.3)
-    "avatar": "avaturn",         # avatar preset id (frontend/avatar/*.glb)
+    "character": "poppy",        # chosen character id (characters.py)
+    "companion_name": "Poppy",   # the character's name (their identity)
+    "gender": "female",          # character gender -> voice + avatar
+    "voice": "af_heart",         # the character's Kokoro voice
+    "vibe": "friend",            # legacy vibe key (mood modes still layer on top)
+    "avatar": "brunette",        # avatar preset id (frontend/avatar/*.glb)
     "created_at": None,
     "last_call_date": None,      # ISO date (YYYY-MM-DD) of the most recent call
     "current_streak": 0,
@@ -83,18 +86,36 @@ def _current_signature() -> tuple[int, str]:
     return personas.PERSONALITY_VERSION, llm.model_id()
 
 
-def create(companion_name: str, vibe: str, avatar: str) -> dict:
-    """Complete onboarding: name Poppy, pick a vibe and a look (§2.3/§2.4)."""
+def _apply_character(p: dict, character: str) -> None:
+    """Copy a chosen character's identity (name, gender, voice, look) onto the profile."""
+    import characters
+    c = characters.get(character)
+    p["character"] = character if character in characters.CHARACTERS else characters.DEFAULT_CHARACTER
+    p["companion_name"] = c["name"]
+    p["gender"] = c["gender"]
+    p["voice"] = c["voice"]
+    p["avatar"] = c["avatar"]
+
+
+def create(character: str = "poppy", **_legacy) -> dict:
+    """Complete onboarding: pick a character, who becomes the companion (name, gender,
+    voice, look all come from the character)."""
     p = _load()
     now = datetime.now(timezone.utc).isoformat()
-    p["companion_name"] = (companion_name or "Poppy").strip()[:40] or "Poppy"
-    p["vibe"] = vibe or "friend"
-    p["avatar"] = avatar or "avaturn"
+    _apply_character(p, character or "poppy")
     p["onboarded"] = True
     if not p["created_at"]:
         p["created_at"] = now
     # Pin the personality this companion is calibrated on (§3.6).
     p["personality_version"], p["model"] = _current_signature()
+    _save(p)
+    return p
+
+
+def set_character(character: str) -> dict:
+    """Switch to a different character later (keeps memory, streak, everything else)."""
+    p = _load()
+    _apply_character(p, character)
     _save(p)
     return p
 
