@@ -68,6 +68,21 @@ def _parse(raw: str, source: str) -> list[dict]:
     return out
 
 
+# The LLM extractor shares the single on-device model, so running it after every
+# turn can make the NEXT reply wait behind it (an intermittent stall). Most turns
+# ("how are you", "haha yeah") carry nothing durable, so we only spend an LLM pass
+# when the message actually looks like a personal disclosure: enough words AND a
+# first-person reference. Everything else uses the free regex extractor.
+# Subject/possessive first person ("I", "my", "we") signals a disclosure ABOUT the
+# user; object forms ("me", "myself") mostly show up in commands ("tell me a joke"),
+# so they're deliberately excluded.
+_FIRST_PERSON = re.compile(r"\b(i|i'?m|i'?ve|i'?d|i'?ll|my|we|we'?re|our)\b", re.I)
+
+
+def _worth_llm(text: str) -> bool:
+    return len(text.split()) >= 4 and bool(_FIRST_PERSON.search(text))
+
+
 def _dedupe(candidates: list[dict]) -> list[dict]:
     """Drop candidates already known, of a suppressed category, or repeated."""
     existing = {t.lower() for t in memory_store.recall()}
@@ -89,9 +104,13 @@ async def propose(user_text: str) -> list[dict]:
     if not user_text:
         return []
 
+    # Cheap turns skip the LLM entirely (keeps the model free for the next reply).
+    if not _worth_llm(user_text):
+        return _dedupe(memory_store.regex_candidates(user_text))
+
     candidates: list[dict] = []
     try:
-        raw = await llm.complete(user_text, _SYSTEM, max_tokens=160)
+        raw = await llm.complete(user_text, _SYSTEM, max_tokens=120)
         candidates = _parse(raw, user_text)
     except Exception as e:
         print(f"[memory] LLM extraction failed, using regex fallback: {e}")
