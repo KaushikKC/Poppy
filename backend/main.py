@@ -8,6 +8,7 @@ from config import DETECTION_DEFAULT
 from ws_handler import handle_chat, clear_history as ws_clear_history
 import personas as persona_store
 import persona_suggest
+import characters
 import companion
 import opening
 import nudges
@@ -169,6 +170,12 @@ async def list_personas():
 
 # ── Companion profile + call lifecycle (POPPY_PRODUCT_PLAYBOOK §2–§6) ──────────
 
+@app.get("/characters")
+async def list_characters():
+    """The companion cast for the onboarding picker (name, gender, tagline, colour)."""
+    return characters.ui_list()
+
+
 @app.get("/companion")
 async def get_companion():
     """Full profile. `onboarded=false` tells the frontend to run onboarding."""
@@ -177,13 +184,14 @@ async def get_companion():
 
 @app.post("/companion")
 async def onboard_companion(payload: dict = Body(...)):
-    """Complete onboarding: name Poppy, pick a vibe and a look (§2.3/§2.4)."""
-    return await asyncio.to_thread(
-        companion.create,
-        payload.get("companion_name", ""),
-        payload.get("vibe", "friend"),
-        payload.get("avatar", "avaturn"),
-    )
+    """Complete onboarding: pick a character, who becomes the companion."""
+    return await asyncio.to_thread(companion.create, payload.get("character", "poppy"))
+
+
+@app.post("/companion/character")
+async def switch_character(payload: dict = Body(...)):
+    """Switch to a different character later (memory, streak, everything else stays)."""
+    return await asyncio.to_thread(companion.set_character, payload.get("character", "poppy"))
 
 
 @app.post("/companion/update")
@@ -339,8 +347,10 @@ async def home():
             remembers = f"I remember: {facts[-1]}"
     return {
         "companion_name": profile.get("companion_name", "Poppy"),
+        "character": profile.get("character", "poppy"),
+        "gender": profile.get("gender", "female"),
         "vibe": profile.get("vibe", "friend"),
-        "avatar": profile.get("avatar", "avaturn"),
+        "avatar": profile.get("avatar", "brunette"),
         "remembers": remembers,
         "current_streak": profile.get("current_streak", 0),
         "total_calls": profile.get("total_calls", 0),
