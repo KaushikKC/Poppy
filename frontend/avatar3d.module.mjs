@@ -50,6 +50,7 @@ const bridge = window.companionAvatar;
 let head = null;
 let headaudio = null;
 let wiring = false;
+let wiredAnalyser = null;   // the analyser HeadAudio is currently tapping
 let currentGender = "female";
 
 async function showFor(gender) {
@@ -125,7 +126,27 @@ async function init() {
 }
 
 async function wireHeadAudio(analyser) {
-  if (headaudio || wiring || !analyser || !head) return;
+  if (!analyser || !head) return;
+
+  // Already have HeadAudio — just make sure it's tapping the CURRENT analyser.
+  // (The audio player keeps one analyser for the whole session, but if it ever
+  // changes we re-point HeadAudio at it so the lips never go dead.)
+  if (headaudio) {
+    if (analyser !== wiredAnalyser) {
+      try { wiredAnalyser?.disconnect(headaudio); } catch {}
+      try {
+        analyser.connect(headaudio);
+        head.opt.update = headaudio.update.bind(headaudio);
+        wiredAnalyser = analyser;
+        console.info("[avatar3d] HeadAudio re-pointed at new analyser");
+      } catch (e) {
+        console.warn("[avatar3d] re-point failed:", e);
+      }
+    }
+    return;
+  }
+
+  if (wiring) return;
   wiring = true;
   try {
     const ctx = analyser.context;
@@ -145,10 +166,12 @@ async function wireHeadAudio(analyser) {
     analyser.connect(ha);                 // tap the playing voice
     head.opt.update = ha.update.bind(ha); // tick HeadAudio in TalkingHead's loop
     headaudio = ha;
+    wiredAnalyser = analyser;
     console.info("[avatar3d] HeadAudio wired — lips follow the voice");
   } catch (e) {
     console.error("[avatar3d] HeadAudio wiring failed:", e);
-    wiring = false; // allow a later retry if the analyser comes again
+  } finally {
+    wiring = false; // allow a later retry if wiring failed
   }
 }
 
