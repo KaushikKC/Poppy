@@ -123,7 +123,8 @@ def get(key: str) -> dict:
 
 
 def ui_list() -> list[dict]:
-    """Character metadata for the onboarding picker (no system_prompt)."""
+    """Character metadata for the onboarding picker (no system_prompt). `photo` is a
+    portrait image path when available; the picker falls back to a colour portrait."""
     return [
         {
             "key": k,
@@ -131,6 +132,9 @@ def ui_list() -> list[dict]:
             "gender": v["gender"],
             "tagline": v["tagline"],
             "color": v["color"],
+            # Portrait path: drop an image at frontend/avatar/characters/<key>.jpg and
+            # it's used automatically; until then the picker shows a colour monogram.
+            "photo": v.get("photo") or f"avatar/characters/{k}.jpg",
         }
         for k, v in CHARACTERS.items()
     ]
