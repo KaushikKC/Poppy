@@ -31,6 +31,11 @@
     onboarding.setAttribute("aria-hidden", v !== "onboarding");
     home.setAttribute("aria-hidden", v !== "home");
     document.body.dataset.view = v;
+    if (v === "call") {
+      // #stage just resized to the left column — nudge TalkingHead to refit the canvas.
+      requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+      setTimeout(() => window.dispatchEvent(new Event("resize")), 320);
+    }
   }
 
   // Point the 3D avatar at a character's gender (loads the male/female model).
@@ -48,9 +53,11 @@
       profile = { onboarded: false };
     }
     if (profile.onboarded) {
-      setAvatarGender(profile.gender);
-      await loadHome();
+      // Show home FIRST, so a later error (loadHome, etc.) can't leave the call
+      // view (#app) showing by default.
       setView("home");
+      setAvatarGender(profile.gender);
+      try { await loadHome(); } catch (e) { console.error("[flow] loadHome failed", e); }
     } else {
       startOnboarding();
     }
@@ -83,37 +90,134 @@
     await renderCharacterCards();
   }
 
+  // ── Character picker: a swipeable Tinder-style card stack ──────────────────
+  let _cast = [];
+  let _charIdx = 0;
+
   async function renderCharacterCards() {
-    const box = document.getElementById("ob-characters");
-    if (!box) return;
-    let cast = [];
+    const stack = document.getElementById("ob-char-stack");
+    if (!stack) return;
     try {
-      cast = await (await fetch(`${BACKEND}/characters`)).json();
+      _cast = await (await fetch(`${BACKEND}/characters`)).json();
     } catch {
-      cast = [];
+      _cast = [];
     }
-    box.innerHTML = "";
-    cast.forEach((c) => {
-      const card = document.createElement("button");
-      card.type = "button";
-      card.className = "ob-character";
-      card.style.setProperty("--char-color", c.color.outline);
-      card.innerHTML =
-        `<span class="ob-char-orb" style="background:${c.color.gradient}"></span>` +
-        `<strong>${c.name}</strong>` +
-        `<span class="ob-char-meta">${c.gender === "male" ? "He" : "She"} · ${c.tagline}</span>`;
-      card.addEventListener("click", () => {
-        ob.character = c.key;
-        ob.name = c.name;
-        box.querySelectorAll(".ob-character").forEach((x) => x.classList.remove("chosen"));
-        card.classList.add("chosen");
-        setAvatarGender(c.gender);
-        const ready = document.getElementById("ob-ready");
-        if (ready) ready.textContent = `${c.name} is ready when you are.`;
-        setTimeout(nextStep, 260); // let the selection register, then advance
-      });
-      box.appendChild(card);
+    _charIdx = 0;
+    renderCharStack();
+    renderCharDots();
+    document.getElementById("char-pass")?.addEventListener("click", () => swipeChar("left"));
+    document.getElementById("char-pick")?.addEventListener("click", () => swipeChar("right"));
+  }
+
+  function buildCharCard(c) {
+    const card = document.createElement("div");
+    card.className = "char-card";
+    card.dataset.key = c.key;
+    const portrait = c.photo
+      ? `<img class="char-photo" src="${c.photo}" alt="">`
+      : `<span class="char-mono">${c.name[0]}</span>`;
+    card.innerHTML =
+      `<div class="char-portrait" style="background:linear-gradient(155deg, ${c.color.gradient}, ${c.color.face})">` +
+        portrait +
+        `<div class="char-scrim"></div>` +
+        // name + what they are, overlaid on the portrait so they're always visible
+        `<div class="char-info">` +
+          `<div class="char-name">${c.name}<span class="char-gsym">${c.gender === "male" ? "♂" : "♀"}</span></div>` +
+          `<div class="char-tag">${c.tagline}</div>` +
+        `</div>` +
+        // Warm, relevant labels — you're meeting companions, not judging people.
+        `<span class="char-tag-pick">CHOOSE</span><span class="char-tag-pass">NEXT</span>` +
+      `</div>`;
+    // If a portrait image is set but missing/broken, fall back to the colour monogram.
+    if (c.photo) {
+      const img = card.querySelector(".char-photo");
+      img.onerror = () => {
+        const s = document.createElement("span");
+        s.className = "char-mono";
+        s.textContent = c.name[0];
+        img.replaceWith(s);
+      };
+    }
+    return card;
+  }
+
+  function renderCharStack() {
+    const stack = document.getElementById("ob-char-stack");
+    if (!stack || !_cast.length) return;
+    stack.innerHTML = "";
+    if (_cast.length > 1) {
+      const behind = buildCharCard(_cast[(_charIdx + 1) % _cast.length]);
+      behind.classList.add("behind");
+      stack.appendChild(behind);
+    }
+    const front = buildCharCard(_cast[_charIdx]);
+    stack.appendChild(front);
+    attachCharDrag(front);
+    highlightCharDot();
+  }
+
+  function selectCharacter(c) {
+    ob.character = c.key;
+    ob.name = c.name;
+    setAvatarGender(c.gender); // the avatar behind switches to match
+    const ready = document.getElementById("ob-ready");
+    if (ready) ready.textContent = `${c.name} is ready when you are.`;
+    nextStep();
+  }
+
+  function swipeChar(dir) {
+    const front = document.querySelector("#ob-char-stack .char-card:not(.behind)");
+    if (!front) return;
+    front.style.transition = "transform 0.35s ease, opacity 0.35s ease";
+    front.classList.add(dir === "right" ? "swipe-right" : "swipe-left");
+    const chosen = _cast[_charIdx];
+    setTimeout(() => {
+      if (dir === "right") selectCharacter(chosen);
+      else { _charIdx = (_charIdx + 1) % _cast.length; renderCharStack(); }
+    }, 320);
+  }
+
+  function attachCharDrag(card) {
+    let sx = 0, dx = 0, dragging = false;
+    card.addEventListener("pointerdown", (e) => {
+      dragging = true; sx = e.clientX; dx = 0;
+      card.style.transition = "none";
+      try { card.setPointerCapture(e.pointerId); } catch {}
     });
+    card.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      dx = e.clientX - sx;
+      card.style.transform = `translateX(${dx}px) rotate(${dx * 0.05}deg)`;
+      card.style.setProperty("--pick-op", Math.max(0, Math.min(1, dx / 110)));
+      card.style.setProperty("--pass-op", Math.max(0, Math.min(1, -dx / 110)));
+    });
+    const end = () => {
+      if (!dragging) return;
+      dragging = false;
+      card.style.transition = "transform 0.3s ease";
+      if (dx > 95) swipeChar("right");
+      else if (dx < -95) swipeChar("left");
+      else {
+        card.style.transform = "";
+        card.style.setProperty("--pick-op", 0);
+        card.style.setProperty("--pass-op", 0);
+      }
+      dx = 0;
+    };
+    card.addEventListener("pointerup", end);
+    card.addEventListener("pointercancel", end);
+  }
+
+  function renderCharDots() {
+    const dots = document.getElementById("char-dots");
+    if (!dots) return;
+    dots.innerHTML = _cast.map(() => "<i></i>").join("");
+    highlightCharDot();
+  }
+  function highlightCharDot() {
+    const dots = document.getElementById("char-dots");
+    if (!dots) return;
+    [...dots.children].forEach((d, i) => d.classList.toggle("on", i === _charIdx));
   }
 
   // "Next" buttons within onboarding advance the stepper.
@@ -384,6 +488,8 @@
 
     if (vibe && window.PersonaPicker) window.PersonaPicker.select(vibe);
     if (profile && profile.gender) setAvatarGender(profile.gender);
+    const nm = document.getElementById("call-name");
+    if (nm) nm.textContent = (profile && profile.companion_name) || "Poppy";
     const transcript = document.getElementById("transcript");
     if (transcript) transcript.innerHTML = "";
     window._lastUserText = "";
