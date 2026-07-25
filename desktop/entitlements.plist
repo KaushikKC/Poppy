@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Voice-first app: it records the microphone. (The usage-description string is
+       set in the Info.plist via poppys.spec.) -->
+  <key>com.apple.security.device.audio-input</key>
+  <true/>
+
+  <!-- MLX / PyTorch generate and run code at runtime (JIT, unsigned exec memory).
+       The hardened runtime blocks this unless these are granted. -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+
+  <!-- PyInstaller bundles many third-party .dylib/.so that aren't individually
+       signed by us; allow the app to load them under the hardened runtime. -->
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+
+  <!-- The launcher sets env vars (HF_HUB_OFFLINE, LLM_BACKEND, etc.) before
+       spawning Python. -->
+  <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+  <true/>
+</dict>
+</plist>
