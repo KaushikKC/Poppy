@@ -20,18 +20,18 @@ const MODE_NOTES: Record<Tone, { title: string; copy: string }> = {
 };
 
 const PRIVACY_NOTES: Record<PrivacyMode, string> = {
-  local: "Memory stays on this device.",
-  erase: "One tap clears the last check-in.",
-  quiet: "Muted until you invite Poppys in.",
+  local: "Everything runs on this device.",
+  erase: "One tap clears what she remembers.",
+  quiet: "Nothing is saved until you say yes.",
 };
 
 const CHECKIN_NOTES = [
-  "Take one breath. Name the feeling. Pick the smallest next step.",
-  "Poppys would ask softly: what do you need in the next ten minutes?",
-  "Saved for this moment only: gentle tone, no pressure, one doable action.",
+  "Pick a character, press call, and she speaks first.",
+  "No typing needed. Just talk, and she talks back in real time.",
+  "Saved for this moment only: her voice, her face, her full attention.",
 ];
 
-const DEFAULT_CHECKIN_NOTE = "Poppys will keep it soft, private, and practical.";
+const DEFAULT_CHECKIN_NOTE = "She picks up on the first ring, every time.";
 
 const MODE_METER_LEVELS = ["42%", "68%", "50%", "76%", "58%"];
 
@@ -48,37 +48,47 @@ const PRIVACY_OPTIONS: { key: PrivacyMode; label: string }[] = [
 ];
 
 const LOCAL_LIST = [
-  "Local-first memory",
-  "Clear delete controls",
-  "Muted by default",
-  "No public profile",
+  "Runs fully on-device",
+  "Encrypted memory",
+  "Consent before saving",
+  "No account, no cloud",
 ];
 
 const PRIVACY_FLOW: [string, string][] = [
-  ["01", "Local memory"],
-  ["02", "Visible controls"],
-  ["03", "Soft presence"],
+  ["01", "On-device"],
+  ["02", "Encrypted"],
+  ["03", "Consent-gated"],
 ];
 
 const MOTION_CARDS: { num: string; title: string; body: string; bg: string }[] = [
   {
     num: "01",
-    title: "Talk naturally",
-    body: "Open a quick voice check-in, type a thought, or let Poppys help you name what you are feeling.",
+    title: "Pick who picks up",
+    body: "Six characters, each with their own voice and personality. Swipe to the one you want, from Poppy to Ravi.",
     bg: "bg-[var(--night)]",
   },
   {
     num: "02",
-    title: "Remember gently",
-    body: "Keep the useful context: routines, preferences, small promises, and the tone you like.",
+    title: "Talk in real time",
+    body: "Press call and she speaks first. A face that talks back, listens, and answers out loud. No typing required.",
     bg: "bg-[var(--poppy)]",
   },
   {
     num: "03",
-    title: "Nudge kindly",
-    body: "Get soft reminders for water, walks, medicine, calls, journaling, or whatever keeps you steady.",
+    title: "Remember and nudge",
+    body: "With your consent she keeps what matters, then checks in with gentle rituals and streaks that keep you steady.",
     bg: "bg-[var(--leaf)]",
   },
+];
+
+// The on-device pipeline, stated plainly. Everything below runs locally.
+const TECH_STACK: { num: string; label: string; body: string }[] = [
+  { num: "01", label: "Speech to text", body: "Whisper, running on the Apple Silicon GPU." },
+  { num: "02", label: "The mind", body: "Llama 3.2 in-process, no server call." },
+  { num: "03", label: "Her voice", body: "Kokoro speaks each reply as it streams." },
+  { num: "04", label: "Her face", body: "A 3D avatar lip-synced to her voice." },
+  { num: "05", label: "Memory", body: "Encrypted SQLite, saved only on consent." },
+  { num: "06", label: "The shell", body: "A native desktop app for Mac and Windows." },
 ];
 
 // Shared utility recipes (kept inline-Tailwind, just DRY).
@@ -187,6 +197,7 @@ export default function Home() {
             ["#companion", "Companion"],
             ["#modes", "Modes"],
             ["#privacy", "Privacy"],
+            ["#stack", "Stack"],
           ].map(([href, label]) => (
             <a
               key={href}
@@ -296,7 +307,7 @@ export default function Home() {
           <div>
             <p className={EYEBROW}>What Poppys does</p>
             <h2 className="m-0 font-display text-[clamp(2.6rem,5.6vw,5.8rem)] font-normal leading-[0.95] text-[color:var(--leaf)] max-[620px]:text-[2.46rem]">
-              A companion that listens first, remembers softly, and responds with care.
+              Someone who picks up, talks back out loud, and remembers you.
             </h2>
           </div>
           <div className="grid grid-cols-[repeat(3,minmax(0,1fr))] gap-[8px] max-[980px]:grid-cols-1">
@@ -348,12 +359,12 @@ export default function Home() {
           <div>
             <p className={EYEBROW}>How it feels</p>
             <h2 className="font-display font-bold text-[24px] text-[color:rgba(7,18,7,0.76)]">
-              Not a dashboard. Not a chatbot box. A small presence that meets you where you
-              are.
+              Not a chatbot box. You call, she answers, and you actually hear her
+              voice.
             </h2>
             <p className="mt-[20px] w-[min(520px,100%)] text-[1rem] leading-[1.72] text-[color:rgba(7,18,7,0.72)] font-semibold">
-              The interface uses voice, expression, color, and motion to make check-ins
-              feel light, not clinical.
+              Her face reacts as she speaks, her voice carries the reply, and the whole
+              exchange happens in real time, on your machine.
             </p>
           </div>
         </section>
@@ -558,11 +569,11 @@ export default function Home() {
           </div>
           <div className="grid gap-[clamp(0.85rem,1.9vh,1.35rem)] max-[620px]:order-1 max-[620px]:gap-[12px]">
             <h2 className="m-0 pt-[40px] max-w-[12.5ch] font-display text-[clamp(3rem,5.3vw,6.25rem)] font-normal leading-[0.88] text-[color:var(--leaf)] max-[620px]:max-w-full max-[620px]:text-[clamp(2.35rem,12vw,3rem)] max-[620px]:leading-[0.94]">
-              Your companion should feel close without making your life feel exposed.
+              She can feel this close because nothing ever leaves your machine.
             </h2>
             <p className="m-0 w-[min(560px,100%)] text-[1rem] font-semibold leading-[1.65] text-[color:rgba(7,18,7,0.68)] max-[620px]:text-[0.86rem] max-[620px]:leading-[1.46]">
-              Every check-in is shaped around consent, calm defaults, and visible controls,
-              so the experience feels personal without becoming noisy.
+              Speech, replies, voice, and memory all run on-device. She only remembers
+              what you consent to keep, stored encrypted, with no account and no cloud.
             </p>
             <div
               aria-label="Privacy flow"
@@ -584,21 +595,53 @@ export default function Home() {
           </div>
         </section>
 
+        {/* TECH STACK */}
+        <section
+          id="stack"
+          className={`${SECTION} grid h-[100svh] min-h-[620px] content-center gap-[clamp(1.5rem,3.4vh,2.6rem)] py-[var(--section-pad)] max-[620px]:content-start max-[620px]:gap-[16px] max-[620px]:pb-[64px] max-[620px]:pt-[88px]`}
+        >
+          <div className="grid gap-[10px]">
+            <p className={EYEBROW}>Under the hood</p>
+            <h2 className="m-0 max-w-[16ch] font-display text-[clamp(2.6rem,5.4vw,5.6rem)] font-normal leading-[0.9] text-[color:var(--leaf)] max-[620px]:text-[2.4rem]">
+              The whole pipeline runs on your machine.
+            </h2>
+            <p className="m-0 w-[min(620px,100%)] text-[1rem] font-semibold leading-[1.6] text-[color:rgba(7,18,7,0.66)] max-[620px]:text-[0.86rem]">
+              Speech to text, the model, her voice, her face, and her memory. Every step
+              is local and open, with no API keys and nothing sent to a server.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-[10px] max-[980px]:grid-cols-2 max-[620px]:grid-cols-1 max-[620px]:gap-[8px]">
+            {TECH_STACK.map((item) => (
+              <article
+                key={item.num}
+                className="grid min-h-[128px] content-between rounded-[8px] border border-[color:var(--line)] bg-[rgba(255,248,234,0.62)] p-[16px] shadow-[0_18px_60px_rgba(7,18,7,0.08)] max-[620px]:min-h-[92px]"
+              >
+                <span className="font-mono text-[0.72rem] font-extrabold uppercase text-[color:var(--poppy)]">
+                  {item.num} {item.label}
+                </span>
+                <p className="m-0 mt-[10px] text-[1.02rem] font-bold leading-[1.32] text-[color:var(--leaf)] max-[620px]:text-[0.94rem]">
+                  {item.body}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+
         {/* CLOSING */}
         <section
           className={`${SECTION} grid h-[100svh] min-h-[620px] grid-cols-[minmax(0,1fr)_minmax(310px,0.72fr)] items-center gap-[clamp(2rem,6vw,6rem)] py-[var(--section-pad)] max-[980px]:grid-cols-1 max-[620px]:pb-[64px] max-[620px]:pt-[88px]`}
         >
           <div className="relative z-[2]">
-            <p className={EYEBROW}>First check-in</p>
+            <p className={EYEBROW}>Your first call</p>
             <h2 className="m-0 w-[min(820px,100%)] font-display text-[clamp(3rem,6.4vw,7rem)] font-normal leading-[0.9] text-[color:var(--leaf)] max-[620px]:text-[2.46rem]">
-              Start small: one honest sentence, one kind response, one next step.
+              Pick a character, press call, and let her say the first hello.
             </h2>
             <button
               className={`${PRIMARY} mt-[28px]`}
               type="button"
               onClick={handleCheckinClick}
             >
-              Start a check-in
+              Meet the characters
             </button>
             <p className="mt-[14px] min-h-[24px] text-[0.94rem] font-semibold text-[color:rgba(7,18,7,0.72)]">
               {checkinNote}
