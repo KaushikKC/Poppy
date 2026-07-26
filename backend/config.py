@@ -111,6 +111,12 @@ WHISPER_COMPUTE = os.getenv("WHISPER_COMPUTE", "int8")
 # (the UI then sends detect=true) when the user wants the reply voice/tone to adapt.
 DETECTION_DEFAULT = os.getenv("DETECTION_DEFAULT", "0") == "1"
 
+# TTS engine. "kokoro" (default) is the fast, light Apache-2.0 voice. The realistic
+# alternatives are opt-in (heavier, need a one-time model download): "parler" =
+# Indic Parler-TTS (native Indian accent), "chatterbox" = Chatterbox (voice-clone),
+# "qwen3" = Qwen3-TTS. A/B them with scripts/tts_ab.py before committing.
+TTS_BACKEND = os.getenv("TTS_BACKEND", "kokoro")
+
 # Multi-accent TTS (Kokoro). The companion replies in the speaker's detected
 # accent; voices are selected in accent.py and synthesized in tts.py.
 KOKORO_REPO_ID = "hexgrad/Kokoro-82M"

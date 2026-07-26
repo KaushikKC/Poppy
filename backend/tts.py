@@ -1,76 +1,36 @@
-import io
-import os
-import threading
-import wave
+"""TTS backend dispatcher.
 
-# Enable Apple-Silicon GPU fallback before torch/kokoro import so MPS can be used.
-os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+Selects the voice engine from TTS_BACKEND (kokoro | parler | qwen3 | chatterbox)
+and exposes one interface — synthesize_to_wav_bytes / warmup / SAMPLE_RATE — so the
+rest of the app doesn't care which is active. The chosen backend is imported lazily
+so an unused one's heavy deps (parler-tts, chatterbox, …) are never loaded.
 
-import numpy as np
-from kokoro import KModel, KPipeline
+To A/B the realistic voices, run scripts/tts_ab.py — it drives each backend module
+directly and writes labeled WAVs to compare.
+"""
 
-from config import KOKORO_REPO_ID, KOKORO_SAMPLE_RATE, KOKORO_DEVICE
-from accent import voice_for
+from config import TTS_BACKEND
 
-# One language-blind model, shared across all accent pipelines (saves memory).
-_model: KModel | None = None
-# One pipeline per language code (G2P + voice cache), lazily created.
-_pipelines: dict[str, KPipeline] = {}
-# Serialize inference: a single torch model shouldn't be driven by concurrent threads.
-_lock = threading.Lock()
+if TTS_BACKEND == "parler":
+    import tts_parler as _backend
+elif TTS_BACKEND == "qwen3":
+    import tts_qwen3 as _backend
+elif TTS_BACKEND == "chatterbox":
+    import tts_chatterbox as _backend
+else:
+    import tts_kokoro as _backend
 
-
-def _get_model() -> KModel:
-    global _model
-    if _model is None:
-        _model = KModel(repo_id=KOKORO_REPO_ID)
-        # Optionally pin TTS to a specific device (e.g. "cpu") so it doesn't
-        # contend with the LLM on the GPU. Empty = leave Kokoro's own default.
-        if KOKORO_DEVICE:
-            _model = _model.to(KOKORO_DEVICE)
-    return _model
-
-
-def _get_pipeline(lang_code: str) -> KPipeline:
-    if lang_code not in _pipelines:
-        _pipelines[lang_code] = KPipeline(
-            lang_code=lang_code, model=_get_model(), repo_id=KOKORO_REPO_ID
-        )
-    return _pipelines[lang_code]
-
-
-def warmup() -> None:
-    """Pre-load the Kokoro model + default pipeline so the first real synthesis
-    isn't a cold start. That cold first call (model load + Metal warmup) is what
-    otherwise delays the first audio of the opening turn by several seconds."""
-    try:
-        synthesize_to_wav_bytes("Hello there.")
-    except Exception:
-        pass
+# The active backend's native sample rate (ws_handler reports it to the client so
+# the browser's AudioContext matches whatever engine is speaking).
+SAMPLE_RATE = _backend.SAMPLE_RATE
 
 
 def synthesize_to_wav_bytes(
     text: str, accent: str | None = None, gender: str | None = None,
     voice: str | None = None,
 ) -> bytes:
-    """Synthesize `text`, return WAV bytes (24 kHz mono). An explicit `voice` (a
-    character's own Kokoro voice) wins; otherwise the voice is chosen from accent +
-    gender. The Kokoro language code is the voice's first letter (a/b/h)."""
-    if voice:
-        lang_code = voice[0]
-    else:
-        lang_code, voice = voice_for(accent, gender)
+    return _backend.synthesize_to_wav_bytes(text, accent, gender, voice)
 
-    with _lock:
-        pipeline = _get_pipeline(lang_code)
-        buf = io.BytesIO()
-        with wave.open(buf, "wb") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(KOKORO_SAMPLE_RATE)
-            for result in pipeline(text, voice=voice):
-                if result.audio is None:
-                    continue
-                pcm = (result.audio.numpy() * 32767).clip(-32768, 32767).astype(np.int16)
-                wf.writeframes(pcm.tobytes())
-    return buf.getvalue()
+
+def warmup() -> None:
+    _backend.warmup()

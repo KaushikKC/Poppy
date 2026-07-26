@@ -2,6 +2,7 @@ import asyncio
 import uuid
 from fastapi import WebSocket, WebSocketDisconnect
 from llm import stream_reply
+import tts
 from tts import synthesize_to_wav_bytes
 from phrase_chunker import PhraseChunker
 from config import (
@@ -54,7 +55,7 @@ async def _say(ws: WebSocket, text: str, accent: str, voice: str):
     """Speak a line the companion initiates herself (the opening line, an end-of-call
     sign-off) — TTS + on-screen text, no LLM turn. Mirrors the chat path's
     phrase-chunked streaming so the first audio still starts almost immediately."""
-    await ws.send_json({"type": "config", "sampleRate": KOKORO_SAMPLE_RATE})
+    await ws.send_json({"type": "config", "sampleRate": tts.SAMPLE_RATE})
     chunker = PhraseChunker()
     tts_tasks: list[asyncio.Task] = []
 
@@ -139,7 +140,7 @@ async def handle_chat(ws: WebSocket):
             reply_accent = char["accent"]
             reply_voice = char["voice"]
 
-            await ws.send_json({"type": "config", "sampleRate": KOKORO_SAMPLE_RATE})
+            await ws.send_json({"type": "config", "sampleRate": tts.SAMPLE_RATE})
 
             chunker = PhraseChunker()
             full_reply: list[str] = []
