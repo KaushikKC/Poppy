@@ -67,8 +67,37 @@ Make TTS swappable and let the user *hear* the options side by side.
   Parler needs none.
 
 ## Build order
-1. Code the dispatcher + backends + A/B harness (no downloads) — **now**.
-2. Free disk, install Parler (+ Chatterbox), run the A/B, pick the voice.
+1. Code the dispatcher + backends + A/B harness (no downloads) — ✅ done.
+2. Free disk, install Parler (+ Chatterbox), run the A/B, pick the voice — ✅ done.
 3. Wire the winner, measure latency.
 4. Silero VAD.
 5. Avatar.
+
+---
+
+## Findings — the A/B, measured on the dev Mac (M-series, no dedicated GPU) · 2026-07-26
+
+Same three lines (English / supportive / Hinglish) through each engine:
+
+| Engine | Voice | Realism | **Speed / line** | Real-time? |
+|---|---|---|---|---|
+| **Kokoro** (current) | female | robotic | **0.7 s** | ✅ |
+| **Chatterbox** (natural default) | male | excellent | **16–58 s** | ❌ |
+| **Chatterbox** (cloned from a Kokoro ref) | female | sounded robotic | 12–16 s | ❌ |
+| **Indic Parler-TTS** | **female, native Indian** | excellent | **100–150 s** | ❌❌ |
+| MeloTTS (EN-INDIA) | female, Indian | decent, fast | not completed | — |
+
+Clips saved to `/tmp/poppy_tts_ab/` (kokoro_*, chatterbox_*, chatterbox_NATURAL_*, parler_*).
+
+### What we learned
+1. **Realistic TTS is real and great** — Parler is a genuinely realistic *native Indian female* voice; Chatterbox's natural voice is clearly human. The quality bar is achievable.
+2. **But it is NOT locally-fast on this Mac.** The realistic models are 6–10× bigger than Kokoro and fall back to CPU on Metal → 16 s (Chatterbox) to **150 s** (Parler) per sentence. Unusable for a real-time call, and too slow even for a chatbot.
+3. **A cloning mistake to avoid:** cloning Chatterbox from a Kokoro-generated reference reproduced Kokoro's *robotic* quality (that's why the first female A/B "sounded the same"). Clone from a real human clip, or use a native voice (Parler).
+4. **Install gotchas (macOS / Py 3.12):** parler-tts needs `--no-build-isolation` (old-setuptools build breaks on 3.12); `ai4bharat/indic-parler-tts` is **gated** (HF login + accept license); MeloTTS needs `brew install mecab` + `unidic`; big model downloads blow the disk fast (HF cache hit 29 GB).
+5. **Fundamental trade-off (proven, not guessed):** on this hardware you can have *fast* OR *realistic*, not both. Fast → small model → robotic (Kokoro). Realistic → big model → too slow.
+
+### Decision / recommendation
+- **Realistic + fast + Indian requires a GPU or a cloud TTS.** The cost-conscious, India-first choice is **Sarvam AI** (real-time, Indian voices, free tier, far cheaper than ElevenLabs). Data/memory can still stay on-device; only text→audio goes to the cloud.
+- The pluggable `tts.py` dispatcher makes swapping in Sarvam (or any engine) a drop-in.
+- **6 characters → 6 voices** is trivial once the engine is chosen (each character maps to a speaker/voice).
+- Local realistic TTS on this Mac is a dead end — stop chasing it; keep Kokoro as the fast fallback.
