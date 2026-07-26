@@ -15,6 +15,7 @@
   const pill   = document.getElementById("status-pill");
   const label  = document.getElementById("status-label");
   const eq     = document.getElementById("status-eq");
+  const turnLabel = document.getElementById("turn-label");
   if (!app || !dot || !pill || !label) return;
 
   const LABELS = {
@@ -41,6 +42,19 @@
     pill.className = visual;
     label.textContent = LABELS[state];
     app.dataset.state = visual;
+
+    // Turn-taking pill — never ambiguous whose turn it is.
+    if (turnLabel) {
+      const nm = document.getElementById("call-name")?.textContent?.trim() || "She";
+      const TURN = {
+        idle: "Your turn",
+        thinking: "Thinking…",
+        speaking: `${nm} is speaking`,
+        listening: "Listening to you",
+        transcribing: "Got that…",
+      };
+      turnLabel.textContent = TURN[state] || "Your turn";
+    }
   }
 
   const opts = { attributes: true, attributeFilter: ["class"] };
@@ -63,15 +77,23 @@
       // sample the voice band (skip the top half — mostly empty for speech)
       const usable = Math.floor(freq.length / 2);
       const bucket = Math.max(1, Math.floor(usable / bars.length));
+      let total = 0;
       bars.forEach((bar, i) => {
         let sum = 0;
         for (let j = i * bucket; j < (i + 1) * bucket; j++) sum += freq[j];
         const level = sum / bucket / 255;
+        total += level;
         bar.style.transform = `scaleY(${Math.max(0.15, Math.min(1, level * 1.6)).toFixed(2)})`;
       });
-    } else if (eq?.classList.contains("live")) {
-      eq.classList.remove("live");
-      bars.forEach((bar) => (bar.style.transform = ""));
+      // overall amplitude → the avatar's voice-reactive aura
+      const amp = Math.min(1, (total / bars.length) * 2.4);
+      app.style.setProperty("--amp", amp.toFixed(3));
+    } else {
+      if (eq?.classList.contains("live")) {
+        eq.classList.remove("live");
+        bars.forEach((bar) => (bar.style.transform = ""));
+      }
+      app.style.setProperty("--amp", "0");
     }
     requestAnimationFrame(tick);
   }

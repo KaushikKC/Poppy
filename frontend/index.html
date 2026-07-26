@@ -101,6 +101,13 @@
   <div id="paywall" class="hidden" aria-hidden="true"></div>
 
   <div id="app" class="hidden">
+    <!-- "Calling…" connect veil — a warm moment before she picks up -->
+    <div id="connect-veil" class="hidden" aria-live="polite">
+      <div class="connect-core" aria-hidden="true"><span></span><span></span><span></span></div>
+      <p class="connect-title">Calling <span id="connect-name">Poppy</span></p>
+      <p class="connect-sub">She picks up in a moment…</p>
+    </div>
+
     <!-- ── LEFT: the stage — the character's presence (3D avatar shows through) ── -->
     <section class="call-stage">
       <header class="call-top">
@@ -126,7 +133,15 @@
       </header>
 
       <!-- the 3D avatar (full-page #stage behind) occupies this area -->
-      <div id="stage-spacer"></div>
+      <div id="stage-spacer">
+        <!-- voice-reactive aura rings that breathe with her voice -->
+        <div class="call-aura" aria-hidden="true"><span></span><span></span><span></span></div>
+        <!-- turn-taking indicator — never ambiguous whose turn it is -->
+        <div id="turn-pill" class="turn-pill">
+          <span class="turn-dot" aria-hidden="true"></span>
+          <span id="turn-label">Your turn</span>
+        </div>
+      </div>
 
       <!-- control dock -->
       <div class="dock" role="toolbar" aria-label="Call controls">
@@ -172,6 +187,23 @@
     <div id="memory-panel" class="hidden"></div>
     <div id="persona-picker" class="hidden"></div>
     <div id="persona-suggestion" class="hidden"></div>
+  </div>
+
+  <!-- ── End-of-call ritual (§4): warm sign-off + what she remembered ── -->
+  <div id="outro" class="hidden" role="dialog" aria-modal="true" aria-label="Call ended">
+    <div class="outro-card">
+      <p class="outro-kicker">Call ended</p>
+      <h2 id="outro-line">Talk soon, okay?</h2>
+      <div id="outro-remember" class="hidden">
+        <p class="outro-remember-kicker">She'll remember</p>
+        <p id="outro-remember-text"></p>
+      </div>
+      <div class="outro-actions">
+        <button type="button" id="outro-again" class="outro-primary">Call again</button>
+        <button type="button" id="outro-done" class="outro-ghost">Done for now</button>
+      </div>
+      <p class="outro-note">Nothing left your device.</p>
+    </div>
   </div>
 
   <script src="audio_player.js"></script>

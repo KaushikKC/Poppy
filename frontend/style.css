@@ -1178,3 +1178,82 @@ body[data-view="call"] #memory-panel:not(.hidden) {
   top: 4.6rem; left: clamp(1rem, 3vw, 2.4rem);
   width: min(360px, 42vw); max-height: 68vh; overflow-y: auto;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Call polish — connect veil, voice aura, turn pill, view transitions, outro.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* smooth fade when switching onboarding / home / call */
+#onboarding:not(.hidden), #home:not(.hidden), #app:not(.hidden) { animation: view-fade 0.45s ease both; }
+@keyframes view-fade { from { opacity: 0; transform: scale(1.008); } to { opacity: 1; transform: none; } }
+
+/* ── "Calling…" connect veil ── */
+#connect-veil {
+  position: fixed; inset: 0; z-index: 45; display: grid; place-items: center;
+  background: radial-gradient(60% 50% at 50% 42%, rgba(151,196,232,0.5), rgba(255,248,234,0.96) 70%);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  animation: view-fade 0.35s ease both;
+}
+.connect-core { position: relative; width: 120px; height: 120px; margin-bottom: 1.5rem; display: grid; place-items: center; }
+.connect-core::after { content: ""; width: 46px; height: 46px; border-radius: 50%; background: var(--poppy); box-shadow: 0 10px 34px -6px var(--poppy); }
+.connect-core span {
+  position: absolute; inset: 0; margin: auto; width: 60px; height: 60px; border-radius: 50%;
+  border: 2px solid var(--poppy); opacity: 0; animation: connect-ring 2.2s ease-out infinite;
+}
+.connect-core span:nth-child(2) { animation-delay: 0.73s; }
+.connect-core span:nth-child(3) { animation-delay: 1.46s; }
+@keyframes connect-ring { 0% { transform: scale(0.7); opacity: 0.7; } 100% { transform: scale(2.7); opacity: 0; } }
+.connect-title { font-family: var(--font-display); font-size: 1.85rem; color: var(--leaf); }
+.connect-sub { color: rgba(7,18,7,0.55); font-size: 0.95rem; margin-top: 0.25rem; }
+
+/* ── voice-reactive aura (breathes with --amp, set by ui.js) ── */
+#stage-spacer { position: relative; }
+.call-aura { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.call-aura span {
+  position: absolute; border-radius: 50%; border: 1px solid var(--field-deep);
+  opacity: calc(0.05 + var(--amp, 0) * 0.34);
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+.call-aura span:nth-child(1) { width: min(34vh,300px); height: min(34vh,300px); transform: scale(calc(1 + var(--amp,0)*0.06)); }
+.call-aura span:nth-child(2) { width: min(46vh,420px); height: min(46vh,420px); transform: scale(calc(1 + var(--amp,0)*0.09)); opacity: calc(0.04 + var(--amp,0)*0.22); }
+.call-aura span:nth-child(3) { width: min(58vh,540px); height: min(58vh,540px); transform: scale(calc(1 + var(--amp,0)*0.12)); opacity: calc(0.03 + var(--amp,0)*0.14); }
+
+/* ── turn-taking pill ── */
+.turn-pill {
+  position: absolute; left: 50%; bottom: 6%; transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: 0.5rem; white-space: nowrap;
+  padding: 0.42rem 0.95rem; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow);
+  font-family: var(--font-mono); font-size: 0.64rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--leaf);
+  transition: color 0.25s;
+}
+.turn-pill .turn-dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(7,18,7,0.35); }
+#app[data-state="speaking"] .turn-dot { background: var(--field-deep); animation: pulse 0.7s infinite; }
+#app[data-state="listening"] .turn-dot { background: var(--poppy); animation: pulse 0.8s infinite; }
+#app[data-state="thinking"]  .turn-dot { background: var(--amber); animation: pulse 1s infinite; }
+#app[data-state="listening"] .turn-pill { color: var(--poppy); }
+
+/* ── end-of-call ritual ── */
+#outro {
+  position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; padding: 1.5rem;
+  background: radial-gradient(70% 60% at 50% 30%, rgba(151,196,232,0.4), rgba(255,248,234,0.96) 70%);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); animation: view-fade 0.4s ease both;
+}
+.outro-card {
+  width: min(460px, 100%); text-align: center;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: var(--shadow); padding: clamp(1.6rem, 5vw, 2.6rem);
+  display: flex; flex-direction: column; gap: 0.9rem;
+  animation: panel-in 0.45s var(--ease-spring) both;
+}
+.outro-kicker, .outro-remember-kicker { font-family: var(--font-mono); font-size: 0.64rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--field-deep); }
+#outro-line { font-family: var(--font-display); font-weight: 400; font-size: clamp(1.5rem, 4.5vw, 2.1rem); line-height: 1.22; color: var(--ink); }
+#outro-remember { background: rgba(151,196,232,0.16); border: 1px solid var(--line); border-radius: 10px; padding: 0.8rem 1rem; }
+#outro-remember-text { font-size: 0.98rem; color: rgba(7,18,7,0.82); margin-top: 0.2rem; }
+.outro-actions { display: flex; gap: 0.6rem; justify-content: center; margin-top: 0.3rem; }
+.outro-primary { padding: 0.7rem 1.6rem; border: none; border-radius: 10px; background: var(--poppy); color: var(--cream); font-family: var(--font-sans); font-weight: 700; cursor: pointer; transition: transform .2s var(--ease-spring), background .2s; }
+.outro-primary:hover { transform: translateY(-2px); background: #f6303b; }
+.outro-ghost { padding: 0.7rem 1.4rem; border: 1.5px solid var(--line); border-radius: 10px; background: transparent; color: var(--leaf); font-family: var(--font-sans); font-weight: 700; cursor: pointer; }
+.outro-ghost:hover { border-color: var(--field-deep); }
+.outro-note { font-size: 0.75rem; color: rgba(7,18,7,0.45); }

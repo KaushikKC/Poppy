@@ -34,6 +34,10 @@ class AudioPlayer {
 
   setSampleRate(sampleRate) {
     this._ensureCtx(sampleRate);
+    // New turn: start its playout buffer fresh so the first chunk gets the full
+    // cushion (otherwise a slightly-slow first phrase stutters). The context +
+    // analyser are kept (lip-sync stays wired); only the schedule resets.
+    this._nextStart = 0;
   }
 
   onPlaybackStart(fn) { this._onStart = fn; }

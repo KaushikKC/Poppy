@@ -500,10 +500,30 @@
     _callbackOffered = !!r.callback_offered;
     _callStart = Date.now();
 
+    // "Calling…" veil until she picks up (hidden when she starts speaking).
+    const veil = document.getElementById("connect-veil");
+    const cn = document.getElementById("connect-name");
+    if (cn) cn.textContent = (profile && profile.companion_name) || "Poppy";
+    veil?.classList.remove("hidden");
+    if (_veilFallback) clearTimeout(_veilFallback);
+    _veilFallback = setTimeout(() => veil?.classList.add("hidden"), 7000);
+
     // She speaks first (§4). A short beat so the view has settled and engines are
     // warm, then her voice opens the call.
     setTimeout(() => window.speakLine?.(opening), 350);
   }
+  let _veilFallback = null;
+
+  // Hide the connect veil the moment she actually starts speaking.
+  (function watchConnect() {
+    const dot = document.getElementById("status-dot");
+    if (!dot) return;
+    new MutationObserver(() => {
+      if (dot.classList.contains("speaking")) {
+        document.getElementById("connect-veil")?.classList.add("hidden");
+      }
+    }).observe(dot, { attributes: true, attributeFilter: ["class"] });
+  })();
 
   // ── Upgrade prompt (§8) — abundance framing, never shown at a vulnerable moment ──
   const paywall = document.getElementById("paywall");
@@ -564,11 +584,26 @@
 
   document.getElementById("end-call-btn")?.addEventListener("click", endCall);
 
+  // End-of-call ritual (§4): warm sign-off + what she'll remember, then a choice.
   async function endCall() {
     try { window.interruptReply?.(); } catch {}
     const loop = (window._lastUserText || "").trim();
-    // A warm sign-off with a forward hook — the open loop that pulls them back (§4).
-    if (loop) window.speakLine?.("I'll be thinking about you. Tell me how it goes, okay?");
+    const signoff = loop
+      ? "I'll be thinking about you. Tell me how it goes, okay?"
+      : "Talk soon, okay?";
+
+    // Fill and show the outro card.
+    const outro = document.getElementById("outro");
+    document.getElementById("outro-line").textContent = signoff;
+    const rem = document.getElementById("outro-remember");
+    const remText = document.getElementById("outro-remember-text");
+    if (loop) { remText.textContent = loop; rem.classList.remove("hidden"); }
+    else rem.classList.add("hidden");
+    outro?.classList.remove("hidden");
+
+    // Speak the sign-off warmly over the ritual card.
+    if (loop) window.speakLine?.(signoff);
+
     const durationS = _callStart ? (Date.now() - _callStart) / 1000 : 0;
     try {
       await fetch(`${BACKEND}/call/close`, {
@@ -583,9 +618,19 @@
     } catch {}
     _callStart = 0;
     window._lastUserText = "";
-    await loadHome();
-    setTimeout(() => setView("home"), loop ? 600 : 0);
   }
+
+  document.getElementById("outro-done")?.addEventListener("click", async () => {
+    document.getElementById("outro")?.classList.add("hidden");
+    try { window.interruptReply?.(); } catch {}
+    await loadHome();
+    setView("home");
+  });
+  document.getElementById("outro-again")?.addEventListener("click", () => {
+    document.getElementById("outro")?.classList.add("hidden");
+    try { window.interruptReply?.(); } catch {}
+    startCall({ vibe: (profile && profile.vibe) || null });
+  });
 
   boot();
 })();
