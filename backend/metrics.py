@@ -14,6 +14,7 @@ from datetime import date, datetime, timezone
 
 import db
 import companion
+import loops
 
 _MEANINGFUL_MIN_SECONDS = 60  # a call is "meaningful" at >= 60s (or if it saved a memory)
 
@@ -68,13 +69,27 @@ def dashboard() -> dict:
     weeks = max((day_span or 0) / 7, 1)
     callbacks_offered = len(by.get("callback_offered", []))
     callbacks_landed = len(by.get("callback_landed", []))
+    self_started = len(by.get("call_self_initiated", []))
     saves = len(by.get("memory_saved", []))
     edits = len(by.get("memory_edited", []))
     deletes = len(by.get("memory_deleted", []))
 
+    # RETENTION_ENGINE §10 — the two numbers that decide everything. Both are
+    # computed from state the loop engine already keeps; no transcript text is
+    # involved, only counts.
+    loop_counts = loops.counts()
+
     return {
         # Activation
         "first_call_ge_60s": first_call_ge_60s,           # the north-star proxy
+        # The open-loop engine's health (§10). Target > 0.45.
+        "loop_close_rate": loop_counts["close_rate"],
+        "loops_planted": loop_counts["planted"],
+        "loops_open": loop_counts["open"],
+        "loops_expired": loop_counts["expired"],
+        # Habit vs. prod (§10). Target > 0.65 by week 3. If this falls while total
+        # calls rise, we are renting engagement rather than building a habit.
+        "user_initiated_rate": _rate(self_started, len(started)),
         # Core magic — "she knows me"
         "callback_land_rate": _rate(callbacks_landed, callbacks_offered),
         # Retention
