@@ -8,9 +8,10 @@ that the old app was missing entirely:
   * identity   — the name the user gave Poppy, the chosen vibe, the avatar preset
   * ritual     — an opt-in morning/night time the user chose (§6)
   * streak     — days connected, celebrated gently, never punished (§6)
-  * open loops — the forward hooks Poppy plants at the end of a call ("tell me how
-                 it goes"), which drive the home-screen "she remembers" strip and,
-                 later, notifications (§4/§6)
+  * open loops — the forward hooks Poppy plants at the end of a call, which drive
+                 the opener, the home-screen strip and the notification. The model
+                 itself lives in `loops.py` (RETENTION_ENGINE §1); this module just
+                 forwards to it and migrates the pre-engine entries across.
 
 It is plain JSON (config, not conversation content) in the per-user data dir, next
 to the SQLite history and the encrypted memory. Single-user local app, so one
@@ -23,7 +24,6 @@ from datetime import date, datetime, timezone
 import paths
 
 _PATH = paths.user_data_dir() / "companion_profile.json"
-_MAX_OPEN_LOOPS = 10
 
 _DEFAULTS = {
     "onboarded": False,
@@ -42,8 +42,9 @@ _DEFAULTS = {
     "ritual_kind": None,         # "morning" | "night" | None
     "last_reminded_date": None,  # local ISO date the ritual was met (talked/dismissed)
     "last_notified_date": None,  # local ISO date the native OS reminder last fired
-    "open_loops": [],            # legacy global list (migrated into per-character below)
-    "open_loops_by_character": {},  # {character: [{text, created_at}]} — per-character memory
+    # Both drained into loops.py on first run; the real loop model lives there now.
+    "open_loops": [],               # legacy global list
+    "open_loops_by_character": {},  # legacy {character: [{text, created_at}]}
     "personality_version": None, # the vibe-prompt version Poppy was pinned to (§3.6)
     "model": None,               # the LLM model her personality was calibrated on
     "celebrated_milestones": [], # streak milestones already celebrated, so we don't repeat
@@ -267,37 +268,48 @@ def days_since_last_call() -> int | None:
     return (_today() - date.fromisoformat(last)).days
 
 
-def _effective_loops(p: dict) -> list:
-    """This character's open loops, folding in any legacy global loops as belonging to
-    the current character (read-only — the fold is persisted on the next add)."""
-    char = p.get("character", "poppy")
-    loops = list((p.get("open_loops_by_character") or {}).get(char, []))
-    if p.get("open_loops"):  # pre-per-character global loops → treat as this character's
-        loops = (loops + p["open_loops"])[-_MAX_OPEN_LOOPS:]
-    return loops
+def _migrate_loops() -> None:
+    """Hand the old `{text, created_at}` entries to the loop engine, once.
 
-
-def add_open_loop(text: str) -> None:
-    """Store a forward hook the character planted at the end of a call (§4), scoped to
-    the CURRENT character so each companion remembers its own conversations."""
-    text = (text or "").strip()
-    if not text:
-        return
+    Those entries were never authored hooks — the pre-engine build stored the
+    user's own last utterance — so loops.py takes them in at minimum strength and
+    lets them fall away behind the first real hook.
+    """
+    import loops
     p = _load()
-    char = p.get("character", "poppy")
-    obc = p.setdefault("open_loops_by_character", {})
-    loops = _effective_loops(p)
-    p["open_loops"] = []  # migrated into the character bucket now
-    loops.append({"text": text, "created_at": datetime.now(timezone.utc).isoformat()})
-    obc[char] = loops[-_MAX_OPEN_LOOPS:]
-    _save(p)
+    legacy = dict(p.get("open_loops_by_character") or {})
+    if p.get("open_loops"):
+        char = p.get("character", "poppy")
+        legacy[char] = list(legacy.get(char, [])) + p["open_loops"]
+    if not legacy:
+        loops.migrate_from_profile({})
+        return
+    if loops.migrate_from_profile(legacy):
+        p["open_loops"] = []
+        p["open_loops_by_character"] = {}
+        _save(p)
+
+
+def add_open_loop(text: str, kind: str = "question", strength: float | None = None) -> dict | None:
+    """Plant a forward hook for the CURRENT character (§1.3). Thin wrapper kept so
+    callers don't need to know about loops.py; the model lives there."""
+    import loops
+    _migrate_loops()
+    return loops.plant(text, kind, strength=strength)
+
+
+def open_loop() -> dict | None:
+    """The single ranked open loop to surface right now, or None (§1.3 Rule 1)."""
+    import loops
+    _migrate_loops()
+    return loops.top()
 
 
 def latest_open_loop() -> str | None:
-    """The current character's most recent open loop (their memory, not another
-    character's)."""
-    loops = _effective_loops(_load())
-    return loops[-1]["text"] if loops else None
+    """The text of the loop to surface, softened if it has decayed. Kept under the
+    original name because the opener and the nudge composer both call it."""
+    import loops
+    return loops.surface_text(open_loop())
 
 
 def as_prompt_block() -> str:
@@ -309,7 +321,7 @@ def as_prompt_block() -> str:
     loop = latest_open_loop()
     if loop:
         line += (
-            f"\nLast time you told the user: \"{loop}\" — if it comes up naturally, "
-            "follow up on it warmly."
+            f"\nLast time you left this hanging with the user: \"{loop}\" — close it "
+            "early and warmly, before anything else."
         )
     return line
