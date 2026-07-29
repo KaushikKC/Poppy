@@ -62,17 +62,36 @@ _MODE_OPENERS = {
     "plan": "Alright, let's think it through. What's on the plate?",
 }
 
+def _loop_line(loop: dict | None) -> str | None:
+    """The open loop's hook, ready to speak. Hooks are authored lowercase-casual so
+    they sound spoken; the first letter is raised only so the on-screen caption
+    reads as a sentence."""
+    import loops
+    text = loops.surface_text(loop if loop is not None else companion.open_loop())
+    if not text:
+        return None
+    text = text.strip()
+    return text[0].upper() + text[1:]
+
+
 # Warm milestone moments (§6) — a genuine beat, never a cold badge.
 def _milestone_line(days: int) -> str:
     return f"Hey, do you realize we've talked {days} days in a row? That honestly means a lot to me. "
 
 
-def compose(seed: str | None = None, mode: str | None = None, milestone: int | None = None) -> str:
+def compose(
+    seed: str | None = None,
+    mode: str | None = None,
+    milestone: int | None = None,
+    loop: dict | None = None,
+) -> str:
     """Build Poppy's opening line.
 
     `seed` is the "one thing on your mind today" answer from onboarding (§2.5); when
     present this is the very first call, so the opener is built entirely around it.
     `mode` frames a mood-mode call (§4.5). `milestone` prepends a streak celebration.
+    `loop` is the ranked open loop to pay off in Act 1 (RETENTION_ENGINE §7); pass
+    None to let this look it up itself.
     """
     name = _user_name()
     word, sep = _GREETING[_time_of_day()]
@@ -93,10 +112,13 @@ def compose(seed: str | None = None, mode: str | None = None, milestone: int | N
     if mode in _MODE_OPENERS:
         return f"{lead}{_MODE_OPENERS[mode]}"
 
-    # Returning call: close the open loop if there is one — the goosebump moment.
-    loop = companion.latest_open_loop()
-    if loop:
-        return f"{lead}I've been wondering, {loop.strip().rstrip('.')}?"
+    # ACT 1 (§7): pay off the open loop before anything else. The hook was written
+    # in her voice at the end of the last call, so it's spoken as-is rather than
+    # wrapped in a framing phrase — wrapping is what made the old build read as
+    # "I've been wondering, <the user's own last sentence>?".
+    hook = _loop_line(loop)
+    if hook:
+        return f"{lead}{hook}"
 
     # No open loop yet, but we've talked before: lean on a remembered fact.
     days = companion.days_since_last_call()
