@@ -99,9 +99,17 @@ def _apply_character(p: dict, character: str) -> None:
     p["avatar"] = c["avatar"]
 
 
-def create(character: str = "poppy", **_legacy) -> dict:
+def create(character: str = "poppy", seed: str | None = None, **_legacy) -> dict:
     """Complete onboarding: pick a character, who becomes the companion (name, gender,
-    voice, look all come from the character)."""
+    voice, look all come from the character).
+
+    Endowed progress (RETENTION_ENGINE §2, §8 day 0): onboarding never ends at
+    zero. The one thing the user typed on the way in is saved as a real memory and
+    planted as the first open loop, so the home screen already has something on it
+    and the relationship has visibly started. Nothing is fabricated to fill the
+    space — if they skipped the question, there is simply less, and the empty
+    surfaces stay hidden instead (§8).
+    """
     p = _load()
     now = datetime.now(timezone.utc).isoformat()
     _apply_character(p, character or "poppy")
@@ -111,6 +119,17 @@ def create(character: str = "poppy", **_legacy) -> dict:
     # Pin the personality this companion is calibrated on (§3.6).
     p["personality_version"], p["model"] = _current_signature()
     _save(p)
+
+    seed = (seed or "").strip()
+    if seed:
+        import memory_store
+        import loops
+        memory_store.remember(seed, "ongoing", why="the first thing you told me")
+        # Lower strength than an authored hook, so the first real call's closing
+        # loop takes the visible slot from it rather than competing with it.
+        hook = loops.from_user_words(seed, lead="when we first talked you mentioned")
+        if hook:
+            loops.plant(hook, "serial", strength=0.35)
     return p
 
 
