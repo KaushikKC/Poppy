@@ -63,12 +63,20 @@ def _guard(text: str) -> str:
 
 
 def compose_nudge(kind: str | None = None) -> str:
-    """A personal, specific, forward-looking reminder in Poppy's voice — built from
-    the user's own open loop where possible, or the chosen ritual otherwise. Always
-    guarded before it leaves this function."""
+    """A personal, specific, forward-looking reminder in Poppy's voice.
+
+    RETENTION_ENGINE §1.4 / §6: **we never write a notification, we surface the
+    open loop.** The hook was already authored in her voice at the end of the last
+    call, so it is sent verbatim rather than wrapped in a reminder sentence —
+    wrapping it turns her line into an app notice, which is the thing that gets
+    muted. The ritual lines below are the only fallback, and they fire only
+    because the user set that time themselves.
+
+    Always guarded before it leaves this function.
+    """
     loop = companion.latest_open_loop()
     if loop:
-        candidate = f"I've been wondering how things are going with what you mentioned: {loop}."
+        candidate = loop
     elif kind == "morning":
         candidate = "Morning. Want to start the day together for a minute?"
     elif kind == "night":
