@@ -209,6 +209,44 @@ def check_milestone() -> int | None:
     return None
 
 
+# §3.2 — the depth meter, surfaced as stages rather than points. A relationship
+# with a score attached stops feeling like a relationship, so this never renders a
+# number and there is nothing here to grind.
+CLOSENESS_STAGES = (
+    "New",
+    "Getting to know you",
+    "Knows you",
+    "Knows you well",
+    "Knows you better than most people do",
+)
+
+# (stage index, calls needed, memories needed). Driven by memories and sessions —
+# deliberately NOT by minutes, which is the metric §10 warns ends the company.
+_CLOSENESS_THRESHOLDS = ((2, 5, 3), (3, 15, 8), (4, 40, 20))
+
+
+def closeness() -> dict:
+    """How well she knows the user, as a stage (§3.2).
+
+    Endowed progress (§2): once onboarding is done this never reads "New" — the
+    user starts at "Getting to know you" because they have in fact already
+    started. Progress artificially pre-started roughly doubles completion, and a
+    first sight of zero is the single most anti-retention thing a surface can show.
+    """
+    import memory_store
+    p = _load()
+    if not p.get("onboarded"):
+        return {"stage": 0, "label": CLOSENESS_STAGES[0]}
+
+    calls = p.get("total_calls", 0)
+    memories = len(memory_store.records())
+    stage = 1
+    for idx, need_calls, need_memories in _CLOSENESS_THRESHOLDS:
+        if calls >= need_calls and memories >= need_memories:
+            stage = idx
+    return {"stage": stage, "label": CLOSENESS_STAGES[stage]}
+
+
 def set_ritual(kind: str | None, time_str: str | None) -> dict:
     """Opt into (or clear) a daily ritual time the user chose themselves (§6). A
     ritual the user picks is a habit; a ping they didn't ask for is spam."""
