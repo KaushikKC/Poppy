@@ -324,13 +324,39 @@ async def get_nudge():
 
 @app.post("/call/close")
 async def close_call(payload: dict = Body(default={})):
-    """End a call: store the forward hook Poppy planted (§4) and log content-free
-    call metrics (§12). `duration_s` is the call length; a call is "meaningful" at
-    >= 60s (or if it saved a memory)."""
+    """End a call: resolve the loop she opened on, author the next one (§1, §7 Act
+    3), and log content-free call metrics (§12).
+
+    `duration_s` is the call length; a call is "meaningful" at >= 60s (or if it
+    saved a memory). The returned `open_loop` is the hook to render on the outro
+    keepsake card.
+    """
     data = payload or {}
-    loop = data.get("open_loop")
-    if loop:
-        await asyncio.to_thread(companion.add_open_loop, loop)
+    turns = list(ws_handler.conversation_history)
+    spoke = any(t.get("role") == "user" and t.get("content") for t in turns)
+
+    # §1.3 Rule 3: the loop she opened on is resolved once the user actually
+    # engaged with it. Hanging up without saying anything is not a resolution —
+    # the loop stays live and gets another chance rather than being silently
+    # counted as paid off.
+    surfaced_id = data.get("surfaced_loop_id")
+    if surfaced_id and spoke:
+        await asyncio.to_thread(loops.resolve, surfaced_id)
+        await asyncio.to_thread(db.record_event, "loop_resolved")
+
+    # §1.3 Rule 5: the end of every payoff is the start of the next hook, so a
+    # call that had a real conversation never ends without planting one.
+    planted = None
+    if spoke:
+        try:
+            hook = await loop_author.author(turns)
+            planted = await asyncio.to_thread(
+                companion.add_open_loop, hook["hook"], hook["type"],
+            )
+        except Exception as e:
+            print(f"[loops] could not plant a loop at close: {e}")
+    if planted:
+        await asyncio.to_thread(db.record_event, "loop_planted")
 
     duration = float(data.get("duration_s") or 0)
     meaningful = duration >= 60 or bool(data.get("saved_memory"))
@@ -339,7 +365,11 @@ async def close_call(payload: dict = Body(default={})):
         await asyncio.to_thread(db.record_event, "meaningful_session", duration)
         if data.get("callback_offered"):
             await asyncio.to_thread(db.record_event, "callback_landed")
-    return {"ok": True, "meaningful": meaningful}
+    return {
+        "ok": True,
+        "meaningful": meaningful,
+        "open_loop": planted.get("hook_text") if planted else None,
+    }
 
 
 @app.get("/entitlement")
