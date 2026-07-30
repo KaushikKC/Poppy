@@ -200,8 +200,15 @@ async def get_companion():
 
 @app.post("/companion")
 async def onboard_companion(payload: dict = Body(...)):
-    """Complete onboarding: pick a character, who becomes the companion."""
-    return await asyncio.to_thread(companion.create, payload.get("character", "poppy"))
+    """Complete onboarding: pick a character, who becomes the companion.
+
+    `seed` is the "one thing on your mind today" answer. Passing it here rather
+    than only into the first call is what lets onboarding end non-empty (§2
+    endowed progress): it becomes a real memory and the first open loop.
+    """
+    return await asyncio.to_thread(
+        companion.create, payload.get("character", "poppy"), payload.get("seed"),
+    )
 
 
 @app.post("/companion/character")
