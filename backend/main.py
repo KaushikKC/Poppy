@@ -7,11 +7,14 @@ from fastapi.responses import Response
 from stt import transcribe
 from config import DETECTION_DEFAULT, AVATAR_BACKEND
 from ws_handler import handle_chat, clear_history as ws_clear_history
+import ws_handler
 import avatar
 import personas as persona_store
 import persona_suggest
 import characters
 import companion
+import loops
+import loop_author
 import opening
 import nudges
 import notify
@@ -248,19 +251,36 @@ async def open_call(payload: dict = Body(default={})):
 
     profile = await asyncio.to_thread(companion.record_call)
     milestone = await asyncio.to_thread(companion.check_milestone)
-    line = await asyncio.to_thread(opening.compose, data.get("seed"), data.get("mode"), milestone)
-    # A "callback" is offered when the opener follows up on a stored open loop —
-    # not on the first-call seed or a mood-mode entry (§12 "she knows me" proxy).
-    callback_offered = bool(
-        not data.get("seed") and not data.get("mode")
-        and await asyncio.to_thread(companion.latest_open_loop)
+
+    # ACT 1 (RETENTION_ENGINE §7): the opener pays off the open loop before
+    # anything else. The seed call is the very first one (no history to owe), and
+    # a mood-mode entry is already framed, so neither surfaces a loop.
+    surfaced = None
+    if not data.get("seed") and not data.get("mode"):
+        surfaced = await asyncio.to_thread(companion.open_loop)
+
+    line = await asyncio.to_thread(
+        opening.compose, data.get("seed"), data.get("mode"), milestone, surfaced,
     )
+
+    if surfaced:
+        await asyncio.to_thread(loops.mark_surfaced, surfaced["id"])
+        await asyncio.to_thread(db.record_event, "loop_surfaced")
+
+    # §10: habit vs. prod. A call the user started themselves is worth more than
+    # one a notification dragged in, and the ratio between them is the health of
+    # the habit — so the two are distinguishable in the log.
     await asyncio.to_thread(db.record_event, "call_started")
+    if data.get("source") != "notification":
+        await asyncio.to_thread(db.record_event, "call_self_initiated")
+
+    callback_offered = bool(surfaced)
     if callback_offered:
         await asyncio.to_thread(db.record_event, "callback_offered")
     return {
         "opening": line, "profile": profile,
         "milestone": milestone, "callback_offered": callback_offered,
+        "surfaced_loop_id": surfaced["id"] if surfaced else None,
     }
 
 
