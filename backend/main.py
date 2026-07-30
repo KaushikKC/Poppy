@@ -402,14 +402,17 @@ async def get_metrics():
 
 @app.get("/home")
 async def home():
-    """Everything the home screen needs in one call (§3): who Poppy is, the
-    "she remembers" callback strip, and the streak."""
+    """Everything the home screen needs in one call (§3): who Poppy is, the single
+    open loop, and the streak.
+
+    RETENTION_ENGINE §1.4 surface 2: the strip is the ranked open loop **in her
+    voice**, because it doubles as the reason to tap Call. It is not labelled or
+    framed as an app notice — the itch works only if it reads as her talking.
+    """
     profile = await asyncio.to_thread(companion.profile)
-    loop = await asyncio.to_thread(companion.latest_open_loop)
-    remembers = None
-    if loop:
-        remembers = f"Last time — {loop}"
-    else:
+    loop = await asyncio.to_thread(companion.open_loop)
+    remembers = await asyncio.to_thread(loops.surface_text, loop)
+    if not remembers:
         facts = await asyncio.to_thread(memory_store.recall)
         if facts:
             remembers = f"I remember: {facts[-1]}"
@@ -420,6 +423,7 @@ async def home():
         "vibe": profile.get("vibe", "friend"),
         "avatar": profile.get("avatar", "brunette"),
         "remembers": remembers,
+        "closeness": await asyncio.to_thread(companion.closeness),
         "current_streak": profile.get("current_streak", 0),
         "total_calls": profile.get("total_calls", 0),
         "ritual_kind": profile.get("ritual_kind"),
