@@ -100,6 +100,12 @@ const BTN_BASE =
 const PRIMARY = `${BTN_BASE} bg-[var(--poppy)] text-[color:var(--cream)] shadow-[0_16px_36px_rgba(152,16,26,0.26)]`;
 const SECONDARY = `${BTN_BASE} border border-[rgba(255,248,234,0.72)] bg-[var(--cream)] text-[color:var(--leaf)] hover:border-[var(--cream)]`;
 
+// The Mac download. Uses the "latest release" URL so it always points at the newest
+// published DMG — no need to touch the site when we ship an update. The GitHub release
+// asset must be named Poppys.dmg.
+const DOWNLOAD_MAC =
+  "https://github.com/KaushikKC/Poppy/releases/latest/download/Poppys.dmg";
+
 export default function Home() {
   const [tone, setTone] = useState<Tone>("calm");
   const [privacyMode, setPrivacyMode] = useState<PrivacyMode>("local");
@@ -288,14 +294,20 @@ export default function Home() {
               Not a chatbot you type at. A face that talks back in real time, remembers
               you, and is genuinely happy to hear from you.
             </p>
-            <div className="mt-[22px] flex flex-wrap gap-[10px]">
-              <a className={PRIMARY} href="#modes">
+            <div className="mt-[22px] flex flex-wrap items-center gap-[10px]">
+              <a className={PRIMARY} href={DOWNLOAD_MAC}>
+                Download for Mac
+              </a>
+              <a className={SECONDARY} href="#modes">
                 Meet Poppy
               </a>
               <button className={SECONDARY} type="button" onClick={handleBloomButtonClick}>
                 Bloom the mark
               </button>
             </div>
+            <p className="mt-[10px] font-mono text-[0.72rem] font-extrabold uppercase tracking-wide text-[color:rgba(255,248,234,0.72)]">
+              Free · macOS · Apple notarized · 100% on-device
+            </p>
           </div>
         </section>
 
@@ -636,13 +648,14 @@ export default function Home() {
             <h2 className="m-0 w-[min(820px,100%)] font-display text-[clamp(3rem,6.4vw,7rem)] font-normal leading-[0.9] text-[color:var(--leaf)] max-[620px]:text-[2.46rem]">
               Pick a character, press call, and let her say the first hello.
             </h2>
-            <button
-              className={`${PRIMARY} mt-[28px]`}
-              type="button"
-              onClick={handleCheckinClick}
-            >
-              Meet the characters
-            </button>
+            <div className="mt-[28px] flex flex-wrap items-center gap-[10px]">
+              <a className={PRIMARY} href={DOWNLOAD_MAC}>
+                Download for Mac
+              </a>
+              <button className={SECONDARY} type="button" onClick={handleCheckinClick}>
+                Meet the characters
+              </button>
+            </div>
             <p className="mt-[14px] min-h-[24px] text-[0.94rem] font-semibold text-[color:rgba(7,18,7,0.72)]">
               {checkinNote}
             </p>
