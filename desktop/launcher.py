@@ -23,6 +23,18 @@ os.environ.setdefault(
     "LLM_BACKEND", "mlx" if sys.platform == "darwin" else "llamacpp"
 )
 
+# ── Fork-bomb guard for the packaged app (CRITICAL) ──────────────────────────
+# A frozen macOS/Windows build uses the multiprocessing "spawn" start method,
+# which re-launches THIS executable for every worker process any library creates.
+# Without freeze_support(), each spawned worker falls through to main() and opens
+# another app window — an infinite spawn loop that opens endless copies of the app
+# and crashes the machine. freeze_support() intercepts a spawned worker here,
+# before any heavy import or the GUI, so it does its job and exits. It is a no-op
+# in the parent process and in dev, so it is always safe to call.
+import multiprocessing
+
+multiprocessing.freeze_support()
+
 import html
 import logging
 import subprocess
