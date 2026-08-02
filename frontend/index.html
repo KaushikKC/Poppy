@@ -208,6 +208,8 @@
 
   <script src="audio_player.js"></script>
   <script src="avatar_bridge.js"></script>
+  <script src="orb_avatar.js"></script>
+  <script src="musetalk_clip.js"></script>
   <script src="vad.js"></script>
   <script src="persona_picker.js"></script>
   <script src="chat.js"></script>
@@ -218,6 +220,8 @@
        call window.sendMessage / window.speakLine and PersonaPicker) -->
   <script src="flow.js"></script>
   <!-- 3D avatar controller (ES module, loads after the classic scripts) -->
-  <script type="module" src="avatar3d.module.mjs"></script>
+  <!-- v1 uses the local orb avatar (orb_avatar.js). The 3D/realistic avatar is
+       shelved; re-enable this line to bring it back. -->
+  <!-- <script type="module" src="avatar3d.module.mjs"></script> -->
 </body>
 </html>

@@ -160,6 +160,7 @@
     ob.character = c.key;
     ob.name = c.name;
     setAvatarGender(c.gender); // the avatar behind switches to match
+    if (c.color) window.companionAvatar?.setColors?.(c.color); // tint the orb
     const ready = document.getElementById("ob-ready");
     if (ready) ready.textContent = `${c.name} is ready when you are.`;
     nextStep();
@@ -280,6 +281,103 @@
       });
       modes.dataset.built = "1";
     }
+
+    // Tint the orb to the current character, and offer a way to switch companion.
+    tintOrbForCurrent(h.character || (profile && profile.character));
+    ensureSwitchButton();
+  }
+
+  // ── Change companion from home (memory/voice/orb all swap with it) ───────────
+  function tintOrbForCurrent(key) {
+    if (!key || !window.companionAvatar) return;
+    const hit = (_cast || []).find((x) => x.key === key);
+    if (hit && hit.color) { window.companionAvatar.setColors(hit.color); return; }
+    fetch(`${BACKEND}/characters`).then((r) => r.json()).then((cast) => {
+      _cast = cast;
+      const c = cast.find((x) => x.key === key);
+      if (c && c.color) window.companionAvatar.setColors(c.color);
+    }).catch(() => {});
+  }
+
+  function ensureSwitchButton() {
+    if (document.getElementById("home-switch")) return;
+    const host = document.getElementById("home-modes")?.parentNode || home;
+    const b = document.createElement("button");
+    b.id = "home-switch";
+    b.type = "button";
+    b.textContent = "Change companion";
+    Object.assign(b.style, {
+      display: "block", margin: "14px auto 0", padding: "10px 16px",
+      borderRadius: "10px", border: "1px solid rgba(255,255,255,0.28)",
+      background: "rgba(255,255,255,0.06)", color: "inherit",
+      fontWeight: "700", cursor: "pointer",
+    });
+    b.addEventListener("click", openCharacterSwitch);
+    host.appendChild(b);
+  }
+
+  async function openCharacterSwitch() {
+    let cast = _cast;
+    if (!cast || !cast.length) {
+      try { cast = _cast = await (await fetch(`${BACKEND}/characters`)).json(); }
+      catch { return; }
+    }
+    const current = profile && profile.character;
+    const ov = document.createElement("div");
+    ov.id = "char-switch";
+    Object.assign(ov.style, {
+      position: "fixed", inset: "0", zIndex: "70", padding: "24px",
+      background: "rgba(5,10,7,0.80)", backdropFilter: "blur(12px)",
+      display: "flex", flexDirection: "column", alignItems: "center",
+      justifyContent: "center", gap: "16px",
+    });
+    const title = document.createElement("div");
+    title.textContent = "Who do you want to talk to?";
+    Object.assign(title.style, { color: "#eaf3ec", fontWeight: "800", fontSize: "1.15rem" });
+    const grid = document.createElement("div");
+    Object.assign(grid.style, {
+      display: "grid", gridTemplateColumns: "repeat(3, minmax(96px, 120px))",
+      gap: "12px", maxWidth: "420px",
+    });
+    cast.forEach((c) => {
+      const card = document.createElement("button");
+      card.type = "button";
+      Object.assign(card.style, {
+        border: "2px solid " + (c.key === current ? (c.color?.outline || "#7c6ef0") : "rgba(255,255,255,0.14)"),
+        borderRadius: "14px", overflow: "hidden", cursor: "pointer",
+        background: (c.color && c.color.gradient) || "#12100f", color: "#eaf3ec", padding: "0",
+      });
+      const img = c.photo
+        ? `<img src="${c.photo}" style="width:100%;height:96px;object-fit:cover;display:block" onerror="this.remove()">`
+        : "";
+      card.innerHTML = img +
+        `<div style="padding:7px 4px;font-weight:700;font-size:.86rem">${c.name}${c.key === current ? " •" : ""}</div>`;
+      card.addEventListener("click", () => chooseCharacter(c, ov));
+      grid.appendChild(card);
+    });
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.textContent = "Cancel";
+    Object.assign(cancel.style, {
+      padding: "9px 18px", borderRadius: "9px", border: "1px solid rgba(255,255,255,0.25)",
+      background: "transparent", color: "#eaf3ec", fontWeight: "700", cursor: "pointer",
+    });
+    cancel.addEventListener("click", () => ov.remove());
+    ov.append(title, grid, cancel);
+    document.body.appendChild(ov);
+  }
+
+  async function chooseCharacter(c, ov) {
+    try {
+      profile = await (await fetch(`${BACKEND}/companion/character`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ character: c.key }),
+      })).json();
+    } catch {}
+    setAvatarGender(c.gender);
+    if (c.color) window.companionAvatar?.setColors?.(c.color);
+    if (ov) ov.remove();
+    await loadHome();
   }
 
   // §3.6 — if Poppy's personality changed under the user (model/prompt update),

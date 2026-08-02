@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Poppy orb preview</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #07120a; color: #eaf3ec;
+      font-family: system-ui, -apple-system, sans-serif; }
+    #stage { position: relative; width: 100vw; height: 74vh; }
+    #controls { position: fixed; bottom: 0; left: 0; right: 0; display: flex;
+      flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px;
+      background: rgba(6,16,10,0.9); backdrop-filter: blur(8px); }
+    .lbl { font-size: 12px; opacity: .6; width: 100%; margin: 0 0 -2px 2px; }
+    button { padding: 9px 13px; border-radius: 8px; border: 1px solid rgba(255,255,255,.18);
+      background: rgba(255,255,255,.06); color: #eaf3ec; font-weight: 700; cursor: pointer; }
+    button.on { background: #2a7; border-color: #3c9; color: #04140b; }
+    .sep { flex-basis: 100%; height: 0; }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="controls">
+    <div class="lbl">State</div>
+    <button data-state="idle" class="on">Idle</button>
+    <button data-state="listening">Listening</button>
+    <button data-state="thinking">Thinking</button>
+    <button data-state="speaking">Speaking (simulated voice)</button>
+    <div class="sep"></div>
+    <div class="lbl">Character color</div>
+    <button data-color="poppy" class="on">Poppy</button>
+    <button data-color="luna">Luna</button>
+    <button data-color="zoe">Zoe</button>
+    <button data-color="leo">Leo</button>
+    <button data-color="kai">Kai</button>
+    <button data-color="ravi">Ravi</button>
+  </div>
+
+  <script src="avatar_bridge.js"></script>
+  <script src="orb_avatar.js"></script>
+  <script>
+    const A = window.companionAvatar;
+
+    // Mirror of the per-character palettes in backend/characters.py
+    const COLORS = {
+      poppy: { gradient: "#2d2248", eyes: "#9b8ff5", outline: "#7c6ef0", glow: "124,110,240" },
+      luna:  { gradient: "#1a3a4a", eyes: "#4fc3f7", outline: "#0288d1", glow: "2,136,209" },
+      zoe:   { gradient: "#4a1a2a", eyes: "#f48fb1", outline: "#e91e63", glow: "233,30,99" },
+      leo:   { gradient: "#24401d", eyes: "#8bd97a", outline: "#4caf50", glow: "76,175,80" },
+      kai:   { gradient: "#4a2c11", eyes: "#ffb74d", outline: "#f57c00", glow: "245,124,0" },
+      ravi:  { gradient: "#164545", eyes: "#4dd0c4", outline: "#009688", glow: "0,150,136" },
+    };
+    A.setColors(COLORS.poppy);
+
+    // Fake analyser so the "speaking" pulse works without mic/audio permission.
+    let speaking = false, ph = 0;
+    const mock = {
+      frequencyBinCount: 64,
+      getByteFrequencyData(arr) {
+        ph += 0.09;
+        const env = speaking ? (0.45 + 0.4 * Math.sin(ph) + 0.18 * Math.sin(ph * 2.7)) : 0;
+        for (let i = 0; i < arr.length; i++) {
+          arr[i] = Math.max(0, Math.min(255, 255 * env * (0.55 + 0.45 * Math.random())));
+        }
+      },
+    };
+    A.setAnalyser(mock);
+
+    document.querySelectorAll("[data-state]").forEach((b) => b.onclick = () => {
+      document.querySelectorAll("[data-state]").forEach((x) => x.classList.remove("on"));
+      b.classList.add("on");
+      speaking = b.dataset.state === "speaking";
+      A.setState(b.dataset.state);
+    });
+    document.querySelectorAll("[data-color]").forEach((b) => b.onclick = () => {
+      document.querySelectorAll("[data-color]").forEach((x) => x.classList.remove("on"));
+      b.classList.add("on");
+      A.setColors(COLORS[b.dataset.color]);
+    });
+  </script>
+</body>
+</html>

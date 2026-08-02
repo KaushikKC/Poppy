@@ -22,8 +22,11 @@ node_modules/
 *.db-shm
 *.db-wal
 companion.key
-companion_memory.enc
+companion_memory*.enc
 companion_profile.json
+
+# Large local assets (e.g. an Unreal character pack), never commit.
+girl19/
 
 # user-supplied avatar assets (private + large): portrait poster + video loops
 frontend/avatar/face.jpg

@@ -35,8 +35,36 @@ import paths
 
 _ROOT = paths.user_data_dir()
 _KEY_PATH = _ROOT / "companion.key"
-_DATA_PATH = _ROOT / "companion_memory.enc"
+# Memory is PER-CHARACTER: each character has its own encrypted file, so switching
+# characters switches whose memories are in play — a character you've never spoken to
+# starts blank, and one you have talked to gets its memories back. The Fernet key is
+# shared across all of them.
+_LEGACY_DATA_PATH = _ROOT / "companion_memory.enc"  # the old single global store
 _MAX_FACTS = 60
+
+
+def _active_character() -> str:
+    """The character whose memory is currently in play (the profile's chosen one)."""
+    try:
+        import companion
+        return companion.profile().get("character") or "poppy"
+    except Exception:
+        return "poppy"
+
+
+def _data_path():
+    """This character's encrypted memory file. One-time migration: if the old global
+    store still exists and the current character has no file yet, adopt it here (so the
+    user's existing memories stay with the character they're using), then remove the
+    global file. New characters therefore start with a blank memory."""
+    path = _ROOT / f"companion_memory_{_active_character()}.enc"
+    if _LEGACY_DATA_PATH.exists() and not path.exists():
+        try:
+            path.write_bytes(_LEGACY_DATA_PATH.read_bytes())
+            _LEGACY_DATA_PATH.unlink()
+        except OSError:
+            pass
+    return path
 
 # The memory categories the product exposes (§5). `temporary` facts carry a TTL and
 # self-expire; `sensitive` is off by default and only ever stored on explicit opt-in.
@@ -105,10 +133,11 @@ def _migrate_old(texts: list[str]) -> list[dict]:
 
 def _read() -> dict:
     """Decrypt and return the full store: {records, suppressed}."""
-    if not _DATA_PATH.exists():
+    path = _data_path()
+    if not path.exists():
         return {"records": [], "suppressed": []}
     try:
-        raw = _fernet().decrypt(_DATA_PATH.read_bytes())
+        raw = _fernet().decrypt(path.read_bytes())
         data = json.loads(raw)
     except (InvalidToken, json.JSONDecodeError, ValueError):
         return {"records": [], "suppressed": []}
@@ -122,10 +151,11 @@ def _read() -> dict:
 
 
 def _write(store: dict) -> None:
+    path = _data_path()
     blob = json.dumps(store).encode("utf-8")
-    _DATA_PATH.write_bytes(_fernet().encrypt(blob))
+    path.write_bytes(_fernet().encrypt(blob))
     try:
-        os.chmod(_DATA_PATH, 0o600)
+        os.chmod(path, 0o600)
     except OSError:
         pass
 
@@ -242,8 +272,11 @@ def suppress_category(category: str) -> None:
 
 
 def forget_all() -> None:
-    if _DATA_PATH.exists():
-        _DATA_PATH.unlink()
+    """Forget everything — for the CURRENT character only (other characters' memories
+    are untouched)."""
+    path = _data_path()
+    if path.exists():
+        path.unlink()
 
 
 # ── Prompt injection ───────────────────────────────────────────────────────────

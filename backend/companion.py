@@ -42,7 +42,8 @@ _DEFAULTS = {
     "ritual_kind": None,         # "morning" | "night" | None
     "last_reminded_date": None,  # local ISO date the ritual was met (talked/dismissed)
     "last_notified_date": None,  # local ISO date the native OS reminder last fired
-    "open_loops": [],            # list of {text, created_at}
+    "open_loops": [],            # legacy global list (migrated into per-character below)
+    "open_loops_by_character": {},  # {character: [{text, created_at}]} — per-character memory
     "personality_version": None, # the vibe-prompt version Poppy was pinned to (§3.6)
     "model": None,               # the LLM model her personality was calibrated on
     "celebrated_milestones": [], # streak milestones already celebrated, so we don't repeat
@@ -113,7 +114,9 @@ def create(character: str = "poppy", **_legacy) -> dict:
 
 
 def set_character(character: str) -> dict:
-    """Switch to a different character later (keeps memory, streak, everything else)."""
+    """Switch to a different character later. Memory and open loops are per-character
+    (so each companion remembers only its own conversations); the streak and ritual are
+    the user's own habit and stay shared."""
     p = _load()
     _apply_character(p, character)
     _save(p)
@@ -264,20 +267,36 @@ def days_since_last_call() -> int | None:
     return (_today() - date.fromisoformat(last)).days
 
 
+def _effective_loops(p: dict) -> list:
+    """This character's open loops, folding in any legacy global loops as belonging to
+    the current character (read-only — the fold is persisted on the next add)."""
+    char = p.get("character", "poppy")
+    loops = list((p.get("open_loops_by_character") or {}).get(char, []))
+    if p.get("open_loops"):  # pre-per-character global loops → treat as this character's
+        loops = (loops + p["open_loops"])[-_MAX_OPEN_LOOPS:]
+    return loops
+
+
 def add_open_loop(text: str) -> None:
-    """Store a forward hook Poppy planted at the end of a call (§4)."""
+    """Store a forward hook the character planted at the end of a call (§4), scoped to
+    the CURRENT character so each companion remembers its own conversations."""
     text = (text or "").strip()
     if not text:
         return
     p = _load()
-    loops = p.get("open_loops", [])
+    char = p.get("character", "poppy")
+    obc = p.setdefault("open_loops_by_character", {})
+    loops = _effective_loops(p)
+    p["open_loops"] = []  # migrated into the character bucket now
     loops.append({"text": text, "created_at": datetime.now(timezone.utc).isoformat()})
-    p["open_loops"] = loops[-_MAX_OPEN_LOOPS:]
+    obc[char] = loops[-_MAX_OPEN_LOOPS:]
     _save(p)
 
 
 def latest_open_loop() -> str | None:
-    loops = _load().get("open_loops", [])
+    """The current character's most recent open loop (their memory, not another
+    character's)."""
+    loops = _effective_loops(_load())
     return loops[-1]["text"] if loops else None
 
 
