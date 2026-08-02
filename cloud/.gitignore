@@ -1,0 +1,8 @@
+# Voice/portrait assets and model caches live on the box, never in git.
+refs/*.wav
+refs/*.mp3
+portraits/*.jpg
+portraits/*.png
+*.pt
+*.ckpt
+__pycache__/

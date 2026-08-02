@@ -11,11 +11,13 @@ from config import (
     SAFETY_ADDENDUM,
     CRISIS_ADDENDUM,
     DISTRESS_ADDENDUM,
+    AVATAR_BACKEND,
 )
 import safety
 import memory_store
 import companion
 import characters
+import avatar
 import emotion as emotion_mod
 import db
 
@@ -51,10 +53,28 @@ def _trim_history():
         del conversation_history[: len(conversation_history) - cap]
 
 
+async def _reply_video(ws: WebSocket, text: str, voice: str):
+    """Deliver one turn as a talking-head clip instead of streamed audio
+    (AVATAR_BACKEND=video). The reply text still streams to the bubble; the clip
+    (rendered on the GPU box, audio baked in) is fetched by the browser at the sent
+    URL. If rendering is unavailable the client just keeps its static avatar."""
+    clip_id = await asyncio.to_thread(avatar.render, text, voice)
+    if clip_id:
+        await ws.send_json({"type": "avatar_clip", "url": f"/avatar/clip/{clip_id}"})
+
+
 async def _say(ws: WebSocket, text: str, accent: str, voice: str):
     """Speak a line the companion initiates herself (the opening line, an end-of-call
     sign-off) — TTS + on-screen text, no LLM turn. Mirrors the chat path's
     phrase-chunked streaming so the first audio still starts almost immediately."""
+    # Video-avatar mode: reveal the line, render one clip (which carries its own
+    # audio), and skip the phrase-audio streaming entirely.
+    if AVATAR_BACKEND == "video":
+        await ws.send_json({"type": "token", "text": text})
+        await _reply_video(ws, text, voice)
+        await ws.send_json({"type": "done"})
+        return
+
     await ws.send_json({"type": "config", "sampleRate": tts.SAMPLE_RATE})
     chunker = PhraseChunker()
     tts_tasks: list[asyncio.Task] = []
@@ -139,6 +159,27 @@ async def handle_chat(ws: WebSocket):
             # not the user's detected voice.
             reply_accent = char["accent"]
             reply_voice = char["voice"]
+
+            # Video-avatar mode (AVATAR_BACKEND=video): stream the reply text, then
+            # render one talking-head clip on the GPU box (voice baked in) instead of
+            # streaming phrase audio. Leaves the local-audio path below untouched.
+            if AVATAR_BACKEND == "video":
+                full_reply = []
+                async for token in stream_reply(conversation_history, user_text, system_prompt):
+                    full_reply.append(token)
+                    await ws.send_json({"type": "token", "text": token})
+                assistant_text = "".join(full_reply)
+                await _reply_video(ws, assistant_text, reply_voice)
+
+                conversation_history.append({"role": "user", "content": user_text})
+                conversation_history.append({"role": "assistant", "content": assistant_text})
+                _trim_history()
+                await asyncio.gather(
+                    _db_save(session_id, "user", user_text),
+                    _db_save(session_id, "assistant", assistant_text),
+                )
+                await ws.send_json({"type": "done", "sessionId": session_id})
+                continue
 
             await ws.send_json({"type": "config", "sampleRate": tts.SAMPLE_RATE})
 

@@ -3,9 +3,11 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form, WebSocket, B
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import Response
 from stt import transcribe
-from config import DETECTION_DEFAULT
+from config import DETECTION_DEFAULT, AVATAR_BACKEND
 from ws_handler import handle_chat, clear_history as ws_clear_history
+import avatar
 import personas as persona_store
 import persona_suggest
 import characters
@@ -111,8 +113,19 @@ async def health():
 @app.get("/settings")
 async def settings():
     # Frontend reads this on load to initialize the voice-adaptation toggle so the
-    # UI matches the server default.
-    return {"detection": DETECTION_DEFAULT}
+    # UI matches the server default, and to learn which avatar mode is active
+    # ("3d" = local Three.js, "video" = cloud MuseTalk talking-head clips).
+    return {"detection": DETECTION_DEFAULT, "avatar": AVATAR_BACKEND}
+
+
+@app.get("/avatar/clip/{clip_id}")
+async def avatar_clip(clip_id: str):
+    """Serve a rendered talking-head clip (AVATAR_BACKEND=video). The chat socket
+    sends the URL; the browser fetches the mp4 here and plays it."""
+    data = await asyncio.to_thread(avatar.get_clip, clip_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Clip not found or expired")
+    return Response(content=data, media_type="video/mp4")
 
 
 @app.post("/stt")
@@ -190,8 +203,13 @@ async def onboard_companion(payload: dict = Body(...)):
 
 @app.post("/companion/character")
 async def switch_character(payload: dict = Body(...)):
-    """Switch to a different character later (memory, streak, everything else stays)."""
-    return await asyncio.to_thread(companion.set_character, payload.get("character", "poppy"))
+    """Switch to a different character. Memory is per-character, so switching swaps
+    whose memories are in play (streak/ritual stay — they're the user's own habit).
+    The in-memory conversation context is reset so the new character starts fresh."""
+    result = await asyncio.to_thread(companion.set_character, payload.get("character", "poppy"))
+    await ws_clear_history()
+    persona_suggest.reset()
+    return result
 
 
 @app.post("/companion/update")

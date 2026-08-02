@@ -1,0 +1,8 @@
+# Poppy cloud voice server (runs on the AWS g5, CUDA).
+# Install on the box:  pip install -r requirements.txt
+# torch is pulled in by chatterbox-tts; on the AWS Deep Learning AMI a CUDA torch is
+# already present, so you can usually skip installing torch here.
+chatterbox-tts
+fastapi
+uvicorn[standard]
+numpy

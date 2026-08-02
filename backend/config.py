@@ -115,7 +115,42 @@ DETECTION_DEFAULT = os.getenv("DETECTION_DEFAULT", "0") == "1"
 # alternatives are opt-in (heavier, need a one-time model download): "parler" =
 # Indic Parler-TTS (native Indian accent), "chatterbox" = Chatterbox (voice-clone),
 # "qwen3" = Qwen3-TTS. A/B them with scripts/tts_ab.py before committing.
+#
+# "cloud" offloads synthesis to our own GPU box (cloud/voice_server.py, running
+# Chatterbox on an AWS g5) — realistic per-character cloned voices at real-time
+# speed, which this Mac can't do locally. See POPPY_CLOUD_PLAN.md. It never falls
+# back silently: if the box is unreachable, synthesis errors and that phrase gets no
+# audio (the reply text still streams). Set CLOUD_GPU_URL to the box's address.
 TTS_BACKEND = os.getenv("TTS_BACKEND", "kokoro")
+
+# ── Cloud GPU TTS (TTS_BACKEND=cloud) ─────────────────────────────────────────
+# Base URL of the voice server on the AWS GPU box, e.g. "http://<ec2-ip>:8600".
+# Empty = not configured (the cloud backend raises a clear error if selected).
+CLOUD_GPU_URL = os.getenv("CLOUD_GPU_URL", "").rstrip("/")
+# The server's output sample rate reported to the browser. Chatterbox is 24 kHz.
+CLOUD_SAMPLE_RATE = int(os.getenv("CLOUD_SAMPLE_RATE", "24000"))
+# Per-phrase HTTP timeout. Real-time on an A10G is ~1-3s/phrase; allow headroom for
+# a cold model load on the first call after the box starts.
+CLOUD_TTS_TIMEOUT = float(os.getenv("CLOUD_TTS_TIMEOUT", "30"))
+
+# ── Cloud GPU avatar (AVATAR_BACKEND=video) ───────────────────────────────────
+# The talking face. "3d" (default) is the local Three.js avatar lip-synced to the
+# voice — works fully offline, unchanged. "video" offloads to our GPU box
+# (cloud/avatar_server.py, MuseTalk): per reply it renders that character's real
+# portrait speaking the reply, and the browser plays the returned clip. The clip
+# carries its own audio, so in video mode the phrase-by-phrase TTS is skipped.
+# See POPPY_CLOUD_PLAN.md Phase 2.
+AVATAR_BACKEND = os.getenv("AVATAR_BACKEND", "3d")
+# Base URL of the avatar server on the box, e.g. "http://<ec2-ip>:8601". Empty when
+# AVATAR_BACKEND=video means "not configured" and rendering is skipped (falls back
+# to the static portrait/3d avatar in the UI).
+CLOUD_AVATAR_URL = os.getenv("CLOUD_AVATAR_URL", "").rstrip("/")
+# Rendering a whole-reply talking-head clip is heavier than a voice phrase; give it
+# room (and headroom for a cold MuseTalk load on the first call after the box starts).
+CLOUD_AVATAR_TIMEOUT = float(os.getenv("CLOUD_AVATAR_TIMEOUT", "90"))
+# How many recently-rendered clips to keep in memory for the browser to fetch. Small:
+# each turn supersedes the last, and clips are a few hundred KB to a few MB.
+AVATAR_CLIP_CACHE = int(os.getenv("AVATAR_CLIP_CACHE", "6"))
 
 # Multi-accent TTS (Kokoro). The companion replies in the speaker's detected
 # accent; voices are selected in accent.py and synthesized in tts.py.

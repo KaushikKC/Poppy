@@ -250,6 +250,8 @@ window.speakLine = function speakLine(text) {
     } else if (msg.type === "token") {
       bubble.textContent = msg.text;
       transcript.scrollTop = transcript.scrollHeight;
+    } else if (msg.type === "avatar_clip") {
+      window.poppyPlayClip?.(`${BACKEND}${msg.url}`);
     } else if (msg.type === "done") {
       bubble.classList.remove("streaming");
       ws.close();
@@ -396,6 +398,10 @@ window.sendMessage = async function sendMessage(text) {
       if (statusDot.title === "thinking") setStatus("thinking");
       target += msg.text;
       startReveal();
+
+    } else if (msg.type === "avatar_clip") {
+      // Video-avatar mode: play the character's talking-head clip (audio baked in).
+      window.poppyPlayClip?.(`${BACKEND}${msg.url}`);
 
     } else if (msg.type === "done") {
       // "done" = the LLM finished generating (all audio is now sent); the voice

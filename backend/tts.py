@@ -1,9 +1,13 @@
 """TTS backend dispatcher.
 
-Selects the voice engine from TTS_BACKEND (kokoro | parler | qwen3 | chatterbox)
-and exposes one interface — synthesize_to_wav_bytes / warmup / SAMPLE_RATE — so the
-rest of the app doesn't care which is active. The chosen backend is imported lazily
-so an unused one's heavy deps (parler-tts, chatterbox, …) are never loaded.
+Selects the voice engine from TTS_BACKEND (kokoro | parler | qwen3 | chatterbox |
+cloud) and exposes one interface — synthesize_to_wav_bytes / warmup / SAMPLE_RATE —
+so the rest of the app doesn't care which is active. The chosen backend is imported
+lazily so an unused one's heavy deps (parler-tts, chatterbox, …) are never loaded.
+
+"cloud" is special: it does no local model work, it just calls our AWS GPU voice
+server (cloud/voice_server.py) over HTTP — realistic per-character cloned voices at
+real-time speed. See POPPY_CLOUD_PLAN.md.
 
 To A/B the realistic voices, run scripts/tts_ab.py — it drives each backend module
 directly and writes labeled WAVs to compare.
@@ -17,6 +21,8 @@ elif TTS_BACKEND == "qwen3":
     import tts_qwen3 as _backend
 elif TTS_BACKEND == "chatterbox":
     import tts_chatterbox as _backend
+elif TTS_BACKEND == "cloud":
+    import tts_cloud as _backend
 else:
     import tts_kokoro as _backend
 
