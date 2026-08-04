@@ -17,6 +17,7 @@ import safety
 import memory_store
 import companion
 import disclosure
+import ritual_pact
 import characters
 import avatar
 import emotion as emotion_mod
@@ -163,14 +164,43 @@ async def handle_chat(ws: WebSocket):
             # remembered facts, with a stronger addendum if distress is detected.
             risk = safety.check(user_text)
             memory_block = await asyncio.to_thread(memory_store.as_prompt_block, user_text)
-            identity_block = await asyncio.to_thread(companion.as_prompt_block)
-            # She goes first (RETENTION_ENGINE §2). Deepens with the relationship,
-            # and carries its own honesty floor so it can never license invention.
-            disclosure_block = await asyncio.to_thread(
-                disclosure.as_prompt_block, profile.get("total_calls", 0),
+            # The ritual pact (§5). Never on a distress or crisis turn: "so when
+            # shall I expect you?" in the middle of something heavy is the exact
+            # opposite of wanting to be part of their day, and it is the same
+            # instinct the paywall guardrail already refuses. Held back a couple of
+            # turns too: the opening turn belongs to the loop payoff (§7 Act 1), and
+            # asking before they've said anything makes it an intake form.
+            pact_block = ""
+            turn_no = current_call_turn_no()
+            if (
+                risk["level"] is None
+                and turn_no >= ritual_pact.ASK_FROM_TURN
+                and await asyncio.to_thread(ritual_pact.is_due, profile)
+            ):
+                pact_block = ritual_pact.as_prompt_block()
+
+            # ── One directive per turn ────────────────────────────────────────
+            # Each of these tells the model where something goes in its reply:
+            # close the open loop first, open with your own disclosure, end by
+            # asking when to expect them. Stacked together the on-device 3B follows
+            # whichever it sees first and silently drops the rest. Measured on the
+            # pact: 3/3 asks on its own, 0/3 with the others present.
+            #
+            # So exactly one wins each turn, by how repeatable it is. The pact
+            # happens once in the whole relationship and is the highest-value habit
+            # lever we have (§5), so it outranks. Loop payoff is next, because an
+            # unpaid-off loop kills that mechanic permanently (§1.3 Rule 3).
+            # Disclosure happens every call and loses nothing by yielding a turn.
+            disclosure_block = ""
+            if not pact_block:
+                disclosure_block = await asyncio.to_thread(
+                    disclosure.as_prompt_block, profile.get("total_calls", 0),
+                )
+            identity_block = await asyncio.to_thread(
+                companion.as_prompt_block, not pact_block,
             )
             system_prompt = (
-                char["system_prompt"] + identity_block + disclosure_block
+                char["system_prompt"] + identity_block + disclosure_block + pact_block
                 + SAFETY_ADDENDUM + memory_block
             )
             if risk["level"] == "crisis":
