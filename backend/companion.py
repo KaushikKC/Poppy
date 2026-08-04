@@ -40,6 +40,9 @@ _DEFAULTS = {
     "total_calls": 0,
     "ritual_time": None,         # "HH:MM" (local) the user opted into, or None
     "ritual_kind": None,         # "morning" | "night" | None
+    "ritual_pact_asked_on": None,  # local ISO date she last raised the pact (§5)
+    "ritual_pact_asks": 0,         # times raised; she stops asking after a few
+    "ritual_pact_declined": False, # they said no, so she never raises it again
     "last_reminded_date": None,  # local ISO date the ritual was met (talked/dismissed)
     "last_notified_date": None,  # local ISO date the native OS reminder last fired
     # Both drained into loops.py on first run; the real loop model lives there now.
