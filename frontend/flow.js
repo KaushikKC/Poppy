@@ -529,7 +529,10 @@
     call.type = "button";
     call.className = "reminder-call";
     call.textContent = "Call now";
-    call.addEventListener("click", () => { box.classList.add("hidden"); startCall({}); });
+    call.addEventListener("click", () => {
+      box.classList.add("hidden");
+      startCall({ source: "notification" });
+    });
     const later = document.createElement("button");
     later.type = "button";
     later.className = "reminder-later";
@@ -568,13 +571,16 @@
   }
 
   // ── Call lifecycle (§4) ─────────────────────────────────────────────────────────
-  async function startCall({ seed = "", vibe = null, mode = null } = {}) {
+  // `source` separates a call the user started themselves from one a reminder
+  // pulled them into. The ratio between the two is the habit-health metric in
+  // RETENTION_ENGINE §10 — a rising call count driven by pings is a warning.
+  async function startCall({ seed = "", vibe = null, mode = null, source = "user" } = {}) {
     let r = {};
     try {
       r = await (await fetch(`${BACKEND}/call/open`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ seed, mode }),
+        body: JSON.stringify({ seed, mode, source }),
       })).json();
     } catch {}
 
