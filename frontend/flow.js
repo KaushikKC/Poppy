@@ -23,6 +23,7 @@
   let profile = null;
   let _callStart = 0;          // ms timestamp of the current call's connect
   let _callbackOffered = false; // did this call's opener follow up on an open loop
+  let _surfacedLoopId = null;   // the loop she opened on, to resolve at close (§1.3 R3)
 
   function setView(v) {
     onboarding.classList.toggle("hidden", v !== "onboarding");
@@ -596,6 +597,7 @@
     const opening = r.opening || "";
     if (r.profile) profile = r.profile;
     _callbackOffered = !!r.callback_offered;
+    _surfacedLoopId = r.surfaced_loop_id || null;
     _callStart = Date.now();
 
     // "Calling…" veil until she picks up (hidden when she starts speaking).
@@ -682,39 +684,47 @@
 
   document.getElementById("end-call-btn")?.addEventListener("click", endCall);
 
-  // End-of-call ritual (§4): warm sign-off + what she'll remember, then a choice.
+  // ACT 3 (RETENTION_ENGINE §7): warm sign-off, then the new open loop rendered as
+  // a keepsake card. The hook is written by the backend from the conversation and
+  // spoken in her voice — the old build used the user's own last sentence here,
+  // which meant she opened the next call by quoting them back at themselves.
   async function endCall() {
     try { window.interruptReply?.(); } catch {}
-    const loop = (window._lastUserText || "").trim();
-    const signoff = loop
-      ? "I'll be thinking about you. Tell me how it goes, okay?"
-      : "Talk soon, okay?";
 
-    // Fill and show the outro card.
+    // Show the card immediately so hanging up never feels abrupt; the hook lands
+    // on it a moment later, once the backend has authored it.
     const outro = document.getElementById("outro");
-    document.getElementById("outro-line").textContent = signoff;
     const rem = document.getElementById("outro-remember");
     const remText = document.getElementById("outro-remember-text");
-    if (loop) { remText.textContent = loop; rem.classList.remove("hidden"); }
-    else rem.classList.add("hidden");
+    document.getElementById("outro-line").textContent = "Talk soon, okay?";
+    rem.classList.add("hidden");
     outro?.classList.remove("hidden");
 
-    // Speak the sign-off warmly over the ritual card.
-    if (loop) window.speakLine?.(signoff);
-
     const durationS = _callStart ? (Date.now() - _callStart) / 1000 : 0;
+    let planted = "";
     try {
-      await fetch(`${BACKEND}/call/close`, {
+      const r = await (await fetch(`${BACKEND}/call/close`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          open_loop: loop || undefined,
           duration_s: durationS,
           callback_offered: _callbackOffered,
+          surfaced_loop_id: _surfacedLoopId || undefined,
         }),
-      });
+      })).json();
+      planted = (r && r.open_loop) || "";
     } catch {}
+
+    if (planted) {
+      const signoff = "I'll be thinking about you. Tell me how it goes, okay?";
+      document.getElementById("outro-line").textContent = signoff;
+      remText.textContent = planted;
+      rem.classList.remove("hidden");
+      window.speakLine?.(signoff);
+    }
+
     _callStart = 0;
+    _surfacedLoopId = null;
     window._lastUserText = "";
   }
 
