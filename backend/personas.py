@@ -18,7 +18,11 @@ frontend's persona-driven theming keeps working.
 # surfaces a deliberate heads-up on change rather than shifting silently (§3.6) —
 # the silent-personality-drift-after-an-update problem is the #1 Replika trust-killer.
 # v2: strengthened the honesty ("I'm an AI") and point-back-to-real-life rules (§10).
-PERSONALITY_VERSION = 2
+# v3: she goes first with real self-disclosure, deepening with the relationship
+#     (RETENTION_ENGINE §2, see disclosure.py). Bumped because this genuinely
+#     changes how she behaves in a call, and §3.6 says a change like that is
+#     announced rather than slipped in under the user.
+PERSONALITY_VERSION = 3
 
 # The taste layer (§10), shared by every vibe. This is who Poppy *is*, underneath
 # whichever stance the user picked.
