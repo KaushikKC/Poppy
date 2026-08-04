@@ -16,6 +16,7 @@ import companion
 import loops
 import loop_author
 import opening
+import ritual_pact
 import nudges
 import notify
 import metrics
@@ -258,6 +259,7 @@ async def open_call(payload: dict = Body(default={})):
 
     profile = await asyncio.to_thread(companion.record_call)
     milestone = await asyncio.to_thread(companion.check_milestone)
+    ws_handler.mark_call_start()
 
     # ACT 1 (RETENTION_ENGINE §7): the opener pays off the open loop before
     # anything else. The seed call is the very first one (no history to owe), and
@@ -339,7 +341,10 @@ async def close_call(payload: dict = Body(default={})):
     keepsake card.
     """
     data = payload or {}
-    turns = list(ws_handler.conversation_history)
+    # Only this call's turns. The history survives across calls so she keeps
+    # context, but the closing hook and the ritual answer must come from what was
+    # just said, not from something the user resolved two calls ago.
+    turns = ws_handler.current_call_turns()
     spoke = any(t.get("role") == "user" and t.get("content") for t in turns)
 
     # §1.3 Rule 3: the loop she opened on is resolved once the user actually
@@ -350,6 +355,26 @@ async def close_call(payload: dict = Body(default={})):
     if surfaced_id and spoke:
         await asyncio.to_thread(loops.resolve, surfaced_id)
         await asyncio.to_thread(db.record_event, "loop_resolved")
+
+    # §5: if she raised the pact this call, read the answer back out of what they
+    # said. A time they committed to out loud is an implementation intention; the
+    # settings form sets the same field but not the same mechanic.
+    ritual = None
+    pact_was_due = await asyncio.to_thread(ritual_pact.is_due)
+    if pact_was_due and spoke:
+        answer = await asyncio.to_thread(ritual_pact.parse_from_turns, turns)
+        await asyncio.to_thread(ritual_pact.mark_asked)
+        if answer and answer.get("declined"):
+            await asyncio.to_thread(companion.update, ritual_pact_declined=True)
+            await asyncio.to_thread(db.record_event, "ritual_pact_declined")
+        elif answer:
+            await asyncio.to_thread(companion.set_ritual, answer["kind"], answer["time"])
+            ritual = {
+                **answer,
+                "confirm": ritual_pact.confirm_line(answer["kind"], answer["time"]),
+            }
+            await asyncio.to_thread(db.record_event, "ritual_set")
+            await asyncio.to_thread(db.record_event, "ritual_set_by_pact")
 
     # §1.3 Rule 5: the end of every payoff is the start of the next hook, so a
     # call that had a real conversation never ends without planting one.
@@ -376,6 +401,7 @@ async def close_call(payload: dict = Body(default={})):
         "ok": True,
         "meaningful": meaningful,
         "open_loop": planted.get("hook_text") if planted else None,
+        "ritual": ritual,
     }
 
 
