@@ -234,7 +234,9 @@
       profile = await (await fetch(`${BACKEND}/companion`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ character: ob.character }),
+        // The seed goes in here, not just into the call: it becomes a real memory
+        // and the first open loop, so onboarding never ends on an empty home (§2).
+        body: JSON.stringify({ character: ob.character, seed: ob.seed }),
       })).json();
       setAvatarGender(profile.gender);
     } catch {}
