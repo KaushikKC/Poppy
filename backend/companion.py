@@ -372,16 +372,21 @@ def latest_open_loop() -> str | None:
     return loops.surface_text(open_loop())
 
 
-def as_prompt_block() -> str:
+def as_prompt_block(with_loop: bool = True) -> str:
     """Identity line injected into the system prompt so Poppy knows her own name
-    and, if a forward hook is open, is nudged to close it in this call."""
+    and, if a forward hook is open, is nudged to close it in this call.
+
+    `with_loop=False` keeps the identity but drops the follow-up instruction, for
+    turns where a different directive has to win (see ws_handler).
+    """
     p = _load()
     name = p.get("companion_name", "Poppy")
     line = f"\n\nYour name is {name}." if name and name != "Poppy" else ""
-    loop = latest_open_loop()
+    loop = latest_open_loop() if with_loop else None
     if loop:
         line += (
-            f"\nLast time you left this hanging with the user: \"{loop}\" — close it "
-            "early and warmly, before anything else."
+            f"\nLast time you left this hanging with the user: \"{loop}\". Close it "
+            "early and warmly, in your own words. Never quote that line back at "
+            "them, just follow up on what it was about."
         )
     return line
