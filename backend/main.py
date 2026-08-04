@@ -390,6 +390,14 @@ async def close_call(payload: dict = Body(default={})):
     if planted:
         await asyncio.to_thread(db.record_event, "loop_planted")
 
+    # §5: a call that landed on its anchor also leaves the cadence hanging. This
+    # is the weakest loop type by design, so it never takes the visible slot from
+    # the conversational one, it just holds the habit between calls.
+    if spoke:
+        cadence = await asyncio.to_thread(ritual_pact.closing_loop)
+        if cadence:
+            await asyncio.to_thread(companion.add_open_loop, cadence, "ritual")
+
     duration = float(data.get("duration_s") or 0)
     meaningful = duration >= 60 or bool(data.get("saved_memory"))
     await asyncio.to_thread(db.record_event, "call_ended", duration)
