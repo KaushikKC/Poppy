@@ -280,7 +280,7 @@ window.sendMessage = async function sendMessage(text) {
   // The user's speaking again — cancel any pending memory extraction so it never
   // fires mid-conversation and steals the model from this reply.
   clearTimeout(window._memProposeTimer);
-  window._lastUserText = text; // becomes the open loop Poppy carries to next call
+  window._lastUserText = text; // last turn, used to pair a memory candidate with its source
   addBubble("user", text);
   const replyBubble = addBubble("assistant");
   replyBubble.classList.add("streaming");
