@@ -16,6 +16,7 @@ from config import (
 import safety
 import memory_store
 import companion
+import disclosure
 import characters
 import avatar
 import emotion as emotion_mod
@@ -140,8 +141,14 @@ async def handle_chat(ws: WebSocket):
             risk = safety.check(user_text)
             memory_block = await asyncio.to_thread(memory_store.as_prompt_block, user_text)
             identity_block = await asyncio.to_thread(companion.as_prompt_block)
+            # She goes first (RETENTION_ENGINE §2). Deepens with the relationship,
+            # and carries its own honesty floor so it can never license invention.
+            disclosure_block = await asyncio.to_thread(
+                disclosure.as_prompt_block, profile.get("total_calls", 0),
+            )
             system_prompt = (
-                char["system_prompt"] + identity_block + SAFETY_ADDENDUM + memory_block
+                char["system_prompt"] + identity_block + disclosure_block
+                + SAFETY_ADDENDUM + memory_block
             )
             if risk["level"] == "crisis":
                 system_prompt += CRISIS_ADDENDUM
