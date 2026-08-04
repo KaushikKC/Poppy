@@ -15,6 +15,7 @@ from datetime import datetime
 
 import companion
 import memory_store
+import ritual_pact
 
 
 def _time_of_day() -> str:
@@ -52,6 +53,15 @@ def _user_name() -> str | None:
 def _addressed(word: str, sep: str, name: str | None) -> str:
     return f"{word}{sep}{name}" if name else word
 
+
+# The two anchor rituals (RETENTION_ENGINE §5). They do different jobs, so they
+# don't get the same opener: morning is one fast intention, cheap to sustain;
+# night is the debrief, which carries the emotional value and where the memories
+# are richest. The doc says to over-invest in night, so night opens wider.
+_RITUAL_OPENERS = {
+    "morning": "Before the day runs off with you, what's the one thing that matters today?",
+    "night": "Okay, the day's done. Talk me through it, what actually happened?",
+}
 
 # Mode-framed openers (§4.5) — each mood mode from the home screen enters a call
 # already framed, so the user never faces a blank slate. Keyed by the mode's key.
@@ -119,6 +129,12 @@ def compose(
     hook = _loop_line(loop)
     if hook:
         return f"{lead}{hook}"
+
+    # Their own ritual time, with no loop outstanding: open on the anchor's job
+    # rather than a generic greeting. This is the cue half of the habit loop (§5).
+    anchor = ritual_pact.anchor_now()
+    if anchor:
+        return f"{lead}{_RITUAL_OPENERS[anchor]}"
 
     # No open loop yet, but we've talked before: lean on a remembered fact.
     days = companion.days_since_last_call()
