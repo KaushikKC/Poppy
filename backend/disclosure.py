@@ -40,7 +40,8 @@ import companion
 _STRUCTURE = (
     "Open every reply with one sentence of your own BEFORE you ask them anything. "
     "Not sympathy and not a compliment: something of yours. One sentence, then your "
-    "question. You go first, every time."
+    "question. You go first, every time. The example below shows the SHAPE only; "
+    "write your own line about what they actually said, never reuse its wording."
 )
 
 # The hard floor, repeated at every depth because it is the thing that must never
