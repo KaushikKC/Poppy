@@ -24,6 +24,29 @@ import db
 
 conversation_history: list[dict] = []
 
+# Where the current call starts inside that history. The history deliberately
+# survives across calls so she keeps context, which means "the turns of this call"
+# is not the same as "the history" — and anything that reads back what was just
+# said (the closing hook, the ritual answer) must only see this call, or it will
+# answer a question the user resolved yesterday.
+_call_turn_base = 0
+
+
+def mark_call_start() -> None:
+    """Called from /call/open so per-call reads have a boundary to work from."""
+    global _call_turn_base
+    _call_turn_base = len(conversation_history)
+
+
+def current_call_turns() -> list[dict]:
+    """Just this call's turns."""
+    return conversation_history[_call_turn_base:]
+
+
+def current_call_turn_no() -> int:
+    """1-based index of the turn being handled right now, within this call."""
+    return (len(conversation_history) - _call_turn_base) // 2 + 1
+
 # A single phrase's synthesis must never be able to hang the whole turn. If it
 # stalls past this (GPU contention, a pathological phrase), we skip that phrase's
 # audio and let the reply finish rather than leaving the voice frozen mid-reply.
