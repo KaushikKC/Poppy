@@ -260,9 +260,18 @@
     remembers.textContent = h.remembers || "";
     remembers.classList.toggle("hidden", !h.remembers);
 
+    // RETENTION_ENGINE §4.7: at most TWO progress indicators on screen at once,
+    // and her open loop is always one of them. Six of them turns a companion into
+    // a task manager, which kills the emotional register the whole product rests
+    // on. So the strip above always shows, and this slot shows exactly one thing:
+    // the streak once it's a real run, otherwise how well she knows them — which
+    // is never "New" after onboarding, so day 0 is never a zero state (§2).
     const streak = document.getElementById("home-streak");
     if (h.current_streak > 1) {
       streak.textContent = `${h.current_streak} day streak`;
+      streak.classList.remove("hidden");
+    } else if (h.closeness && h.closeness.stage > 0) {
+      streak.textContent = h.closeness.label;
       streak.classList.remove("hidden");
     } else {
       streak.classList.add("hidden");
