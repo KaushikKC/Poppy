@@ -237,13 +237,34 @@ loop, and `loop_close_rate` / `user_initiated_rate` move accordingly.
 
 ### Sprint 2 — the ritual pact (§5)
 
-13. Move the ritual from a form to a spoken pact in the week-1 call: she asks,
+**Status: COMPLETE (2026-08-04).**
+
+13. ✅ Move the ritual from a form to a spoken pact in the week-1 call: she asks,
     the user answers out loud, she repeats it back as a commitment, then
     `/ritual` is set from the transcript. Keep the existing form as the edit
     path in settings. `ritual_set` is already the strongest retention predictor
     we log — this raises the rate it gets set at.
-14. Night ritual gets the richer debrief script; night plants morning's loop and
+14. ✅ Night ritual gets the richer debrief script; night plants morning's loop and
     vice versa (§5 compounding).
+
+> **The finding from Sprint 2, and it now governs the prompt.** Loop payoff,
+> disclosure and the pact are each a *structural* instruction about where
+> something goes in her reply. Stacked together the on-device 3B follows whichever
+> it sees first and silently drops the rest: the pact asked in 3 of 3 calls on its
+> own and 0 of 3 alongside the others. `ws_handler` now runs **one directive per
+> turn**, ranked pact > loop payoff > disclosure, on the reasoning that the pact
+> happens once in the whole relationship, an unpaid-off loop kills its mechanic
+> permanently, and disclosure recurs every call so it loses least by yielding.
+> Anything added to the system prompt in later sprints has to join that ranking
+> rather than stack on top of it.
+>
+> Two bugs surfaced on the way and are fixed: the shared conversation history had
+> no per-call boundary, so the closing hook could be built from a previous call
+> and the ritual parser could set a ritual from a time the user mentioned
+> yesterday; and she was reading the disclosure prompt's *example* back verbatim.
+>
+> The pact ask is LLM-phrased but the answer parsing is deterministic, because a
+> wrong ritual time is a wrong notification every day.
 
 ### Sprint 3 — the daily layer core (§4, in the doc's exact order)
 
