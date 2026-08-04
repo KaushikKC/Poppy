@@ -719,6 +719,7 @@
 
     const durationS = _callStart ? (Date.now() - _callStart) / 1000 : 0;
     let planted = "";
+    let pact = null;
     try {
       const r = await (await fetch(`${BACKEND}/call/close`, {
         method: "POST",
@@ -730,7 +731,19 @@
         }),
       })).json();
       planted = (r && r.open_loop) || "";
+      pact = (r && r.ritual) || null;
     } catch {}
+
+    // §5: if they set their ritual out loud this call, the card is the receipt.
+    // She already said it back in the conversation, so this doesn't repeat it
+    // aloud, it just makes the plan visible.
+    if (pact && pact.confirm) {
+      const note = document.getElementById("outro-ritual");
+      if (note) {
+        note.textContent = pact.confirm;
+        note.classList.remove("hidden");
+      }
+    }
 
     if (planted) {
       const signoff = "I'll be thinking about you. Tell me how it goes, okay?";
