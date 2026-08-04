@@ -1251,6 +1251,9 @@ body[data-view="call"] #memory-panel:not(.hidden) {
 #outro-line { font-family: var(--font-display); font-weight: 400; font-size: clamp(1.5rem, 4.5vw, 2.1rem); line-height: 1.22; color: var(--ink); }
 #outro-remember { background: rgba(151,196,232,0.16); border: 1px solid var(--line); border-radius: 10px; padding: 0.8rem 1rem; }
 #outro-remember-text { font-size: 0.98rem; color: rgba(7,18,7,0.82); margin-top: 0.2rem; }
+/* §5: the ritual receipt. Quieter than the loop card above it, because the pact
+   already happened out loud in the call and this is only the confirmation. */
+.outro-ritual { font-size: 0.9rem; color: rgba(7,18,7,0.62); font-style: italic; }
 .outro-actions { display: flex; gap: 0.6rem; justify-content: center; margin-top: 0.3rem; }
 .outro-primary { padding: 0.7rem 1.6rem; border: none; border-radius: 10px; background: var(--poppy); color: var(--cream); font-family: var(--font-sans); font-weight: 700; cursor: pointer; transition: transform .2s var(--ease-spring), background .2s; }
 .outro-primary:hover { transform: translateY(-2px); background: #f6303b; }
