@@ -283,6 +283,8 @@
       streak.classList.add("hidden");
     }
 
+    renderFreezeNotice(h.freeze_notice);
+    renderRepair(h.streak);
     renderPersonalityNotice();
     renderRitual(h);
     checkRitualDue();
@@ -303,6 +305,44 @@
     // Tint the orb to the current character, and offer a way to switch companion.
     tintOrbForCurrent(h.character || (profile && profile.character));
     ensureSwitchButton();
+  }
+
+  // §4.1: the user learns a freeze was spent after the fact, in her voice. It is
+  // warmth, not a warning, and it appears once because the backend clears it on
+  // read. A heads-up beforehand would just be a countdown with better manners.
+  function renderFreezeNotice(text) {
+    const box = document.getElementById("home-freeze");
+    if (!box) return;
+    box.textContent = text || "";
+    box.classList.toggle("hidden", !text);
+  }
+
+  // §4.1: 48h grace, free once a month, no ceremony. There is deliberately no
+  // price anywhere on this: charging to undo an emotional-sounding failure is
+  // the one thing the doc marks red about repair.
+  function renderRepair(s) {
+    const box = document.getElementById("home-repair");
+    if (!box) return;
+    if (!s || !s.repairable) {
+      box.classList.add("hidden");
+      box.innerHTML = "";
+      return;
+    }
+    box.innerHTML = "";
+    const msg = document.createElement("span");
+    msg.className = "repair-text";
+    msg.textContent = `Your ${s.broken_from} day run stopped. Want it back?`;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "repair-btn";
+    btn.textContent = "Pick it back up";
+    btn.addEventListener("click", async () => {
+      try { await fetch(`${BACKEND}/streak/repair`, { method: "POST" }); } catch {}
+      box.classList.add("hidden");
+      await loadHome();
+    });
+    box.append(msg, btn);
+    box.classList.remove("hidden");
   }
 
   // ── Change companion from home (memory/voice/orb all swap with it) ───────────

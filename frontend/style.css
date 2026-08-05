@@ -757,6 +757,21 @@ button:not(:disabled):active { transform: scale(0.94); }
   padding: 0.4rem 0.7rem; border-radius: 20px;
   background: rgba(255,248,234,0.7); border: 1px solid var(--line); color: var(--field-deep);
 }
+/* §4.1: the freeze notice and the repair offer. Both deliberately quiet and in
+   the warm palette, never red or urgent. Loss aversion fires either way; only the
+   threatening version produces the "already broke it, why bother" cascade. */
+.home-freeze, .home-repair {
+  max-width: 520px; margin: 0.8rem auto 0; text-align: center;
+  font-size: 0.9rem; color: rgba(7,18,7,0.72);
+  background: rgba(255,248,234,0.8); border: 1px solid var(--line);
+  border-radius: 10px; padding: 0.7rem 1rem;
+}
+.home-repair { display: flex; align-items: center; justify-content: center; gap: 0.7rem; flex-wrap: wrap; }
+.repair-btn {
+  padding: 0.4rem 0.9rem; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel); color: var(--ink); font-family: var(--font-sans);
+  font-weight: 700; font-size: 0.85rem; cursor: pointer;
+}
 .home-lower { display: flex; flex-direction: column; align-items: center; gap: 1rem; max-width: 640px; margin: 0 auto; width: 100%; }
 .home-remembers {
   text-align: center; font-family: var(--font-display); font-size: clamp(1.1rem, 3.5vw, 1.5rem);
