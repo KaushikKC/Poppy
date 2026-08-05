@@ -467,6 +467,38 @@ async def get_referral():
     return await asyncio.to_thread(billing.referral)
 
 
+@app.get("/quests")
+async def get_quests():
+    """Today's three quests, the chosen goal, and the ring (§4.2, §4.3). Slot 1 is
+    always the open loop. Empty when the daily layer is switched off."""
+    if await asyncio.to_thread(companion.daily_layer_off):
+        return {"off": True}
+    return await asyncio.to_thread(quests.status)
+
+
+@app.post("/goal")
+async def set_goal(payload: dict = Body(default={})):
+    """Pick the daily goal. A goal the user chose out loud in a call is an
+    implementation intention and outperforms one the app assigned (§4.2)."""
+    result = await asyncio.to_thread(quests.set_goal, (payload or {}).get("goal"))
+    await asyncio.to_thread(db.record_event, "goal_set")
+    return result
+
+
+@app.post("/daily-layer")
+async def set_daily_layer(payload: dict = Body(default={})):
+    """§4.9: "Just let me talk to her" hides the counting layer entirely.
+
+    Tracked so that cohort's retention can be compared against everyone else's,
+    which is the point of the guardrail: in products like this they retain best.
+    Nothing here ever nags them back.
+    """
+    off = bool((payload or {}).get("off"))
+    await asyncio.to_thread(companion.update, daily_layer_off=off)
+    await asyncio.to_thread(db.record_event, "daily_layer_off" if off else "daily_layer_on")
+    return {"off": off}
+
+
 @app.get("/streak")
 async def get_streak():
     """The full streak state (§4.1): the count, which of the five states it's in,
