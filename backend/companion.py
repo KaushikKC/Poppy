@@ -50,6 +50,9 @@ _DEFAULTS = {
     "streak_freeze_notice": 0,    # freezes spent since the user was last told
     "streak_history": [],         # local ISO dates that met the floor
     "streak_frozen_days": [],     # local ISO dates a freeze covered for them
+    "daily_goal": None,           # "light" | "regular" | "deep", chosen by the user (§4.2)
+    "quests_state": {},           # {"day": ISO, "done": [quest ids]} (§4.3)
+    "daily_layer_off": False,     # §4.9 kill switch: "just let me talk to her"
     "ritual_time": None,         # "HH:MM" (local) the user opted into, or None
     "ritual_kind": None,         # "morning" | "night" | None
     "ritual_pact_asked_on": None,  # local ISO date she last raised the pact (§5)
