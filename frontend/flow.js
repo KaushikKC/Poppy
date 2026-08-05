@@ -267,8 +267,14 @@
     // the streak once it's a real run, otherwise how well she knows them — which
     // is never "New" after onboarding, so day 0 is never a zero state (§2).
     const streak = document.getElementById("home-streak");
-    if (h.current_streak > 1) {
-      streak.textContent = `${h.current_streak} day streak`;
+    const s = h.streak || {};
+    if (s.current > 1) {
+      // Opportunity and protection, never threat and shame (§4.1). No countdown,
+      // no red, no exclamation mark: the same loss-aversion fires either way, and
+      // only one of them produces the "already broke it, why bother" cascade.
+      streak.textContent = s.state === "at_risk" && !s.met_today
+        ? `${s.current} days. one call keeps it going`
+        : `${s.current} day streak`;
       streak.classList.remove("hidden");
     } else if (h.closeness && h.closeness.stage > 0) {
       streak.textContent = h.closeness.label;
