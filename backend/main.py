@@ -495,6 +495,10 @@ async def home():
         "avatar": profile.get("avatar", "brunette"),
         "remembers": remembers,
         "closeness": await asyncio.to_thread(companion.closeness),
+        "streak": await asyncio.to_thread(streak.status),
+        # §4.1: the user learns a freeze was spent *after* the fact, warmly. Read
+        # once and cleared, so it's a moment rather than a running tally.
+        "freeze_notice": await asyncio.to_thread(streak.take_freeze_notice),
         "current_streak": profile.get("current_streak", 0),
         "total_calls": profile.get("total_calls", 0),
         "ritual_kind": profile.get("ritual_kind"),
