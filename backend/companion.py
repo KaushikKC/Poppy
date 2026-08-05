@@ -216,20 +216,6 @@ def record_call() -> dict:
     return p
 
 
-def check_milestone() -> int | None:
-    """If today's call just reached a days-connected milestone we haven't celebrated,
-    return it (once). Call after record_call(). Celebration, never obligation (§6)."""
-    p = _load()
-    streak = p.get("current_streak", 0)
-    celebrated = p.get("celebrated_milestones", [])
-    if streak in _MILESTONES and streak not in celebrated:
-        celebrated.append(streak)
-        p["celebrated_milestones"] = celebrated
-        _save(p)
-        return streak
-    return None
-
-
 # §3.2 — the depth meter, surfaced as stages rather than points. A relationship
 # with a score attached stops feeling like a relationship, so this never renders a
 # number and there is nothing here to grind.
