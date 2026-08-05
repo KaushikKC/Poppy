@@ -80,7 +80,10 @@ async def _ritual_notifier_loop():
             if due.get("due") and await asyncio.to_thread(companion.should_notify):
                 prof = await asyncio.to_thread(companion.profile)
                 text = await asyncio.to_thread(nudges.compose_nudge, due.get("kind"))
-                await asyncio.to_thread(notify.send, prof.get("companion_name", "Poppy"), text)
+                # §4.8: past the end of the ladder the copy is empty, which means
+                # send nothing. Mark it handled so we don't retry every 30s.
+                if text:
+                    await asyncio.to_thread(notify.send, prof.get("companion_name", "Poppy"), text)
                 await asyncio.to_thread(companion.mark_notified)
         except Exception as e:
             print(f"[ritual] notifier loop error: {e}")
@@ -317,6 +320,8 @@ async def ritual_due():
     if not due.get("due"):
         return {"due": False}
     text = await asyncio.to_thread(nudges.compose_nudge, due.get("kind"))
+    if not text:
+        return {"due": False}  # §4.8: past the ladder, silence is the message
     return {"due": True, "kind": due.get("kind"), "text": text}
 
 
