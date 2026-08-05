@@ -17,6 +17,8 @@ import loops
 import loop_author
 import streak
 import quests
+import bloom
+import garden
 import opening
 import ritual_pact
 import nudges
@@ -267,6 +269,9 @@ async def open_call(payload: dict = Body(default={})):
     # qualifying call. It's surfaced here so she can make it a moment inside the
     # next conversation rather than a badge popup (§4.1).
     milestone = await asyncio.to_thread(streak.check_milestone)
+    # §4.4: a level-up is a scene, not a toast. Surfaced here so she can notice it
+    # herself mid-conversation, which is a reward no XP bar can produce.
+    level_up = await asyncio.to_thread(bloom.take_level_up)
     ws_handler.mark_call_start()
 
     # ACT 1 (RETENTION_ENGINE §7): the opener pays off the open loop before
@@ -298,6 +303,7 @@ async def open_call(payload: dict = Body(default={})):
         "opening": line, "profile": profile,
         "milestone": milestone, "callback_offered": callback_offered,
         "surfaced_loop_id": surfaced["id"] if surfaced else None,
+        "level_up": level_up,
     }
 
 
@@ -436,6 +442,34 @@ async def close_call(payload: dict = Body(default={})):
     if await asyncio.to_thread(streak.qualifies, duration, quest_done or data.get("quest_done")):
         streak_status = await asyncio.to_thread(streak.record_activity)
         await asyncio.to_thread(db.record_event, "streak_day", streak_status["current"])
+
+    # §3.1: a call plants a bud, a call with something real in it blooms. Absence
+    # never removes anything, so there is no path here that takes a flower away.
+    #
+    # Gated on the same floor as the streak rather than on whether they spoke, so
+    # one call grows exactly one thing and the garden can't disagree with the day
+    # the streak just credited.
+    if streak_status:
+        await asyncio.to_thread(
+            garden.plant, data.get("mode") or "talk", bool(meaningful),
+        )
+
+    # §4.4: depth, not duration. Note there is deliberately no award keyed to how
+    # long the call ran past the floor, which is what makes the number
+    # un-grindable and stops a user optimising BP from optimising minutes.
+    if not await asyncio.to_thread(companion.daily_layer_off):
+        if streak_status:
+            await asyncio.to_thread(bloom.award, "call")
+        if surfaced_id and spoke:
+            await asyncio.to_thread(bloom.award, "loop_resolved")
+        if data.get("saved_memory"):
+            await asyncio.to_thread(bloom.award, "memory_saved")
+        if data.get("edited_memory"):
+            await asyncio.to_thread(bloom.award, "memory_edited")
+        if await asyncio.to_thread(ritual_pact.anchor_now):
+            await asyncio.to_thread(bloom.award, "ritual_hit")
+        if quest_done:
+            await asyncio.to_thread(bloom.award, "quest", len(newly))
 
     await asyncio.to_thread(db.record_event, "call_ended", duration)
     if meaningful:
