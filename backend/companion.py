@@ -38,6 +38,18 @@ _DEFAULTS = {
     "current_streak": 0,
     "longest_streak": 0,
     "total_calls": 0,
+    # Streak state (§4.1), owned by streak.py. Declared here because `update()`
+    # only writes keys it knows about, and the profile is where they live.
+    "streak_last_date": None,     # local streak-date of the last qualifying activity
+    "streak_freezes": 1,          # one in hand from the start, so a first miss is soft
+    "streak_fragments": 0,        # 5 fragments make a freeze
+    "streak_freeze_mark": 0,      # streak length at the last freeze grant
+    "streak_repair_month": None,  # "YYYY-MM" the free repair was used
+    "streak_broken_at": None,     # ISO timestamp of the break, for the 48h window
+    "streak_broken_from": 0,      # what the run was worth when it stopped
+    "streak_freeze_notice": 0,    # freezes spent since the user was last told
+    "streak_history": [],         # local ISO dates that met the floor
+    "streak_frozen_days": [],     # local ISO dates a freeze covered for them
     "ritual_time": None,         # "HH:MM" (local) the user opted into, or None
     "ritual_kind": None,         # "morning" | "night" | None
     "ritual_pact_asked_on": None,  # local ISO date she last raised the pact (§5)
