@@ -506,6 +506,29 @@ async def get_referral():
     return await asyncio.to_thread(billing.referral)
 
 
+@app.get("/garden")
+async def get_garden():
+    """The garden (§3.1). Carries no number of any kind: the counting all lives on
+    the /bloom surface, and the moment one appears here the user starts gardening
+    for a score instead of talking."""
+    return await asyncio.to_thread(garden.state)
+
+
+@app.get("/garden/year")
+async def get_year():
+    """"My year with Poppy" (§3.1): the private-by-default share artifact."""
+    return await asyncio.to_thread(garden.year_in_review)
+
+
+@app.get("/bloom")
+async def get_bloom():
+    """Level, band, and the distance to the next level only when the user is
+    inside the last 20% of it (§4.4's goal gradient)."""
+    if await asyncio.to_thread(companion.daily_layer_off):
+        return {"off": True}
+    return await asyncio.to_thread(bloom.status)
+
+
 @app.get("/quests")
 async def get_quests():
     """Today's three quests, the chosen goal, and the ring (§4.2, §4.3). Slot 1 is
