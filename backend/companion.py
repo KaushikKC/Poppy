@@ -53,6 +53,11 @@ _DEFAULTS = {
     "daily_goal": None,           # "light" | "regular" | "deep", chosen by the user (§4.2)
     "quests_state": {},           # {"day": ISO, "done": [quest ids]} (§4.3)
     "daily_layer_off": False,     # §4.9 kill switch: "just let me talk to her"
+    # Bloom Points carry ALL the counting (§4.4); the garden carries none of it (§3).
+    "bloom_points": 0,
+    "bloom_day": {},              # {"day": ISO, "earned": {source: bp}} for the daily caps
+    "bloom_level_seen": 1,        # last level she has acknowledged in a call
+    "garden": [],                 # the flowers, one per call (§3.1). Never pruned by absence.
     "ritual_time": None,         # "HH:MM" (local) the user opted into, or None
     "ritual_kind": None,         # "morning" | "night" | None
     "ritual_pact_asked_on": None,  # local ISO date she last raised the pact (§5)
