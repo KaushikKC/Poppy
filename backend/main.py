@@ -15,6 +15,7 @@ import characters
 import companion
 import loops
 import loop_author
+import streak
 import opening
 import ritual_pact
 import nudges
@@ -258,7 +259,10 @@ async def open_call(payload: dict = Body(default={})):
         return {"paywall": ent}
 
     profile = await asyncio.to_thread(companion.record_call)
-    milestone = await asyncio.to_thread(companion.check_milestone)
+    # The milestone was reached when the streak was credited, at the *close* of the
+    # qualifying call. It's surfaced here so she can make it a moment inside the
+    # next conversation rather than a badge popup (§4.1).
+    milestone = await asyncio.to_thread(streak.check_milestone)
     ws_handler.mark_call_start()
 
     # ACT 1 (RETENTION_ENGINE §7): the opener pays off the open loop before
@@ -400,6 +404,14 @@ async def close_call(payload: dict = Body(default={})):
 
     duration = float(data.get("duration_s") or 0)
     meaningful = duration >= 60 or bool(data.get("saved_memory"))
+
+    # §4.1: the day is credited here, not at call open, and only once the floor is
+    # actually met. The floor is deliberately low so a bad day can still be kept.
+    streak_status = None
+    if await asyncio.to_thread(streak.qualifies, duration, data.get("quest_done")):
+        streak_status = await asyncio.to_thread(streak.record_activity)
+        await asyncio.to_thread(db.record_event, "streak_day", streak_status["current"])
+
     await asyncio.to_thread(db.record_event, "call_ended", duration)
     if meaningful:
         await asyncio.to_thread(db.record_event, "meaningful_session", duration)
@@ -410,6 +422,7 @@ async def close_call(payload: dict = Body(default={})):
         "meaningful": meaningful,
         "open_loop": planted.get("hook_text") if planted else None,
         "ritual": ritual,
+        "streak": streak_status,
     }
 
 
