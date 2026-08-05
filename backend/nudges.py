@@ -62,6 +62,50 @@ def _guard(text: str) -> str:
     return text if is_healthy(text) else _SAFE_FALLBACK
 
 
+# §4.8 — the escalation ladder, ported without the owl's guilt. Duolingo's
+# passive-aggression works because it's a meme about a cartoon bird and the stakes
+# are language lessons. Our users have told this thing real things, so the same
+# tone reads as emotional coercion rather than a joke.
+#
+# The day-5 line is the honest re-engagement play and it genuinely outperforms
+# escalation: "I'll stop nudging" is the only message in the category that signals
+# the app isn't desperate. Then we actually stop, because one real hook at day 30
+# is worth more than twenty ignored pings.
+_LADDER = {
+    1: None,   # the open loop itself carries day 1; never mention the streak
+    2: "still time today if you want it.",
+    3: "no pressure. just here when you want to talk.",
+    5: "I'll stop nudging now. you know where I am.",
+}
+LADDER_SILENCE_DAY = 7
+
+
+def ladder_line() -> str | None:
+    """Where we are on the ladder, or None to fall through to the open loop.
+
+    Returns "" to mean *say nothing at all* (§6: silence is a feature), which is
+    what happens from day 7 onward.
+    """
+    days = companion.days_since_last_call()
+    if days is None or days <= 1:
+        return None
+    if days >= LADDER_SILENCE_DAY:
+        return ""
+    line = None
+    for threshold in sorted(_LADDER):
+        if days >= threshold:
+            line = _LADDER[threshold]
+    if line is None:
+        return None
+    # The streak is only ever mentioned as something still available, never as
+    # something about to be lost.
+    import streak
+    current = streak.status().get("current", 0)
+    if days == 2 and current > 1:
+        return f"{current} days. one call keeps it going, even a short one."
+    return line
+
+
 def compose_nudge(kind: str | None = None) -> str:
     """A personal, specific, forward-looking reminder in Poppy's voice.
 
@@ -72,10 +116,17 @@ def compose_nudge(kind: str | None = None) -> str:
     muted. The ritual lines below are the only fallback, and they fire only
     because the user set that time themselves.
 
+    After a few missed days the §4.8 ladder takes over, and from day 7 this
+    returns **""** meaning send nothing at all. Callers must treat empty as
+    silence rather than as a message.
+
     Always guarded before it leaves this function.
     """
+    ladder = ladder_line()
     loop = companion.latest_open_loop()
-    if loop:
+    if ladder is not None:
+        candidate = ladder
+    elif loop:
         candidate = loop
     elif kind == "morning":
         candidate = "Morning. Want to start the day together for a minute?"
