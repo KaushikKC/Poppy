@@ -287,6 +287,7 @@
     renderFreezeNotice(h.freeze_notice);
     renderRepair(h.streak);
     loadToday();
+    loadGarden();
     renderPersonalityNotice();
     renderRitual(h);
     checkRitualDue();
@@ -420,6 +421,42 @@
     document.getElementById("today")?.classList.add("hidden");
     document.getElementById("home-today")?.classList.add("hidden");
     await loadHome();
+  });
+
+  // ── The garden (§3.1) ───────────────────────────────────────────────────────
+  // The record of what they've grown, and the thing that makes leaving painful
+  // after two months. Note there is no count rendered anywhere in here: §3 keeps
+  // every number on the daily-layer surface, because the moment the relationship
+  // gets a score attached the user starts optimising instead of talking.
+  async function loadGarden() {
+    const btn = document.getElementById("home-garden");
+    if (!btn) return;
+    let g = {};
+    try { g = await (await fetch(`${BACKEND}/garden`)).json(); } catch {}
+    // §8: never show a progress surface while it's empty. First sight is never zero.
+    if (g.empty || !g.flowers) { btn.classList.add("hidden"); return; }
+    _garden = g;
+    btn.classList.remove("hidden");
+  }
+
+  let _garden = null;
+
+  document.getElementById("home-garden")?.addEventListener("click", () => {
+    if (!_garden) return;
+    const view = document.getElementById("garden");
+    view.classList.remove("hidden");
+    const note = document.getElementById("garden-note");
+    // Names the season, never a total. A season is a temporal landmark; a total
+    // is a scoreboard.
+    if (note) note.textContent = `${_garden.season} in your garden`;
+    // Render after the view is visible so the canvas has a real size.
+    requestAnimationFrame(() => {
+      window.PoppyGarden?.render(document.getElementById("garden-canvas"), _garden);
+    });
+  });
+  document.getElementById("garden-close")?.addEventListener("click", () => {
+    window.PoppyGarden?.stop();
+    document.getElementById("garden")?.classList.add("hidden");
   });
 
   // ── Change companion from home (memory/voice/orb all swap with it) ───────────

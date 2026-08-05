@@ -98,8 +98,20 @@
       <!-- §4.7: today's quests live behind a tap, not on the home surface, so the
            screen never carries more than two progress indicators at once -->
       <button type="button" id="home-today" class="home-today hidden"></button>
+      <!-- §3.1: the garden. Carries no number, so it isn't one of §4.7's two
+           progress indicators; it's the record, not the score. -->
+      <button type="button" id="home-garden" class="home-today hidden">Your garden</button>
       <!-- §6: opt-in daily ritual the user picks themselves -->
       <div class="home-ritual" id="home-ritual"></div>
+    </div>
+  </div>
+
+  <!-- §3.1: the garden, the visible investment that makes leaving painful -->
+  <div id="garden" class="hidden" role="dialog" aria-modal="true" aria-label="Your garden">
+    <canvas id="garden-canvas"></canvas>
+    <div class="garden-bar">
+      <p id="garden-note" class="garden-note"></p>
+      <button type="button" id="garden-close" class="outro-ghost">Close</button>
     </div>
   </div>
 
@@ -245,6 +257,7 @@
   <script src="ui.js"></script>
   <!-- View orchestrator: onboarding → home → call (loads after chat.js so it can
        call window.sendMessage / window.speakLine and PersonaPicker) -->
+  <script src="garden.js"></script>
   <script src="flow.js"></script>
   <!-- 3D avatar controller (ES module, loads after the classic scripts) -->
   <!-- v1 uses the local orb avatar (orb_avatar.js). The 3D/realistic avatar is
