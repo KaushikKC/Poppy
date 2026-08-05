@@ -421,6 +421,7 @@ async def close_call(payload: dict = Body(default={})):
     # ticking a box. A quest finished without trying should feel like the app
     # noticing you.
     quest_done = False
+    newly: list[str] = []
     if not await asyncio.to_thread(companion.daily_layer_off):
         signals = {
             "loop_resolved": bool(surfaced_id and spoke),
