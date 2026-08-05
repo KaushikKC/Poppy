@@ -283,8 +283,10 @@
       streak.classList.add("hidden");
     }
 
+    _streakWeek = (h.streak && h.streak.week) || null;
     renderFreezeNotice(h.freeze_notice);
     renderRepair(h.streak);
+    loadToday();
     renderPersonalityNotice();
     renderRitual(h);
     checkRitualDue();
@@ -344,6 +346,81 @@
     box.append(msg, btn);
     box.classList.remove("hidden");
   }
+
+  // ── Today: quests, the goal ring, the week (§4.2, §4.3, §4.7) ────────────────
+  // Deliberately behind a tap. Home shows her open loop plus at most one number
+  // (§4.7); six progress indicators on one screen turns a companion into a task
+  // manager and the emotional register, which is the whole moat, dies with it.
+  async function loadToday() {
+    const btn = document.getElementById("home-today");
+    if (!btn) return;
+    let t = {};
+    try { t = await (await fetch(`${BACKEND}/quests`)).json(); } catch {}
+    if (t.off || !t.quests) { btn.classList.add("hidden"); return; }
+
+    // Ending the day at 2 of 3 is the loop, not a failure state (§4.3).
+    btn.textContent = `Today · ${t.completed} of ${t.total}`;
+    btn.classList.remove("hidden");
+    _today = t;
+  }
+
+  let _today = null;
+
+  function renderToday() {
+    const t = _today;
+    if (!t) return;
+    const list = document.getElementById("today-list");
+    list.innerHTML = "";
+    t.quests.forEach((q) => {
+      const li = document.createElement("li");
+      li.className = "today-item" + (q.done ? " done" : "");
+      // Slot 1 is always her open loop (§4.3) — the fusion of the two layers.
+      li.innerHTML =
+        `<span class="today-tick">${q.done ? "●" : "○"}</span>` +
+        `<span class="today-text">${q.text}</span>`;
+      list.appendChild(li);
+    });
+
+    // A partially filled ring is the cheapest open loop in the product (§4.2).
+    const ring = document.getElementById("today-ring");
+    const pct = Math.round((t.ring || 0) * 100);
+    ring.style.setProperty("--pct", pct);
+    ring.textContent = t.goal_met ? "✓" : `${t.completed}/${t.total}`;
+
+    const week = document.getElementById("today-week");
+    week.innerHTML = "";
+    (_streakWeek || []).forEach((d) => {
+      const dot = document.createElement("span");
+      // A frozen day is shown as its own thing, never as a day they turned up.
+      dot.className = "week-dot" +
+        (d.met ? " met" : "") + (d.frozen ? " frozen" : "") + (d.today ? " today" : "");
+      week.appendChild(dot);
+    });
+  }
+
+  let _streakWeek = null;
+
+  document.getElementById("home-today")?.addEventListener("click", () => {
+    renderToday();
+    document.getElementById("today")?.classList.remove("hidden");
+  });
+  document.getElementById("today-close")?.addEventListener("click", () => {
+    document.getElementById("today")?.classList.add("hidden");
+  });
+  // §4.9: turning the layer off is one tap, takes effect immediately, and
+  // nothing ever asks them to turn it back on.
+  document.getElementById("today-off")?.addEventListener("click", async () => {
+    try {
+      await fetch(`${BACKEND}/daily-layer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ off: true }),
+      });
+    } catch {}
+    document.getElementById("today")?.classList.add("hidden");
+    document.getElementById("home-today")?.classList.add("hidden");
+    await loadHome();
+  });
 
   // ── Change companion from home (memory/voice/orb all swap with it) ───────────
   function tintOrbForCurrent(key) {

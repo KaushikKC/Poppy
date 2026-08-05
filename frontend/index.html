@@ -95,8 +95,29 @@
         <strong id="home-name">Poppy</strong>
       </button>
       <div class="home-modes" id="home-modes"></div>
+      <!-- §4.7: today's quests live behind a tap, not on the home surface, so the
+           screen never carries more than two progress indicators at once -->
+      <button type="button" id="home-today" class="home-today hidden"></button>
       <!-- §6: opt-in daily ritual the user picks themselves -->
       <div class="home-ritual" id="home-ritual"></div>
+    </div>
+  </div>
+
+  <!-- §4.2/§4.3: today's quests and the goal ring. A panel rather than part of
+       home, so the home screen keeps to two progress indicators (§4.7). -->
+  <div id="today" class="hidden" role="dialog" aria-modal="true" aria-label="Today">
+    <div class="today-card">
+      <div class="today-head">
+        <p class="today-kicker">Today</p>
+        <div id="today-ring" class="today-ring" aria-hidden="true"></div>
+      </div>
+      <ul id="today-list" class="today-list"></ul>
+      <p id="today-week-label" class="today-kicker">This week</p>
+      <div id="today-week" class="today-week"></div>
+      <div class="today-actions">
+        <button type="button" id="today-close" class="outro-primary">Done</button>
+        <button type="button" id="today-off" class="outro-ghost">Just let me talk to her</button>
+      </div>
     </div>
   </div>
 
