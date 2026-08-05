@@ -16,6 +16,7 @@ import companion
 import loops
 import loop_author
 import streak
+import quests
 import opening
 import ritual_pact
 import nudges
@@ -405,10 +406,29 @@ async def close_call(payload: dict = Body(default={})):
     duration = float(data.get("duration_s") or 0)
     meaningful = duration >= 60 or bool(data.get("saved_memory"))
 
+    # §4.3: quests complete from what actually happened, never from the user
+    # ticking a box. A quest finished without trying should feel like the app
+    # noticing you.
+    quest_done = False
+    if not await asyncio.to_thread(companion.daily_layer_off):
+        signals = {
+            "loop_resolved": bool(surfaced_id and spoke),
+            "call_5min": duration >= 300,
+            "ritual_time": bool(await asyncio.to_thread(ritual_pact.anchor_now)),
+            "good_thing": bool(data.get("good_thing")),
+            "memory_saved": bool(data.get("saved_memory")),
+            "memory_edited": bool(data.get("edited_memory")),
+            "mood_new": bool(data.get("mood_new")),
+        }
+        newly = await asyncio.to_thread(quests.complete, signals)
+        quest_done = bool(newly)
+        for _ in newly:
+            await asyncio.to_thread(db.record_event, "quest_completed")
+
     # §4.1: the day is credited here, not at call open, and only once the floor is
     # actually met. The floor is deliberately low so a bad day can still be kept.
     streak_status = None
-    if await asyncio.to_thread(streak.qualifies, duration, data.get("quest_done")):
+    if await asyncio.to_thread(streak.qualifies, duration, quest_done or data.get("quest_done")):
         streak_status = await asyncio.to_thread(streak.record_activity)
         await asyncio.to_thread(db.record_event, "streak_day", streak_status["current"])
 
