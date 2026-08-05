@@ -316,12 +316,36 @@ loop, and `loop_close_rate` / `user_initiated_rate` move accordingly.
 
 ### Sprint 4 — visible investment (§3)
 
-22. Port `useFlowerField.ts` from the landing page into the app as the garden.
+**Status: items 22-23 done (2026-08-05). Item 24 partly done.**
+
+22. ✅ Port `useFlowerField.ts` from the landing page into the app as the garden.
     Bud on call, bloom on a meaningful one, flower identity by call type, **never
     wilts**.
-23. Bloom Points + levels 1-50 per the §4.4 table — including the load-bearing
+23. ✅ Bloom Points + levels 1-50 per the §4.4 table — including the load-bearing
     `call duration beyond 60s = 0 BP` row.
-24. Moment collection, closeness stages, Seasons, Journeys.
+24. Partly: closeness stages ✅ (Sprint 1), garden seasons ✅. **Moment collection ☐, §4.5A Seasons ☐, Journeys ☐** still outstanding.
+
+> **The doc contradicts itself on the level curve, and this is how it was
+> resolved.** §4.4 states three things that cannot all hold:
+>
+> | | states | at ~75 BP/day |
+> |---|---|---|
+> | the formula | `BP_to_next = 100 x level^1.35` | L50 in ~15 years |
+> | the totals | "~1,900 for L20, ~6,000 for L50" | L50 in ~80 days |
+> | the pacing | "L10 in ~3 weeks, L50 in ~a year" | the target |
+>
+> The pacing is the part that describes how the product should *feel*, so the
+> curve is tuned to it while keeping the doc's power-curve shape:
+> `45 x level^0.8` gives L10 in ~19 days and L50 in ~374 days. The one cost is
+> that L2 asks 45 BP rather than the quoted ~100. Reasoning is written out above
+> the constants in `bloom.py`; revisit if the quoted totals were the real intent.
+>
+> **Other decisions:** the garden is gated on the same floor as the streak rather
+> than on whether the user spoke, so one call grows exactly one thing and the two
+> surfaces can never disagree. The renderer takes only the flower-drawing math
+> from `useFlowerField`; that hook's scroll/hero/frame-manifest machinery has no
+> analogue here. Flower positions are hashed from a stored per-flower seed, so the
+> field looks grown rather than plotted and looks the same on every visit.
 
 ### Sprint 5+ — depth and network (§4 Phase 4-5)
 
