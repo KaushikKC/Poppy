@@ -257,6 +257,17 @@ def closeness() -> dict:
     return {"stage": stage, "label": CLOSENESS_STAGES[stage]}
 
 
+def daily_layer_off() -> bool:
+    """§4.9's kill switch: Settings, "Just let me talk to her".
+
+    A meaningful minority turn the whole counting layer off, and in every product
+    like this that cohort has the *highest* LTV. So this hides it completely and
+    nothing nags them back: no re-prompt, no A/B test to win them over. It ships
+    with the layer rather than after it.
+    """
+    return bool(_load().get("daily_layer_off"))
+
+
 def set_ritual(kind: str | None, time_str: str | None) -> dict:
     """Opt into (or clear) a daily ritual time the user chose themselves (§6). A
     ritual the user picks is a habit; a ping they didn't ask for is spam."""
