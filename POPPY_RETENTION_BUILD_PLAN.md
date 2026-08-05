@@ -268,23 +268,51 @@ loop, and `loop_close_rate` / `user_initiated_rate` move accordingly.
 
 ### Sprint 3 — the daily layer core (§4, in the doc's exact order)
 
-15. **Streak rebuild** — local date + 4AM rollover, credited at `/call/close` on
+**Status: items 15, 17-21 done (2026-08-05). Item 16, the widget, outstanding.**
+
+15. ✅ **Streak rebuild** — local date + 4AM rollover, credited at `/call/close` on
     ≥60s or a completed quest, states `safe/at_risk/frozen/repairable/broken`,
     freeze economy (2 max, 1 per 7 days, silent consumption, warm after-the-fact
     disclosure), 48h repair free once a month. Milestones expanded to the 11
     tiers, still delivered as an in-call moment.
-16. **Widget** — streak number + current loop, one line. Doc's sleeper DAU lever.
+16. ☐ **Widget** — streak number + current loop, one line. Doc's sleeper DAU lever.
     On macOS this is a separate target; scope it as its own task, not a
     sub-bullet.
-17. **Daily goal pact** (Light/Regular/Deep) chosen out loud, in the same call as
+17. ✅ **Daily goal pact** (Light/Regular/Deep) chosen out loud, in the same call as
     the ritual pact. Goal ring on home, never full for long.
-18. **3 daily quests**, slot 1 hard-wired to the open loop. Tune to ~70%
+18. ✅ **3 daily quests**, slot 1 hard-wired to the open loop. Tune to ~70%
     completion inside one session.
-19. **Perfect Week calendar** — 7 dots. Cheapest DAU mechanic here.
-20. **Kill switch** — Settings → *"Just let me talk to her"* hides the whole
+19. ✅ **Perfect Week calendar** — 7 dots. Cheapest DAU mechanic here.
+20. ✅ **Kill switch** — Settings → *"Just let me talk to her"* hides the whole
     layer. Ship it with the layer, and track that cohort's D30 separately.
-21. **Notification ladder** (§4.8) — day 1/2/3/5, then silence at 7+. Extend
+21. ✅ **Notification ladder** (§4.8) — day 1/2/3/5, then silence at 7+. Extend
     `nudges.py`, which already has the guardrail choke point.
+
+> **All three P0 defects from §2 are now closed.** P0-3 was the last: the streak
+> counted `/call/open` on a UTC clock, so launching the app and shutting it earned
+> a day and the day itself could be the wrong one. It now credits at close, on a
+> local 4am boundary, only once a 60-second call or a completed quest has actually
+> happened.
+>
+> **Decisions worth keeping:**
+> - Freezes settle **lazily**, not at a 4am job, because a desktop app may not be
+>   running then. The break is dated to the rollover it happened at rather than to
+>   when we noticed, or an abandoned streak would keep offering repair forever.
+> - A **`none`** state was added to §4.1's five. A user who never had a streak has
+>   not broken one, and offering to repair it is both false and the shame framing
+>   the section rules out.
+> - Freeze-covered days are recorded **separately** from days they turned up, so
+>   the Perfect Week calendar shows them as covered instead of claiming attendance.
+> - `companion.update()` only writes keys it already knows about, so every
+>   `streak_*` field had to be declared in the profile defaults. Fields declared
+>   only in the owning module were silently dropped on save.
+> - Today lives **behind a tap**, not on home. §4.7 caps the home screen at two
+>   progress indicators with her open loop always one of them, and quests + ring +
+>   streak + closeness would have been four.
+>
+> **Item 16, the widget, is not built.** It is a separate macOS target rather than
+> a change to this codebase, and the doc flags it as the sleeper DAU lever, so it
+> deserves its own pass rather than being tacked on here.
 
 ### Sprint 4 — visible investment (§3)
 
