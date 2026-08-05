@@ -447,6 +447,23 @@ async def get_referral():
     return await asyncio.to_thread(billing.referral)
 
 
+@app.get("/streak")
+async def get_streak():
+    """The full streak state (§4.1): the count, which of the five states it's in,
+    freezes in hand, and the seven Perfect Week dots."""
+    return await asyncio.to_thread(streak.status)
+
+
+@app.post("/streak/repair")
+async def repair_streak():
+    """Restore a streak broken within the last 48 hours. Free, once a calendar
+    month, no ceremony. Charging to undo an emotional-sounding failure is the one
+    thing §4.1 marks red about repair, so there is no payment path here at all."""
+    result = await asyncio.to_thread(streak.repair)
+    await asyncio.to_thread(db.record_event, "streak_repaired", result["current"])
+    return result
+
+
 @app.get("/metrics")
 async def get_metrics():
     """The §12 dashboard, computed from content-free local events. Optimizes for
