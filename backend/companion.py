@@ -67,9 +67,9 @@ _DEFAULTS = {
     "referral_code": None,       # the user's share code (§7 growth loop B)
 }
 
-# Days-connected milestones worth a warm moment (§6). Celebration only, never an
-# obligation, and a broken streak is never punished — that's handled in the opener.
-_MILESTONES = (7, 30, 100, 365)
+# Streak state lives in this profile but is owned by streak.py (RETENTION_ENGINE
+# §4.1), which holds the 4am rollover, the freeze economy and the eleven
+# milestone tiers. Nothing here should change those fields directly.
 
 
 def _load() -> dict:
@@ -201,27 +201,14 @@ def _today() -> date:
 
 
 def record_call() -> dict:
-    """Mark that a call happened today and roll the streak forward (§6).
+    """Mark that a call started.
 
-    Streak rules, deliberately kind: a same-day repeat call doesn't change it; a
-    call the day after the last one increments it; a longer gap resets it to 1.
-    A broken streak is never punished — that's a UI concern, and the copy on
-    return is warmth, not shame.
+    This no longer touches the streak. Opening the app and closing it again is
+    not a day, and the old build credited one here, before a single word was
+    spoken. The streak is credited at call *close*, once the floor is actually
+    met (RETENTION_ENGINE §4.1, see streak.py).
     """
     p = _load()
-    today = _today()
-    last = p.get("last_call_date")
-    last_date = date.fromisoformat(last) if last else None
-
-    if last_date == today:
-        pass  # already counted today
-    elif last_date == date.fromordinal(today.toordinal() - 1):
-        p["current_streak"] = p.get("current_streak", 0) + 1
-    else:
-        p["current_streak"] = 1
-
-    p["last_call_date"] = today.isoformat()
-    p["longest_streak"] = max(p.get("longest_streak", 0), p["current_streak"])
     p["total_calls"] = p.get("total_calls", 0) + 1
     # Talking counts as meeting today's ritual, so the reminder won't nag afterwards.
     p["last_reminded_date"] = datetime.now().date().isoformat()
