@@ -28,23 +28,31 @@
   const SEASONS = {
     spring: {
       sky: "#a9d5ef", skySoft: "#d5ebf7", haze: "#fff8ea", sun: "rgba(255,244,214,0.55)",
+      cloud: "rgba(255,255,255,0.95)", cloudSoft: "rgba(255,252,246,0.5)",
       hillFar: "#a8c9a4", hillNear: "#7fae74",
-      meadow: "#8fc47a", meadowMid: "#6aa658", deep: "#2f6b34", grass: "#3f7a3a",
+      meadow: "#8fc47a", meadowMid: "#6aa658", deep: "#2f6b34",
+      grass: "#4f8f45", grassLight: "#7fc06a", grassDark: "#2f6b34",
     },
     summer: {
       sky: "#8fd0ee", skySoft: "#c9e8f6", haze: "#fff8ea", sun: "rgba(255,240,196,0.6)",
+      cloud: "rgba(255,255,255,0.96)", cloudSoft: "rgba(252,250,242,0.5)",
       hillFar: "#9cc593", hillNear: "#6da55e",
-      meadow: "#7cba63", meadowMid: "#589c48", deep: "#255c26", grass: "#2f6b2c",
+      meadow: "#7cba63", meadowMid: "#589c48", deep: "#255c26",
+      grass: "#3f8a35", grassLight: "#78bd5f", grassDark: "#255c26",
     },
     autumn: {
       sky: "#f2d9b6", skySoft: "#f8e9d4", haze: "#fff3e0", sun: "rgba(255,214,150,0.6)",
+      cloud: "rgba(255,250,240,0.95)", cloudSoft: "rgba(250,238,220,0.5)",
       hillFar: "#cbb083", hillNear: "#a98b57",
-      meadow: "#c2a259", meadowMid: "#a08243", deep: "#5f4720", grass: "#6d5326",
+      meadow: "#c2a259", meadowMid: "#a08243", deep: "#5f4720",
+      grass: "#8a6b32", grassLight: "#c9a95e", grassDark: "#5f4720",
     },
     winter: {
       sky: "#c8d9e6", skySoft: "#e6eef4", haze: "#f7fbff", sun: "rgba(238,246,255,0.55)",
+      cloud: "rgba(255,255,255,0.9)", cloudSoft: "rgba(238,246,252,0.5)",
       hillFar: "#b9c6c2", hillNear: "#94a89e",
-      meadow: "#9db3a4", meadowMid: "#7e9689", deep: "#42574e", grass: "#4a5f55",
+      meadow: "#9db3a4", meadowMid: "#7e9689", deep: "#42574e",
+      grass: "#6a8074", grassLight: "#9db3a4", grassDark: "#42574e",
     },
   };
 
@@ -65,96 +73,142 @@
 
   function layout(flower, i, total) {
     const s = flower.seed || i * 37;
-    // Older calls sit further back, so the field reads front-to-back as recency
-    // without ever labelling it.
-    const age = total > 1 ? i / (total - 1) : 1;
-    const depth = lerp(0.34, 1, age * 0.75 + rand(s, 3) * 0.25);
+    // Depth is derived from where the flower stands, not from how old it is.
+    // They were independent before, so an old call could be placed in the
+    // foreground and still drawn tiny, which is why one flower looked like it was
+    // floating at the horizon. Further down the field = nearer = bigger.
+    //
+    // Placement is biased toward the foreground so that a garden of five flowers
+    // still reads as a garden rather than five specks near the skyline.
+    const y = Math.pow(rand(s, 2), 0.62);
+    // Newer calls lean toward the front, but only as a nudge: position wins.
+    const recency = total > 1 ? i / (total - 1) : 1;
+    const yy = Math.min(1, y * 0.75 + recency * 0.25);
     return {
-      x: rand(s, 1),
-      y: rand(s, 2),
-      depth,
-      size: lerp(0.75, 1.15, rand(s, 4)),
+      // Spread across the field by golden-ratio spacing rather than pure
+      // randomness. With four flowers, random seeds clump into one corner and
+      // the field looks empty; this covers the width at any count, and the
+      // jitter keeps it from looking planted in a row.
+      x: 0.05 + (((i * 0.6180339887) % 1) * 0.86 + (rand(s, 1) - 0.5) * 0.07 + 1) % 1 * 0.9,
+      y: yy,
+      depth: 0.28 + yy * 0.72,
+      size: lerp(0.85, 1.25, rand(s, 4)),
       lean: (rand(s, 5) - 0.5) * 1.4,
       phase: rand(s, 6) * Math.PI * 2,
     };
   }
 
-  // Depth, drawn back to front: sky, sun, far hills, near hills, meadow, grass.
-  // A flat two-band background made the flowers look pasted onto a colour swatch;
-  // haze between the layers is what reads as distance.
-  function drawField(ctx, W, H, pal, t, reduced) {
-    const horizon = H * 0.44;
+  // ── Background ─────────────────────────────────────────────────────────────
+  // Split in two on purpose: the land never changes, so it is drawn once into an
+  // offscreen canvas and blitted. Only the clouds move. That way the grass can be
+  // thousands of blades without costing anything per frame.
 
-    const sky = ctx.createLinearGradient(0, 0, 0, horizon);
+  function drawClouds(ctx, W, horizon, pal, t, reduced) {
+    // Slow drift. Clouds are the only part of the sky that moves, so this is the
+    // whole difference between "a blue rectangle" and "sky".
+    const shift = reduced ? 0 : (t * 0.004);
+    for (let c = 0; c < 7; c += 1) {
+      const baseX = rand(c, 21) * (W + 400) - 200;
+      const x = ((baseX + shift * (0.4 + rand(c, 22) * 0.8)) % (W + 460)) - 230;
+      const y = horizon * (0.14 + rand(c, 23) * 0.55);
+      const scale = 0.5 + rand(c, 24) * 1.1;
+      const puffs = 5 + Math.floor(rand(c, 25) * 4);
+
+      ctx.save();
+      ctx.globalAlpha = 0.5 + rand(c, 26) * 0.35;
+      // A cloud is a run of overlapping soft circles, biggest in the middle.
+      for (let i = 0; i < puffs; i += 1) {
+        const px = x + (i - puffs / 2) * 26 * scale;
+        const bell = 1 - Math.abs(i - (puffs - 1) / 2) / puffs;
+        const r = (14 + bell * 26 + rand(c * 10 + i, 27) * 8) * scale;
+        const py = y + (rand(c * 10 + i, 28) - 0.5) * 10 * scale;
+        const g = ctx.createRadialGradient(px, py, r * 0.2, px, py, r);
+        g.addColorStop(0, pal.cloud);
+        g.addColorStop(0.7, pal.cloudSoft);
+        g.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(px, py, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
+  function buildLand(W, H, pal) {
+    const horizon = H * 0.42;
+    const off = document.createElement("canvas");
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    off.width = Math.floor(W * dpr);
+    off.height = Math.floor(H * dpr);
+    const c = off.getContext("2d");
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const sky = c.createLinearGradient(0, 0, 0, horizon);
     sky.addColorStop(0, pal.sky);
-    sky.addColorStop(0.7, pal.skySoft);
+    sky.addColorStop(0.65, pal.skySoft);
     sky.addColorStop(1, pal.haze);
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, W, horizon + 1);
+    c.fillStyle = sky;
+    c.fillRect(0, 0, W, horizon + 1);
 
-    // Low sun, sitting just above the hills.
-    const sunX = W * 0.72;
-    const sunY = horizon * 0.42;
-    const glow = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, horizon * 0.85);
+    const sunX = W * 0.74, sunY = horizon * 0.34;
+    const glow = c.createRadialGradient(sunX, sunY, 0, sunX, sunY, horizon * 0.9);
     glow.addColorStop(0, pal.sun);
     glow.addColorStop(1, "rgba(255,248,234,0)");
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, W, horizon + 1);
+    c.fillStyle = glow;
+    c.fillRect(0, 0, W, horizon + 1);
 
-    // Two hill ranges. The far one is washed toward the haze so it sits back.
-    function hills(baseY, amp, step, fill, seedOff) {
-      ctx.fillStyle = fill;
-      ctx.beginPath();
-      ctx.moveTo(0, H);
-      ctx.lineTo(0, baseY);
-      for (let x = 0; x <= W; x += step) {
-        const y = baseY
-          - Math.sin(x * 0.006 + seedOff) * amp
-          - Math.sin(x * 0.013 + seedOff * 2) * amp * 0.45;
-        ctx.lineTo(x, y);
+    function hills(baseY, amp, fill, seedOff) {
+      c.fillStyle = fill;
+      c.beginPath();
+      c.moveTo(0, H);
+      c.lineTo(0, baseY);
+      for (let x = 0; x <= W; x += 10) {
+        c.lineTo(x, baseY - Math.sin(x * 0.006 + seedOff) * amp
+                       - Math.sin(x * 0.013 + seedOff * 2) * amp * 0.45);
       }
-      ctx.lineTo(W, H);
-      ctx.closePath();
-      ctx.fill();
+      c.lineTo(W, H);
+      c.closePath();
+      c.fill();
     }
-    hills(horizon - 4, 16, 14, pal.hillFar, 1.2);
-    hills(horizon + 6, 11, 12, pal.hillNear, 3.7);
+    hills(horizon - 3, 15, pal.hillFar, 1.2);
+    hills(horizon + 7, 10, pal.hillNear, 3.7);
 
-    // The meadow the flowers actually stand in.
-    const g = ctx.createLinearGradient(0, horizon, 0, H);
+    const g = c.createLinearGradient(0, horizon, 0, H);
     g.addColorStop(0, pal.meadow);
-    g.addColorStop(0.45, pal.meadowMid);
+    g.addColorStop(0.4, pal.meadowMid);
     g.addColorStop(1, pal.deep);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, horizon + 4, W, H - horizon);
+    c.fillStyle = g;
+    c.fillRect(0, horizon + 5, W, H - horizon);
 
-    // Grass strokes, denser and taller toward the front, so the ground has
-    // texture instead of being a gradient the stems are drawn on top of.
-    const drift = reduced ? 0 : Math.sin(t * 0.0009) * 3;
-    ctx.strokeStyle = pal.grass;
-    ctx.lineWidth = 1;
-    for (let i = 0; i < 260; i += 1) {
-      const r = rand(i, 11);
-      const depth = rand(i, 12);
-      const x = r * W;
-      const y = horizon + 6 + depth * depth * (H - horizon);
-      const len = 3 + depth * 16;
-      ctx.globalAlpha = 0.10 + depth * 0.22;
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.quadraticCurveTo(x + drift * depth, y - len * 0.6, x + (r - 0.5) * 9 + drift * depth, y - len);
-      ctx.stroke();
+    // The grass itself. Thousands of individual blades, short and pale near the
+    // horizon and tall and dark at your feet: that gradient of size is what the
+    // eye reads as ground receding, and it is what a flat fill can never do.
+    const blades = Math.round((W * H) / 260);
+    for (let i = 0; i < blades; i += 1) {
+      const d = Math.pow(rand(i, 31), 0.55);        // bias toward the foreground
+      const x = rand(i, 32) * W;
+      const y = horizon + 5 + d * (H - horizon - 5);
+      const len = 4 + d * 34 + rand(i, 33) * 8;
+      const lean = (rand(i, 34) - 0.5) * (10 + d * 26);
+      c.strokeStyle = i % 3 === 0 ? pal.grassLight : (i % 3 === 1 ? pal.grass : pal.grassDark);
+      c.globalAlpha = 0.35 + d * 0.5;
+      c.lineWidth = 0.7 + d * 1.6;
+      c.lineCap = "round";
+      c.beginPath();
+      c.moveTo(x, y);
+      c.quadraticCurveTo(x + lean * 0.35, y - len * 0.6, x + lean, y - len);
+      c.stroke();
     }
-    ctx.globalAlpha = 1;
+    c.globalAlpha = 1;
 
-    // Soft haze along the horizon so the ground meets the sky instead of cutting.
-    const seam = ctx.createLinearGradient(0, horizon - 14, 0, horizon + 26);
-    seam.addColorStop(0, "rgba(255,248,234,0.30)");
+    const seam = c.createLinearGradient(0, horizon - 16, 0, horizon + 30);
+    seam.addColorStop(0, "rgba(255,248,234,0.32)");
     seam.addColorStop(1, "rgba(255,248,234,0)");
-    ctx.fillStyle = seam;
-    ctx.fillRect(0, horizon - 14, W, 40);
+    c.fillStyle = seam;
+    c.fillRect(0, horizon - 16, W, 46);
 
-    return horizon;
+    return { canvas: off, horizon, W, H };
   }
 
   function drawFlower(ctx, f, pos, horizon, W, H, t, kinds, reduced) {
@@ -162,13 +216,13 @@
     const bloomed = f.state === "bloom";
     const drift = reduced ? 0 : Math.sin(t * 0.0013 + pos.phase);
     const x = pos.x * W + drift * 6 * pos.depth;
-    const y = horizon + (pos.y * (H - horizon) * 0.92);
-    const stem = lerp(10, 46, pos.depth) * pos.size;
+    const y = horizon + 14 + pos.y * (H - horizon - 40);
+    const stem = lerp(22, 104, pos.depth) * pos.size;
     // A bud is a smaller, closed thing. Never a failure, just a smaller event.
-    const petal = lerp(2.2, 9.4, pos.depth) * pos.size * (bloomed ? 1 : 0.55);
+    const petal = lerp(6, 30, pos.depth) * pos.size * (bloomed ? 1 : 0.5);
 
     ctx.strokeStyle = pos.depth > 0.52 ? "#2f6b2c" : "rgba(23, 63, 22, 0.72)";
-    ctx.lineWidth = Math.max(1, pos.depth * 3.2);
+    ctx.lineWidth = Math.max(1.4, pos.depth * 5.5);
     ctx.lineCap = "round";
     ctx.beginPath();
     ctx.moveTo(x - pos.lean * 7, y + stem);
@@ -178,7 +232,7 @@
     if (pos.depth > 0.42) {
       ctx.fillStyle = "rgba(255, 248, 234, 0.16)";
       ctx.beginPath();
-      ctx.ellipse(x + 7 * pos.lean, y + stem * 0.54, 11 * pos.depth, 3.6 * pos.depth,
+      ctx.ellipse(x + 12 * pos.lean, y + stem * 0.54, 22 * pos.depth, 7 * pos.depth,
         pos.lean, 0, Math.PI * 2);
       ctx.fill();
     }
@@ -187,8 +241,8 @@
     ctx.translate(x, y);
     ctx.rotate(pos.lean * 0.16 + drift * 0.02);
     ctx.shadowColor = "rgba(103, 5, 18, 0.24)";
-    ctx.shadowBlur = 4 * pos.depth;
-    ctx.shadowOffsetY = 2 * pos.depth;
+    ctx.shadowBlur = 7 * pos.depth;
+    ctx.shadowOffsetY = 3 * pos.depth;
 
     if (bloomed) {
       // Flowers have identity: the petal count and hue come from what kind of
@@ -229,6 +283,7 @@
     const positions = flowers.map((f, i) => layout(f, i, flowers.length));
     // Draw far flowers first so the field has depth.
     const order = flowers.map((_, i) => i).sort((a, b) => positions[a].depth - positions[b].depth);
+    let land = null;
 
     function frame(t) {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -239,8 +294,10 @@
         canvas.height = Math.floor(H * dpr);
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const horizon = drawField(ctx, W, H, pal, t, reduced);
-      order.forEach((i) => drawFlower(ctx, flowers[i], positions[i], horizon, W, H, t, kinds, reduced));
+      if (!land || land.W !== W || land.H !== H) land = buildLand(W, H, pal);
+      ctx.drawImage(land.canvas, 0, 0, W, H);
+      drawClouds(ctx, W, land.horizon, pal, t, reduced);
+      order.forEach((i) => drawFlower(ctx, flowers[i], positions[i], land.horizon, W, H, t, kinds, reduced));
       _raf = reduced ? null : requestAnimationFrame(frame);
     }
 
