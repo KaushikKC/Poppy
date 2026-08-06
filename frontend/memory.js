@@ -72,6 +72,10 @@ function consentRow(c) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: text.value.trim(), category: c.category, why: c.why }),
     }).catch(() => {});
+    // The call's close reports this so the garden can bloom and the quest can
+    // complete (RETENTION_ENGINE §3.1, §4.3). Without it, saving a memory is
+    // invisible to every other surface.
+    window._callSavedMemory = true;
     closeRow(row);
   });
 
@@ -196,6 +200,9 @@ function memoryRow(r) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: next.trim() }),
     }).catch(() => {});
+    // §2's IKEA effect: editing what she remembers is the highest-value quest in
+    // the pool, so the close needs to know it happened.
+    window._callEditedMemory = true;
     renderMemory();
   });
 

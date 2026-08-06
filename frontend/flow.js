@@ -24,6 +24,11 @@
   let _callStart = 0;          // ms timestamp of the current call's connect
   let _callbackOffered = false; // did this call's opener follow up on an open loop
   let _surfacedLoopId = null;   // the loop she opened on, to resolve at close (§1.3 R3)
+  let _callMode = "talk";       // the mood this call entered with (§3.1 flower identity)
+  let _callModeIsNew = false;   // first time using this mood (§4.3 quest)
+  // Which moods have ever been used, so "try a mood you haven't used" is real.
+  let _moodsUsed = new Set();
+  try { _moodsUsed = new Set(JSON.parse(localStorage.getItem("poppy_moods") || "[]")); } catch {}
 
   function setView(v) {
     onboarding.classList.toggle("hidden", v !== "onboarding");
@@ -776,6 +781,14 @@
     _callbackOffered = !!r.callback_offered;
     _surfacedLoopId = r.surfaced_loop_id || null;
     _callStart = Date.now();
+    // The mood decides which flower this call grows (§3.1), and a mood used for
+    // the first time completes one of the deliberate quests (§4.3).
+    _callMode = mode || "talk";
+    _callModeIsNew = !_moodsUsed.has(_callMode);
+    _moodsUsed.add(_callMode);
+    try { localStorage.setItem("poppy_moods", JSON.stringify([..._moodsUsed])); } catch {}
+    window._callSavedMemory = false;
+    window._callEditedMemory = false;
 
     // "Calling…" veil until she picks up (hidden when she starts speaking).
     const veil = document.getElementById("connect-veil");
@@ -888,6 +901,12 @@
           duration_s: durationS,
           callback_offered: _callbackOffered,
           surfaced_loop_id: _surfacedLoopId || undefined,
+          // What actually happened in this call. The garden, the quests and the
+          // points all read these; without them a saved memory is invisible.
+          mode: _callMode,
+          mood_new: _callModeIsNew,
+          saved_memory: !!window._callSavedMemory,
+          edited_memory: !!window._callEditedMemory,
         }),
       })).json();
       planted = (r && r.open_loop) || "";
