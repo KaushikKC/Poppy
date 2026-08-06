@@ -68,6 +68,64 @@ async def _synthesize_safe(text: str, accent: str, voice: str) -> bytes:
         return b""
 
 
+class SpeechStream:
+    """Synthesise a reply's phrases one at a time, in order.
+
+    Every phrase used to get its own `asyncio.create_task`, so a long reply fired
+    eight or ten synthesis calls at the speech model simultaneously. They thrash:
+    each one then takes longer than the timeout and gets dropped, which is heard
+    as her going silent while the text still appears. Worse as the conversation
+    goes on, because replies get longer.
+
+    One worker fixes both that and an ordering bug that was there all along: the
+    concurrent tasks sent their audio in completion order, not phrase order, so a
+    reply could play back scrambled.
+
+    Streaming is preserved. The first phrase starts synthesising while the model
+    is still generating the rest; it just never runs two at once.
+    """
+
+    def __init__(self, ws: WebSocket, accent: str, voice: str):
+        self._ws = ws
+        self._accent = accent
+        self._voice = voice
+        self._queue: asyncio.Queue = asyncio.Queue()
+        self._worker = asyncio.create_task(self._run())
+
+    async def _run(self) -> None:
+        while True:
+            phrase = await self._queue.get()
+            try:
+                if phrase is None:
+                    return
+                audio = await _synthesize_safe(phrase, self._accent, self._voice)
+                if audio:
+                    await self._ws.send_bytes(audio)
+            except (asyncio.CancelledError, Exception):
+                if isinstance(phrase, str):
+                    print(f"[tts] dropped phrase after send failure: {phrase[:40]!r}")
+                raise
+            finally:
+                self._queue.task_done()
+
+    def push(self, phrase: str) -> None:
+        if phrase:
+            self._queue.put_nowait(phrase)
+
+    async def close(self) -> None:
+        """Wait for every queued phrase to be spoken."""
+        self._queue.put_nowait(None)
+        await self._worker
+
+    async def cancel(self) -> None:
+        if not self._worker.done():
+            self._worker.cancel()
+        try:
+            await self._worker
+        except (asyncio.CancelledError, Exception):
+            pass
+
+
 async def _db_save(session_id: str, role: str, content: str) -> None:
     await asyncio.to_thread(db.save_turn, session_id, role, content)
 
@@ -102,12 +160,7 @@ async def _say(ws: WebSocket, text: str, accent: str, voice: str):
 
     await ws.send_json({"type": "config", "sampleRate": tts.SAMPLE_RATE})
     chunker = PhraseChunker()
-    tts_tasks: list[asyncio.Task] = []
-
-    async def tts_and_send(phrase: str):
-        audio = await _synthesize_safe(phrase, accent, voice)
-        if audio:
-            await ws.send_bytes(audio)
+    speech = SpeechStream(ws, accent, voice)
 
     try:
         # Reveal the whole line up front (the text is already known), then stream
@@ -116,19 +169,13 @@ async def _say(ws: WebSocket, text: str, accent: str, voice: str):
         for ch in text:
             phrase = chunker.push(ch)
             if phrase:
-                tts_tasks.append(asyncio.create_task(tts_and_send(phrase)))
-                await asyncio.sleep(0)
-        remainder = chunker.flush()
-        if remainder:
-            tts_tasks.append(asyncio.create_task(tts_and_send(remainder)))
-        if tts_tasks:
-            await asyncio.gather(*tts_tasks)
+                speech.push(phrase)
+        speech.push(chunker.flush())
+        await speech.close()
         await ws.send_json({"type": "done"})
-    finally:
-        for t in tts_tasks:
-            if not t.done():
-                t.cancel()
-        await asyncio.gather(*tts_tasks, return_exceptions=True)
+    except Exception:
+        await speech.cancel()
+        raise
 
 
 async def handle_chat(ws: WebSocket):
@@ -245,32 +292,18 @@ async def handle_chat(ws: WebSocket):
 
             chunker = PhraseChunker()
             full_reply: list[str] = []
-
-            async def tts_and_send(phrase: str):
-                audio = await _synthesize_safe(phrase, reply_accent, reply_voice)
-                if audio:
-                    await ws.send_bytes(audio)
-
-            tts_tasks: list[asyncio.Task] = []
+            # One worker, in order. Phrases are queued as the model produces them,
+            # so the voice still starts while she is still "typing", but only one
+            # synthesis ever runs at a time.
+            speech = SpeechStream(ws, reply_accent, reply_voice)
             try:
                 async for token in stream_reply(conversation_history, user_text, system_prompt):
                     full_reply.append(token)
                     await ws.send_json({"type": "token", "text": token})
+                    speech.push(chunker.push(token))
 
-                    phrase = chunker.push(token)
-                    if phrase:
-                        tts_tasks.append(asyncio.create_task(tts_and_send(phrase)))
-                        # Yield so synthesis of this phrase starts now (in its
-                        # thread) rather than only after the whole text stream
-                        # ends — that's what makes the voice begin while typing.
-                        await asyncio.sleep(0)
-
-                remainder = chunker.flush()
-                if remainder:
-                    tts_tasks.append(asyncio.create_task(tts_and_send(remainder)))
-
-                if tts_tasks:
-                    await asyncio.gather(*tts_tasks)
+                speech.push(chunker.flush())
+                await speech.close()
 
                 assistant_text = "".join(full_reply)
                 conversation_history.append({"role": "user", "content": user_text})
@@ -286,14 +319,11 @@ async def handle_chat(ws: WebSocket):
                 # stored without consent (§5): after the turn the frontend calls
                 # /memory/extract to get candidates and asks the user to Save them.
                 await ws.send_json({"type": "done", "sessionId": session_id})
-            finally:
-                # On barge-in the socket closes mid-stream; cancel any pending
-                # synthesis so we don't leave orphaned tasks sending into a dead
-                # connection.
-                for t in tts_tasks:
-                    if not t.done():
-                        t.cancel()
-                await asyncio.gather(*tts_tasks, return_exceptions=True)
+            except Exception:
+                # On barge-in the socket closes mid-stream; drop anything still
+                # queued rather than synthesising into a dead connection.
+                await speech.cancel()
+                raise
 
     except WebSocketDisconnect:
         pass
