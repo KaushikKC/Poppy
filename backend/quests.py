@@ -26,6 +26,7 @@ ever scolds, and there is no penalty for an unfinished day.
 """
 
 import random
+import re
 from datetime import datetime
 
 import companion
@@ -75,6 +76,39 @@ _ACTIVE = [
 
 SLOTS = 3
 FRAGMENTS_PER_QUEST = 1  # five fragments make a freeze (§4.1)
+
+
+# "Tell her one thing that went well today" has to be detected from what was
+# actually said, like every other quest signal. It was previously read from a
+# field the frontend never sent, so the quest could never be completed at all.
+#
+# Deterministic rather than another model pass: this runs on every call close, and
+# a quest that ticks itself when you didn't do it is worse than one that doesn't.
+_GOOD_THING = re.compile(
+    r"\b("
+    r"went (?:really |pretty |so )?(?:well|great|good)"
+    r"|(?:good|great|nice|lovely|better|productive) day"
+    r"|i'?m (?:really |so )?(?:happy|glad|proud|pleased|chuffed)"
+    r"|(?:i|we) (?:finally|actually) \w+"
+    r"|managed to \w+"
+    r"|i did it"
+    r"|got the (?:job|offer|role|place|part)"
+    r"|(?:it|that) was (?:really |so )?(?:nice|lovely|good|great|fun)"
+    r"|best (?:part|bit|thing)"
+    r"|(?:i )?enjoyed"
+    r"|proud of (?:myself|me)"
+    r"|good news"
+    r")\b",
+    re.I,
+)
+
+
+def detect_good_thing(turns: list[dict]) -> bool:
+    """Did they actually tell her something that went well?"""
+    for t in turns or []:
+        if t.get("role") == "user" and _GOOD_THING.search(str(t.get("content") or "")):
+            return True
+    return False
 
 
 def _today() -> str:

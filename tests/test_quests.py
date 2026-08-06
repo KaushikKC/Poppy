@@ -144,5 +144,20 @@ for d in range(0, 12):
     if line:
         check(f"day {d} healthy", nudges.is_healthy(line), line)
 
+
+# ── Regression: "one thing that went well" was uncompletable ────────────────
+# Found in QA. The signal was read from a field the frontend never sent, so the
+# quest could never tick no matter what the user said.
+print("\n== 'one thing that went well' is detected from speech ==")
+for said in ("work went really well today", "it was a good day honestly",
+             "I finally finished the migration", "I'm so glad I went",
+             "I managed to get it done", "that was really nice"):
+    check(f"detects: {said[:38]}", quests.detect_good_thing([{"role": "user", "content": said}]))
+for said in ("work was rough today", "I don't want to talk about it",
+             "nothing much happened", "she said the same thing"):
+    check(f"ignores:  {said[:38]}", not quests.detect_good_thing([{"role": "user", "content": said}]))
+check("her own words never count",
+      not quests.detect_good_thing([{"role": "assistant", "content": "that went really well!"}]))
+
 print("\n" + ("ALL PASS" if ok else "FAILURES ABOVE"))
 sys.exit(0 if ok else 1)

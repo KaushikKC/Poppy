@@ -427,7 +427,8 @@ async def close_call(payload: dict = Body(default={})):
             "loop_resolved": bool(surfaced_id and spoke),
             "call_5min": duration >= 300,
             "ritual_time": bool(await asyncio.to_thread(ritual_pact.anchor_now)),
-            "good_thing": bool(data.get("good_thing")),
+            # Read from what they said, not from a flag the client never sent.
+            "good_thing": await asyncio.to_thread(quests.detect_good_thing, turns),
             "memory_saved": bool(data.get("saved_memory")),
             "memory_edited": bool(data.get("edited_memory")),
             "mood_new": bool(data.get("mood_new")),
