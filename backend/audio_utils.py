@@ -18,7 +18,13 @@ def decode_16k_mono(data: bytes) -> np.ndarray:
     if not data:
         return np.zeros(0, dtype=np.float32)
 
-    container = av.open(io.BytesIO(data))
+    try:
+        container = av.open(io.BytesIO(data))
+    except Exception:
+        # A truncated or empty recording from the browser is normal (a tapped
+        # mic, a dropped chunk). Treat it as silence rather than a 500, which
+        # the user experiences as the app freezing mid-conversation.
+        return np.zeros(0, dtype=np.float32)
     resampler = av.AudioResampler(format="s16", layout="mono", rate=TARGET_RATE)
     out: list[np.ndarray] = []
     try:
