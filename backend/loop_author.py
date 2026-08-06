@@ -78,10 +78,15 @@ _UNDECIDED = re.compile(
     re.I,
 )
 
-# A call where the user barely spoke has no topic worth naming, and the model
-# will invent one if asked ("the long conversation"). Below this it goes straight
-# to the reveal fallback, which needs no detail and is honest about having none.
-_MIN_USER_WORDS = 12
+# A call where the user said literally nothing has no topic to name. This is only
+# meant to skip empty calls.
+#
+# It used to be 12 words, which was badly wrong for a *voice* product: people
+# speak in short sentences, so "I'm having an interview on Friday" (6 words) is a
+# perfectly hookable call that never reached the model at all. The invention
+# problem that threshold was guarding against is handled properly by
+# `_is_grounded` below, which checks the topic against what was actually said.
+_MIN_USER_WORDS = 3
 
 # The line she actually says, built here so it is always grammatical and always
 # in her voice. Two variants per type: enough that it doesn't feel canned, few
@@ -115,10 +120,14 @@ _FALLBACK = {
 }
 
 _WORD = re.compile(r"[a-z0-9']+")
-# A topic is about the user's life, described from the outside. Any first or
-# second person pronoun means the model slipped into the wrong voice, which is
-# the failure mode that produced "prioritize me over my job".
-_WRONG_PERSON = re.compile(r"\b(i|i'm|my|me|mine|myself|we|our|us|you|your)\b", re.I)
+# First person in a topic means the model slipped into the user's voice, which is
+# the failure mode that produced "prioritize me over my job": she would end up
+# claiming their life as her own.
+#
+# Second person is fine and is the *natural* phrasing here. "your interview on
+# Friday" reads correctly in every template ("how did your interview on Friday
+# turn out?"), and rejecting it threw away good topics.
+_WRONG_PERSON = re.compile(r"\b(i|i'm|my|me|mine|myself|we|our|us)\b", re.I)
 # Framing the templates already provide; see _clean_topic.
 _REDUNDANT_LEAD = re.compile(
     r"^(?:the\s+)?(?:decision|question|issue|topic|thing|matter)\s+(?:about|of|to|with)\s+",
@@ -128,6 +137,39 @@ _REDUNDANT_LEAD = re.compile(
 
 def _words(text: str) -> list[str]:
     return _WORD.findall((text or "").lower())
+
+
+# Filler that carries no subject, so it can't ground a topic on its own.
+_STOP = {
+    "the", "a", "an", "and", "or", "but", "of", "to", "in", "on", "at", "for",
+    "with", "about", "that", "this", "it", "is", "was", "were", "be", "been",
+    "im", "i", "my", "me", "you", "your", "we", "our", "they", "so", "just",
+    "like", "yeah", "really", "very", "some", "any", "what", "how", "when",
+    "thing", "things", "today", "day", "time", "going", "got", "get", "have",
+    "had", "do", "did", "not", "no", "yes", "ok", "okay",
+}
+
+
+def _content_words(text: str) -> set[str]:
+    return {w for w in _words(text) if w not in _STOP and len(w) > 2}
+
+
+def _is_grounded(topic: str, user_lines: list[str]) -> bool:
+    """True if the topic is built from something the user actually said.
+
+    This is the real guard against invention, and it replaces a crude word-count
+    threshold that was rejecting short but perfectly specific calls. Asked to name
+    a topic for "not much today, just tired", a small model happily returns "the
+    long conversation"; none of those content words appear in what was said, so it
+    is rejected here and the call falls back to the reveal hook instead.
+    """
+    said = set()
+    for line in user_lines:
+        said |= _content_words(line)
+    topic_words = _content_words(topic)
+    if not topic_words:
+        return False
+    return bool(topic_words & said)
 
 
 def _is_echo(hook: str, user_lines: list[str]) -> bool:
@@ -247,6 +289,11 @@ async def author(turns: list[dict] | None = None) -> dict:
 
     parsed = _parse(raw)
     if not parsed:
+        return dict(_FALLBACK)
+
+    # The topic has to come from something they actually said, not from the
+    # model's sense of what a conversation usually contains.
+    if not _is_grounded(parsed["topic"], user_lines):
         return dict(_FALLBACK)
 
     kind = _infer_type(transcript)

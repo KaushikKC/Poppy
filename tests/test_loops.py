@@ -129,5 +129,25 @@ for kind in loops.TYPES:
     check(f"{kind}: no lowercase sentence start", ". h" not in text and ". w" not in text)
     check(f"{kind}: healthy", nudges.is_healthy(text))
 
+
+# ── Regression: the hook must survive a SHORT call ──────────────────────────
+# Found in QA. `_MIN_USER_WORDS` was 12, so "I'm having an interview on Friday"
+# (6 words) never reached the model and every call fell back to the reveal hook.
+# Voice users speak in short sentences; the guard against invention is grounding,
+# not length.
+print("\n== short calls still produce a real hook ==")
+check("a 6-word call is above the floor", loop_author._MIN_USER_WORDS <= 6,
+      str(loop_author._MIN_USER_WORDS))
+check("a topic drawn from what was said is grounded",
+      loop_author._is_grounded("the Friday interview", ["I'm having an interview on Friday."]))
+check("an invented topic is not",
+      not loop_author._is_grounded("the long conversation", ["not much today, just tired"]))
+check("filler alone cannot ground a topic",
+      not loop_author._is_grounded("the thing today", ["yeah", "just today"]))
+check("second person is allowed in a topic",
+      loop_author._clean_topic("your interview on Friday") is not None)
+check("first person is still rejected",
+      loop_author._clean_topic("my interview on Friday") is None)
+
 print("\n" + ("ALL PASS" if ok else "FAILURES ABOVE"))
 sys.exit(0 if ok else 1)
