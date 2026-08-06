@@ -26,10 +26,26 @@
 
   // Season palettes (§3.1: temporal landmarks made visual).
   const SEASONS = {
-    spring: { sky: "#cfe6f5", meadow: "#8fc47a", deep: "#3f7a3a", haze: "#fff8ea" },
-    summer: { sky: "#bfe0f2", meadow: "#7cba63", deep: "#2f6b2c", haze: "#fff8ea" },
-    autumn: { sky: "#f0dcc4", meadow: "#c2a259", deep: "#6d5326", haze: "#fff3e0" },
-    winter: { sky: "#dfe9f0", meadow: "#9db3a4", deep: "#4a5f55", haze: "#f7fbff" },
+    spring: {
+      sky: "#a9d5ef", skySoft: "#d5ebf7", haze: "#fff8ea", sun: "rgba(255,244,214,0.55)",
+      hillFar: "#a8c9a4", hillNear: "#7fae74",
+      meadow: "#8fc47a", meadowMid: "#6aa658", deep: "#2f6b34", grass: "#3f7a3a",
+    },
+    summer: {
+      sky: "#8fd0ee", skySoft: "#c9e8f6", haze: "#fff8ea", sun: "rgba(255,240,196,0.6)",
+      hillFar: "#9cc593", hillNear: "#6da55e",
+      meadow: "#7cba63", meadowMid: "#589c48", deep: "#255c26", grass: "#2f6b2c",
+    },
+    autumn: {
+      sky: "#f2d9b6", skySoft: "#f8e9d4", haze: "#fff3e0", sun: "rgba(255,214,150,0.6)",
+      hillFar: "#cbb083", hillNear: "#a98b57",
+      meadow: "#c2a259", meadowMid: "#a08243", deep: "#5f4720", grass: "#6d5326",
+    },
+    winter: {
+      sky: "#c8d9e6", skySoft: "#e6eef4", haze: "#f7fbff", sun: "rgba(238,246,255,0.55)",
+      hillFar: "#b9c6c2", hillNear: "#94a89e",
+      meadow: "#9db3a4", meadowMid: "#7e9689", deep: "#42574e", grass: "#4a5f55",
+    },
   };
 
   function roundedBlob(ctx, w, h, wobble, fill) {
@@ -63,19 +79,81 @@
     };
   }
 
-  function drawField(ctx, W, H, pal) {
-    const sky = ctx.createLinearGradient(0, 0, 0, H * 0.78);
+  // Depth, drawn back to front: sky, sun, far hills, near hills, meadow, grass.
+  // A flat two-band background made the flowers look pasted onto a colour swatch;
+  // haze between the layers is what reads as distance.
+  function drawField(ctx, W, H, pal, t, reduced) {
+    const horizon = H * 0.44;
+
+    const sky = ctx.createLinearGradient(0, 0, 0, horizon);
     sky.addColorStop(0, pal.sky);
+    sky.addColorStop(0.7, pal.skySoft);
     sky.addColorStop(1, pal.haze);
     ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(0, 0, W, horizon + 1);
 
-    const horizon = H * 0.44;
+    // Low sun, sitting just above the hills.
+    const sunX = W * 0.72;
+    const sunY = horizon * 0.42;
+    const glow = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, horizon * 0.85);
+    glow.addColorStop(0, pal.sun);
+    glow.addColorStop(1, "rgba(255,248,234,0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, horizon + 1);
+
+    // Two hill ranges. The far one is washed toward the haze so it sits back.
+    function hills(baseY, amp, step, fill, seedOff) {
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      ctx.moveTo(0, H);
+      ctx.lineTo(0, baseY);
+      for (let x = 0; x <= W; x += step) {
+        const y = baseY
+          - Math.sin(x * 0.006 + seedOff) * amp
+          - Math.sin(x * 0.013 + seedOff * 2) * amp * 0.45;
+        ctx.lineTo(x, y);
+      }
+      ctx.lineTo(W, H);
+      ctx.closePath();
+      ctx.fill();
+    }
+    hills(horizon - 4, 16, 14, pal.hillFar, 1.2);
+    hills(horizon + 6, 11, 12, pal.hillNear, 3.7);
+
+    // The meadow the flowers actually stand in.
     const g = ctx.createLinearGradient(0, horizon, 0, H);
     g.addColorStop(0, pal.meadow);
+    g.addColorStop(0.45, pal.meadowMid);
     g.addColorStop(1, pal.deep);
     ctx.fillStyle = g;
-    ctx.fillRect(0, horizon, W, H - horizon);
+    ctx.fillRect(0, horizon + 4, W, H - horizon);
+
+    // Grass strokes, denser and taller toward the front, so the ground has
+    // texture instead of being a gradient the stems are drawn on top of.
+    const drift = reduced ? 0 : Math.sin(t * 0.0009) * 3;
+    ctx.strokeStyle = pal.grass;
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 260; i += 1) {
+      const r = rand(i, 11);
+      const depth = rand(i, 12);
+      const x = r * W;
+      const y = horizon + 6 + depth * depth * (H - horizon);
+      const len = 3 + depth * 16;
+      ctx.globalAlpha = 0.10 + depth * 0.22;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(x + drift * depth, y - len * 0.6, x + (r - 0.5) * 9 + drift * depth, y - len);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // Soft haze along the horizon so the ground meets the sky instead of cutting.
+    const seam = ctx.createLinearGradient(0, horizon - 14, 0, horizon + 26);
+    seam.addColorStop(0, "rgba(255,248,234,0.30)");
+    seam.addColorStop(1, "rgba(255,248,234,0)");
+    ctx.fillStyle = seam;
+    ctx.fillRect(0, horizon - 14, W, 40);
+
     return horizon;
   }
 
@@ -161,7 +239,7 @@
         canvas.height = Math.floor(H * dpr);
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const horizon = drawField(ctx, W, H, pal);
+      const horizon = drawField(ctx, W, H, pal, t, reduced);
       order.forEach((i) => drawFlower(ctx, flowers[i], positions[i], horizon, W, H, t, kinds, reduced));
       _raf = reduced ? null : requestAnimationFrame(frame);
     }
