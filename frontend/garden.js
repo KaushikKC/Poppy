@@ -71,8 +71,21 @@
     ctx.fill();
   }
 
+  // Where a flower sits. A saved position always wins: once the user has placed
+  // something, nothing we compute should move it again.
   function layout(flower, i, total) {
     const s = flower.seed || i * 37;
+    if (typeof flower.x === "number" && typeof flower.y === "number") {
+      return {
+        x: flower.x,
+        y: flower.y,
+        depth: 0.28 + flower.y * 0.72,
+        size: lerp(0.85, 1.25, rand(s, 4)),
+        lean: (rand(s, 5) - 0.5) * 1.4,
+        phase: rand(s, 6) * Math.PI * 2,
+        placed: true,
+      };
+    }
     // Depth is derived from where the flower stands, not from how old it is.
     // They were independent before, so an old call could be placed in the
     // foreground and still drawn tiny, which is why one flower looked like it was
@@ -241,7 +254,7 @@
     ctx.translate(x, y);
     ctx.rotate(pos.lean * 0.16 + drift * 0.02);
     ctx.shadowColor = "rgba(103, 5, 18, 0.24)";
-    ctx.shadowBlur = 7 * pos.depth;
+    ctx.shadowBlur = (pos.lifted ? 16 : 7) * pos.depth;
     ctx.shadowOffsetY = 3 * pos.depth;
 
     if (bloomed) {
@@ -301,13 +314,115 @@
       _raf = reduced ? null : requestAnimationFrame(frame);
     }
 
+    // ── Rearranging ────────────────────────────────────────────────────────
+    // Positions are stored 0-1 in field space, so an arrangement survives a
+    // resize. Depth follows y, which means dragging a flower toward you also
+    // makes it grow: the perspective does the work and it feels physical.
+    let dragging = null;
+    let dirty = false;
+
+    function fieldFromEvent(e) {
+      const r = canvas.getBoundingClientRect();
+      const H = canvas.clientHeight;
+      const horizon = land ? land.horizon : H * 0.42;
+      const px = e.clientX - r.left;
+      const py = e.clientY - r.top;
+      return {
+        x: Math.min(Math.max(px / canvas.clientWidth, 0), 1),
+        y: Math.min(Math.max((py - horizon - 14) / (H - horizon - 40), 0), 1),
+      };
+    }
+
+    function hit(e) {
+      const r = canvas.getBoundingClientRect();
+      const px = e.clientX - r.left;
+      const py = e.clientY - r.top;
+      const W = canvas.clientWidth;
+      const H = canvas.clientHeight;
+      const horizon = land ? land.horizon : H * 0.42;
+      let best = null;
+      let bestD = Infinity;
+      // Nearest flower head wins, and nearer (larger) flowers win ties, so a
+      // foreground bloom is never stolen by something small behind it.
+      positions.forEach((pos, i) => {
+        const fx = pos.x * W;
+        const fy = horizon + 14 + pos.y * (H - horizon - 40);
+        const petal = lerp(6, 30, pos.depth) * pos.size;
+        const grab = Math.max(26, petal * 1.7);
+        const d = Math.hypot(px - fx, py - fy);
+        if (d < grab && d - pos.depth * 12 < bestD) {
+          bestD = d - pos.depth * 12;
+          best = i;
+        }
+      });
+      return best;
+    }
+
+    function onDown(e) {
+      const i = hit(e);
+      if (i === null) return;
+      dragging = i;
+      positions[i].lifted = true;
+      canvas.setPointerCapture?.(e.pointerId);
+      canvas.style.cursor = "grabbing";
+      e.preventDefault();
+    }
+
+    function onMove(e) {
+      if (dragging === null) {
+        canvas.style.cursor = hit(e) !== null ? "grab" : "default";
+        return;
+      }
+      const f = fieldFromEvent(e);
+      const pos = positions[dragging];
+      pos.x = f.x;
+      pos.y = f.y;
+      pos.depth = 0.28 + f.y * 0.72;   // nearer the viewer = bigger
+      dirty = true;
+      // Re-sort so a flower dragged forward draws in front of the ones behind it.
+      order.sort((a, b) => positions[a].depth - positions[b].depth);
+      e.preventDefault();
+    }
+
+    async function onUp(e) {
+      if (dragging === null) return;
+      positions[dragging].lifted = false;
+      dragging = null;
+      canvas.style.cursor = "grab";
+      if (!dirty) return;
+      dirty = false;
+      const body = {};
+      flowers.forEach((f, i) => {
+        body[f.id] = { x: positions[i].x, y: positions[i].y };
+      });
+      try {
+        await fetch(`${window.BACKEND || "http://localhost:8000"}/garden/arrange`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ positions: body }),
+        });
+      } catch {}
+      // Keep the in-memory copy in step so reopening doesn't snap them back.
+      flowers.forEach((f, i) => { f.x = positions[i].x; f.y = positions[i].y; });
+    }
+
+    canvas.onpointerdown = onDown;
+    canvas.onpointermove = onMove;
+    canvas.onpointerup = onUp;
+    canvas.onpointercancel = onUp;
+    canvas.style.touchAction = "none";   // let a finger drag a flower, not the page
+
     if (_raf) cancelAnimationFrame(_raf);
     _raf = requestAnimationFrame(frame);
   }
 
-  function stop() {
+  function stop(canvas) {
     if (_raf) cancelAnimationFrame(_raf);
     _raf = null;
+    if (canvas) {
+      canvas.onpointerdown = canvas.onpointermove = null;
+      canvas.onpointerup = canvas.onpointercancel = null;
+    }
   }
 
   window.PoppyGarden = { render, stop };

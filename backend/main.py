@@ -516,6 +516,19 @@ async def get_garden():
     return await asyncio.to_thread(garden.state)
 
 
+@app.post("/garden/arrange")
+async def arrange_garden(payload: dict = Body(default={})):
+    """Save where the user placed their flowers (§3.1).
+
+    The one thing this product gave the user no way to do was make something.
+    Rearranging their own garden is that, and unlike a level it never runs out.
+    """
+    moved = await asyncio.to_thread(garden.arrange, (payload or {}).get("positions") or {})
+    if moved:
+        await asyncio.to_thread(db.record_event, "garden_arranged", moved)
+    return {"moved": moved}
+
+
 @app.get("/garden/year")
 async def get_year():
     """"My year with Poppy" (§3.1): the private-by-default share artifact."""

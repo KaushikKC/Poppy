@@ -104,6 +104,39 @@ def bloom_last(when: datetime | None = None) -> dict | None:
     return None
 
 
+def arrange(positions: dict) -> int:
+    """Save where the user put their flowers. Returns how many moved.
+
+    Until now the garden arranged itself and the user only watched it. Placing
+    things yourself is the one motivation this product had no answer for: it is
+    why people rearrange a room or keep a shelf a particular way, and unlike a
+    level cap it never runs out, because the novelty comes from them rather than
+    from us.
+
+    `x` and `y` are 0-1 in field space, not pixels, so an arrangement survives a
+    resized window and a different screen.
+    """
+    flowers = _flowers()
+    by_id = {f.get("id"): f for f in flowers}
+    moved = 0
+    for fid, pos in (positions or {}).items():
+        f = by_id.get(fid)
+        if not f or not isinstance(pos, dict):
+            continue
+        try:
+            x, y = float(pos["x"]), float(pos["y"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        # Clamped rather than rejected: a flower dragged off the edge should end
+        # up at the edge, not vanish.
+        f["x"] = min(max(x, 0.0), 1.0)
+        f["y"] = min(max(y, 0.0), 1.0)
+        moved += 1
+    if moved:
+        companion.update(garden=flowers)
+    return moved
+
+
 def state(limit: int = 400) -> dict:
     """What the renderer needs.
 

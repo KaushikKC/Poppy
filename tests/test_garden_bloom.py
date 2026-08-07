@@ -178,5 +178,31 @@ check("a fresh garden reports empty", garden.state()["empty"] is True)
 garden.plant("talk")
 check("and stops once something grew", garden.state()["empty"] is False)
 
+
+print("\n== §3.1 + Octalysis: the garden is arrangeable ==")
+reset()
+a = garden.plant("vent", bloomed=True)
+b = garden.plant("hype", bloomed=True)
+check("a fresh flower has no saved position", "x" not in a and "y" not in a)
+
+moved = garden.arrange({a["id"]: {"x": 0.25, "y": 0.8}})
+check("one flower moved", moved == 1, str(moved))
+saved = {f["id"]: f for f in garden.state()["flowers"]}
+check("position persisted", saved[a["id"]]["x"] == 0.25 and saved[a["id"]]["y"] == 0.8)
+check("the other is untouched", "x" not in saved[b["id"]])
+
+check("unknown ids are ignored", garden.arrange({"nope": {"x": 0.5, "y": 0.5}}) == 0)
+check("junk is ignored", garden.arrange({a["id"]: {"x": "left"}}) == 0)
+garden.arrange({a["id"]: {"x": 4.0, "y": -3.0}})
+saved = {f["id"]: f for f in garden.state()["flowers"]}
+check("dragged off the edge clamps, never vanishes",
+      saved[a["id"]]["x"] == 1.0 and saved[a["id"]]["y"] == 0.0,
+      f'{saved[a["id"]]["x"]},{saved[a["id"]]["y"]}')
+
+garden.plant("talk", bloomed=True)
+after = {f["id"]: f for f in garden.state()["flowers"]}
+check("planting later does not disturb an arrangement", after[a["id"]]["x"] == 1.0)
+check("arranging still exposes no number", "count" not in json.dumps(garden.state()))
+
 print("\n" + ("ALL PASS" if ok else "FAILURES ABOVE"))
 sys.exit(0 if ok else 1)

@@ -453,14 +453,16 @@
     const note = document.getElementById("garden-note");
     // Names the season, never a total. A season is a temporal landmark; a total
     // is a scoreboard.
-    if (note) note.textContent = `${_garden.season} in your garden`;
+    // Say it once, quietly. The garden is theirs to arrange and nothing else on
+    // screen would tell them that.
+    if (note) note.textContent = `${_garden.season} in your garden · drag to arrange`;
     // Render after the view is visible so the canvas has a real size.
     requestAnimationFrame(() => {
       window.PoppyGarden?.render(document.getElementById("garden-canvas"), _garden);
     });
   });
   document.getElementById("garden-close")?.addEventListener("click", () => {
-    window.PoppyGarden?.stop();
+    window.PoppyGarden?.stop(document.getElementById("garden-canvas"));
     document.getElementById("garden")?.classList.add("hidden");
   });
 
