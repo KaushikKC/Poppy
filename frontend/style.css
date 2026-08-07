@@ -833,6 +833,23 @@ button:not(:disabled):active { transform: scale(0.94); }
   display: flex; align-items: center; justify-content: space-between;
   gap: 1rem; padding: 1rem 1.2rem;
   background: linear-gradient(to top, rgba(7,18,7,0.45), transparent);
+  /* The bar is a full-width strip lying over the front of the field, which is
+     exactly where the nearest flowers stand. Left clickable it swallowed every
+     tap and drag on them. Only its own controls take the pointer. */
+  pointer-events: none;
+}
+.garden-bar > * { pointer-events: auto; }
+.garden-name { display: flex; gap: 0.5rem; align-items: center; }
+.garden-name-input {
+  padding: 0.45rem 0.7rem; border-radius: 8px; border: 1px solid rgba(255,248,234,0.5);
+  background: rgba(7,18,7,0.55); color: var(--cream);
+  font-family: var(--font-sans); font-size: 0.9rem; width: min(260px, 42vw);
+}
+.garden-name-input::placeholder { color: rgba(255,248,234,0.55); }
+.garden-name-save {
+  padding: 0.45rem 0.9rem; border-radius: 8px; border: none;
+  background: var(--poppy); color: var(--cream);
+  font-family: var(--font-sans); font-weight: 700; font-size: 0.85rem; cursor: pointer;
 }
 .garden-note {
   font-family: var(--font-mono); font-size: 0.68rem; font-weight: 800;
