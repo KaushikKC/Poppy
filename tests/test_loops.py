@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "backend"))
 
 import loops
+import nudges
 import loop_author
 
 ok = True
@@ -148,6 +149,51 @@ check("second person is allowed in a topic",
       loop_author._clean_topic("your interview on Friday") is not None)
 check("first person is still rejected",
       loop_author._clean_topic("my interview on Friday") is None)
+
+
+# ── Octalysis: unpredictability ────────────────────────────────────────────
+# Everything about her was on a schedule: every hook landed at the exact end of
+# a call and the reveal line was identical every time. Not knowing *when* is the
+# one lever that creates urgency without any pressure.
+print("\n== a reveal waits, then turns up on its own ==")
+loops._PATH.unlink(missing_ok=True)
+now = datetime.now(timezone.utc)
+
+r = loops.plant("there's something I've been meaning to tell you", "reveal")
+due = loops._parse(r["due_at"])
+check("a reveal is not due immediately", due > now, str(r["due_at"]))
+gap = (due - now).total_seconds() / 3600
+check("it lands hours out, not days", 0 < gap <= 46, f"{gap:.1f}h")
+check("it is not shown yet", loops.top() is None, str(loops.top()))
+
+print("\n== but an answer to what was just said is live at once ==")
+e = loops.plant("how did the interview go?", "event")
+check("an event surfaces immediately", loops.top() and loops.top()["id"] == e["id"])
+
+print("\n== never in the small hours ==")
+for hour in range(24):
+    d = loops._reveal_due(now.replace(hour=hour, minute=0))
+    check(f"planted {hour:02d}:00 -> lands {d.hour:02d}:00 (waking)",
+          loops.REVEAL_WAKING_START <= d.hour < loops.REVEAL_WAKING_END, str(d.hour))
+
+print("\n== it announces itself once, not repeatedly ==")
+loops._PATH.unlink(missing_ok=True)
+past = loops._iso(now - timedelta(hours=1))
+r = loops.plant("I've got something to tell you", "reveal", due_at=past)
+first = loops.newly_due()
+check("becomes due", first and first["id"] == r["id"], str(first))
+check("and only once", loops.newly_due() is None)
+check("now visible", loops.top() and loops.top()["id"] == r["id"])
+
+print("\n== the reveal line varies ==")
+lines = {loop_author._fallback([f"conversation {i}"])["hook"] for i in range(30)}
+check("more than one line in use", len(lines) > 1, f"{len(lines)} distinct")
+check("stable for the same conversation",
+      loop_author._fallback(["work was rough"])["hook"]
+      == loop_author._fallback(["work was rough"])["hook"])
+for line in loop_author._FALLBACKS:
+    check(f"healthy: {line[:34]}", nudges.is_healthy(line))
+    check(f"no em dash: {line[:34]}", "—" not in line)
 
 print("\n" + ("ALL PASS" if ok else "FAILURES ABOVE"))
 sys.exit(0 if ok else 1)

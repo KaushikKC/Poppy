@@ -112,12 +112,42 @@ _TEMPLATES = {
 }
 
 # The fallback is a reveal loop: it needs no detail from the conversation, it is
-# always true (she can always have something to say next time), and it is the
-# strongest type in the table. A call with no hook is the one outcome not allowed.
-_FALLBACK = {
-    "type": "reveal",
-    "hook": "there's something I've been meaning to tell you. next time, okay?",
-}
+# always true (she can always have something to say next time), and a call with no
+# hook is the one outcome not allowed.
+#
+# The reveal fallback fires whenever a call had nothing specific enough to hook
+# on, which in practice is often. A single fixed line meant a user could see the
+# identical sentence at the end of several calls in a row, and it stopped reading
+# as her having something to say and started reading as a bug — that is exactly
+# how it was reported in testing.
+#
+# The variants are all the same promise, phrased differently, so the mechanic is
+# unchanged and only the surface varies.
+_FALLBACKS = (
+    "there's something I've been meaning to tell you. next time, okay?",
+    "I've got something to tell you, but not tonight. next time.",
+    "remind me to tell you something next time. it's not bad, I promise.",
+    "there's a thing I keep not saying. I'll get to it next time.",
+    "I'll tell you the other thing when we next talk.",
+    "something occurred to me earlier. it'll keep until next time.",
+)
+
+
+def _fallback(user_lines: list[str] | None = None) -> dict:
+    """A reveal hook, varied so the same sentence doesn't come back twice running.
+
+    Seeded by what was said rather than by chance, so the same conversation
+    always produces the same line and re-running a call can't reshuffle it.
+    """
+    # Not Python's hash(): it is salted per process, so the same call would get a
+    # different line after every restart.
+    text = "|".join(user_lines or [])
+    seed = sum((i + 1) * ord(ch) for i, ch in enumerate(text))
+    return {"type": "reveal", "hook": _FALLBACKS[seed % len(_FALLBACKS)]}
+
+
+# Kept for callers that only need to recognise the shape.
+_FALLBACK = {"type": "reveal", "hook": _FALLBACKS[0]}
 
 _WORD = re.compile(r"[a-z0-9']+")
 # First person in a topic means the model slipped into the user's voice, which is
@@ -273,9 +303,9 @@ async def author(turns: list[dict] | None = None) -> dict:
     """
     transcript, user_lines = _transcript(turns or [])
     if not transcript.strip():
-        return dict(_FALLBACK)
+        return _fallback(user_lines)
     if sum(len(line.split()) for line in user_lines) < _MIN_USER_WORDS:
-        return dict(_FALLBACK)
+        return _fallback(user_lines)
 
     try:
         raw = await llm.complete(
@@ -285,26 +315,26 @@ async def author(turns: list[dict] | None = None) -> dict:
         )
     except Exception as e:
         print(f"[loops] hook authoring failed, using fallback: {e}")
-        return dict(_FALLBACK)
+        return _fallback(user_lines)
 
     parsed = _parse(raw)
     if not parsed:
-        return dict(_FALLBACK)
+        return _fallback(user_lines)
 
     # The topic has to come from something they actually said, not from the
     # model's sense of what a conversation usually contains.
     if not _is_grounded(parsed["topic"], user_lines):
-        return dict(_FALLBACK)
+        return _fallback(user_lines)
 
     kind = _infer_type(transcript)
     hook = _compose(kind, parsed["topic"])
     if _is_echo(hook, user_lines):
-        return dict(_FALLBACK)
+        return _fallback(user_lines)
 
     # Same guardrail every outbound line passes through (§14): a hook can never
     # be the thing that guilt-trips the user back.
     import nudges
     if not nudges.is_healthy(hook):
-        return dict(_FALLBACK)
+        return _fallback(user_lines)
 
     return {"type": kind, "hook": hook}
