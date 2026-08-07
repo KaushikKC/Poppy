@@ -137,6 +137,38 @@ def arrange(positions: dict) -> int:
     return moved
 
 
+MAX_LABEL = 60
+
+
+def label(flower_id: str, text: str) -> dict | None:
+    """Name one flower. "the day I quit."
+
+    The garden already records *that* something happened; a label is the user
+    saying what it meant. That is theirs to write, not ours to infer, and it is
+    the second thing in the product they make rather than receive.
+
+    An empty label clears it, so a name is never permanent by accident.
+    """
+    flowers = _flowers()
+    text = (text or "").strip()[:MAX_LABEL]
+    for f in flowers:
+        if f.get("id") != flower_id:
+            continue
+        if text:
+            f["label"] = text
+        else:
+            f.pop("label", None)
+        companion.update(garden=flowers)
+        return f
+    return None
+
+
+def labelled_count() -> int:
+    """How many flowers carry a name. A count only: the labels themselves are the
+    user's own words about their own life and never reach the analytics log."""
+    return sum(1 for f in _flowers() if f.get("label"))
+
+
 def state(limit: int = 400) -> dict:
     """What the renderer needs.
 

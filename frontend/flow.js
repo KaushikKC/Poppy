@@ -455,13 +455,53 @@
     // is a scoreboard.
     // Say it once, quietly. The garden is theirs to arrange and nothing else on
     // screen would tell them that.
-    if (note) note.textContent = `${_garden.season} in your garden · drag to arrange`;
+    if (note) note.textContent = `${_garden.season} in your garden · drag to move, tap to name`;
     // Render after the view is visible so the canvas has a real size.
     requestAnimationFrame(() => {
-      window.PoppyGarden?.render(document.getElementById("garden-canvas"), _garden);
+      window.PoppyGarden?.render(document.getElementById("garden-canvas"), _garden, {
+        onSelect: showNameField,
+      });
     });
   });
+  // Tapping a flower offers to name it. The garden records that something
+  // happened; the name is the user saying what it meant, which is theirs to write.
+  let _naming = null;
+
+  function showNameField(flower) {
+    const form = document.getElementById("garden-name");
+    const input = document.getElementById("garden-name-input");
+    if (!form || !input) return;
+    if (!flower) {
+      _naming = null;
+      form.classList.add("hidden");
+      return;
+    }
+    _naming = flower;
+    input.value = flower.label || "";
+    form.classList.remove("hidden");
+    input.focus();
+    input.select();
+  }
+
+  document.getElementById("garden-name")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!_naming) return;
+    const input = document.getElementById("garden-name-input");
+    const text = (input.value || "").trim();
+    try {
+      await fetch(`${BACKEND}/garden/label`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: _naming.id, label: text }),
+      });
+    } catch {}
+    // Empty clears the name, so nothing is permanent by accident.
+    window.PoppyGarden?.setLabel(_naming.id, text);
+    showNameField(null);
+  });
+
   document.getElementById("garden-close")?.addEventListener("click", () => {
+    showNameField(null);
     window.PoppyGarden?.stop(document.getElementById("garden-canvas"));
     document.getElementById("garden")?.classList.add("hidden");
   });

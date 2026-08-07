@@ -204,5 +204,39 @@ after = {f["id"]: f for f in garden.state()["flowers"]}
 check("planting later does not disturb an arrangement", after[a["id"]]["x"] == 1.0)
 check("arranging still exposes no number", "count" not in json.dumps(garden.state()))
 
+
+print("\n== naming a flower (Octalysis: the user's own words) ==")
+reset()
+a = garden.plant("vent", bloomed=True)
+b = garden.plant("hype", bloomed=True)
+check("a new flower has no name", "label" not in a)
+
+got = garden.label(a["id"], "  the day I quit  ")
+check("name is saved and trimmed", got and got["label"] == "the day I quit", str(got))
+saved = {f["id"]: f for f in garden.state()["flowers"]}
+check("persisted", saved[a["id"]]["label"] == "the day I quit")
+check("the other is untouched", "label" not in saved[b["id"]])
+check("counted", garden.labelled_count() == 1, str(garden.labelled_count()))
+
+garden.label(a["id"], "")
+check("an empty name clears it, nothing is permanent by accident",
+      "label" not in {f["id"]: f for f in garden.state()["flowers"]}[a["id"]])
+check("count follows", garden.labelled_count() == 0)
+
+check("unknown flower is rejected", garden.label("nope", "x") is None)
+long_name = "y" * 300
+garden.label(b["id"], long_name)
+kept = {f["id"]: f for f in garden.state()["flowers"]}[b["id"]]["label"]
+check("over-long names are capped", len(kept) == garden.MAX_LABEL, str(len(kept)))
+
+garden.label(b["id"], "the hard winter")
+garden.arrange({b["id"]: {"x": 0.3, "y": 0.6}})
+after = {f["id"]: f for f in garden.state()["flowers"]}[b["id"]]
+check("moving a flower keeps its name", after["label"] == "the hard winter")
+check("naming a flower keeps its position", after["x"] == 0.3)
+
+print("\n== a name is the user's own words, so it never reaches analytics ==")
+check("labelled_count returns a number, not text", isinstance(garden.labelled_count(), int))
+
 print("\n" + ("ALL PASS" if ok else "FAILURES ABOVE"))
 sys.exit(0 if ok else 1)

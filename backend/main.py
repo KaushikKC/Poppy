@@ -563,6 +563,23 @@ async def arrange_garden(payload: dict = Body(default={})):
     return {"moved": moved}
 
 
+@app.post("/garden/label")
+async def label_flower(payload: dict = Body(default={})):
+    """Name a flower, or clear its name with an empty string (§3.1).
+
+    Only a count is logged, never the text: a label is the user's own words about
+    their own life and belongs in the encrypted local store, not in analytics.
+    """
+    data = payload or {}
+    f = await asyncio.to_thread(garden.label, data.get("id", ""), data.get("label", ""))
+    if f is None:
+        raise HTTPException(status_code=404, detail="No such flower")
+    await asyncio.to_thread(
+        db.record_event, "garden_labelled", await asyncio.to_thread(garden.labelled_count),
+    )
+    return {"id": f["id"], "label": f.get("label")}
+
+
 @app.get("/garden/year")
 async def get_year():
     """"My year with Poppy" (§3.1): the private-by-default share artifact."""

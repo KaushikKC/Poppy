@@ -273,6 +273,15 @@
       ctx.beginPath();
       ctx.arc(0, 0, Math.max(1.6, petal * 0.24), 0, Math.PI * 2);
       ctx.fill();
+      // A flower you have named wears a pale ring. Enough to spot which ones
+      // carry a name without putting every label on screen at once.
+      if (f.label) {
+        ctx.strokeStyle = "rgba(255,248,234,0.85)";
+        ctx.lineWidth = Math.max(1, petal * 0.07);
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.max(3, petal * 0.42), 0, Math.PI * 2);
+        ctx.stroke();
+      }
     } else {
       ctx.shadowBlur = 0;
       ctx.fillStyle = kind.hue;
@@ -285,7 +294,31 @@
 
   let _raf = null;
 
-  function render(canvas, state) {
+  function drawTag(ctx, f, pos, horizon, W, H) {
+    const label = f.label || "";
+    const when = (f.date || "").slice(5).split("-").reverse().join("/");
+    const text = label ? `${label}  ·  ${when}` : `${f.kind} · ${when}  ·  tap to name`;
+    const petal = lerp(6, 30, pos.depth) * pos.size;
+    const x = pos.x * W;
+    const y = horizon + 14 + pos.y * (H - horizon - 40) - petal - 16;
+
+    ctx.font = '600 12px ui-monospace, SFMono-Regular, Menlo, monospace';
+    const w = ctx.measureText(text).width + 18;
+    const bx = Math.min(Math.max(x - w / 2, 6), W - w - 6);
+
+    ctx.fillStyle = "rgba(7,18,7,0.62)";
+    ctx.beginPath();
+    ctx.roundRect ? ctx.roundRect(bx, y - 20, w, 24, 6) : ctx.rect(bx, y - 20, w, 24);
+    ctx.fill();
+    ctx.fillStyle = label ? "#fff8ea" : "rgba(255,248,234,0.72)";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, bx + 9, y - 8);
+  }
+
+  let onSelect = null;
+
+  function render(canvas, state, opts) {
+    onSelect = (opts && opts.onSelect) || null;
     if (!canvas || !state || !state.flowers) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -311,6 +344,13 @@
       ctx.drawImage(land.canvas, 0, 0, W, H);
       drawClouds(ctx, W, land.horizon, pal, t, reduced);
       order.forEach((i) => drawFlower(ctx, flowers[i], positions[i], land.horizon, W, H, t, kinds, reduced));
+
+      // One label at a time, on the flower under the cursor or the one being
+      // named. Showing them all would bury the field in text.
+      const showing = dragging !== null ? dragging : (selected !== null ? selected : hovered);
+      if (showing !== null && showing !== undefined && flowers[showing]) {
+        drawTag(ctx, flowers[showing], positions[showing], land.horizon, W, H);
+      }
       _raf = reduced ? null : requestAnimationFrame(frame);
     }
 
@@ -320,6 +360,9 @@
     // makes it grow: the perspective does the work and it feels physical.
     let dragging = null;
     let dirty = false;
+    let pressAt = null;      // where the press began, to tell a tap from a drag
+    let hovered = null;      // flower under the cursor, for showing its name
+    let selected = null;     // flower being named
 
     function fieldFromEvent(e) {
       const r = canvas.getBoundingClientRect();
@@ -360,7 +403,12 @@
 
     function onDown(e) {
       const i = hit(e);
-      if (i === null) return;
+      if (i === null) {
+        // A press on empty field puts the naming away.
+        if (selected !== null) { selected = null; onSelect?.(null); }
+        return;
+      }
+      pressAt = { x: e.clientX, y: e.clientY };
       dragging = i;
       positions[i].lifted = true;
       canvas.setPointerCapture?.(e.pointerId);
@@ -370,7 +418,8 @@
 
     function onMove(e) {
       if (dragging === null) {
-        canvas.style.cursor = hit(e) !== null ? "grab" : "default";
+        hovered = hit(e);
+        canvas.style.cursor = hovered !== null ? "grab" : "default";
         return;
       }
       const f = fieldFromEvent(e);
@@ -386,9 +435,22 @@
 
     async function onUp(e) {
       if (dragging === null) return;
+      const wasDragging = dragging;
       positions[dragging].lifted = false;
       dragging = null;
       canvas.style.cursor = "grab";
+
+      // A press that barely moved is a tap, and a tap means "name this one".
+      const moved = pressAt
+        ? Math.hypot(e.clientX - pressAt.x, e.clientY - pressAt.y)
+        : 99;
+      pressAt = null;
+      if (!dirty && moved < 6) {
+        selected = wasDragging;
+        onSelect?.(flowers[wasDragging]);
+        return;
+      }
+
       if (!dirty) return;
       dirty = false;
       const body = {};
@@ -412,9 +474,17 @@
     canvas.onpointercancel = onUp;
     canvas.style.touchAction = "none";   // let a finger drag a flower, not the page
 
+    // So the caller can write a name back in without a full reload.
+    _setLabel = (id, text) => {
+      const f = flowers.find((x) => x.id === id);
+      if (f) { if (text) f.label = text; else delete f.label; }
+    };
+
     if (_raf) cancelAnimationFrame(_raf);
     _raf = requestAnimationFrame(frame);
   }
+
+  let _setLabel = null;
 
   function stop(canvas) {
     if (_raf) cancelAnimationFrame(_raf);
@@ -425,5 +495,5 @@
     }
   }
 
-  window.PoppyGarden = { render, stop };
+  window.PoppyGarden = { render, stop, setLabel: (id, text) => _setLabel?.(id, text) };
 })();
