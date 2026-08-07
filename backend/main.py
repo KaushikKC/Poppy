@@ -45,6 +45,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def _no_cache_frontend(request, call_next):
+    """Never let the browser cache the app's own files.
+
+    Everything here is served from the same machine, so caching buys nothing and
+    costs a genuinely confusing class of bug: after an update the browser keeps
+    running the old JS, which looks exactly like the new feature being broken.
+    That cost a debugging cycle chasing a click handler that was, in fact, fine.
+    """
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.endswith((".js", ".css", ".html")):
+        response.headers["Cache-Control"] = "no-store, must-revalidate"
+    return response
+
 # Background voice-detection tasks, kept referenced so the event loop doesn't
 # garbage-collect them mid-run (asyncio holds only weak refs to bare tasks).
 _detect_tasks: set = set()
