@@ -223,6 +223,46 @@ def _score(loop: dict) -> float:
 # ── the API ──────────────────────────────────────────────────────────────────
 
 
+# ── When a reveal arrives ────────────────────────────────────────────────────
+# Everything else about Poppy is deliberately predictable, and that is right:
+# §6 says the ritual reminder is the cue in a habit loop, so it fires at the time
+# the user chose and never moves. But being predictable everywhere means she is
+# warm without ever being urgent. People feel fond of her and call at the weekend.
+#
+# The one honest lever is not knowing *when*. A reveal loop is her having
+# something of her own to say, which is not a habit cue, so it can land whenever.
+# She says it in the call, then it goes quiet, then it turns up on its own.
+#
+# That is §2's "reliable warmth, unpredictable delight" applied to the clock
+# rather than the content: the cue stays fixed, the delight moves.
+REVEAL_DELAY_MIN_H = 3
+REVEAL_DELAY_MAX_H = 22
+# Never in the small hours. A surprise at 4am is not a delight.
+REVEAL_WAKING_START = 9
+REVEAL_WAKING_END = 21
+
+
+def _reveal_due(now: datetime) -> datetime:
+    """A time to surface a reveal, inside waking hours.
+
+    Seeded by the minute it was planted rather than by chance, so the same call
+    always resolves to the same moment and a restart cannot reshuffle it.
+    """
+    span = REVEAL_DELAY_MAX_H - REVEAL_DELAY_MIN_H
+    seed = (int(now.timestamp()) // 60)
+    offset = REVEAL_DELAY_MIN_H + seed % span
+    due = now + timedelta(hours=offset)
+    if REVEAL_WAKING_START <= due.hour < REVEAL_WAKING_END:
+        return due
+    # Outside waking hours. Spread across the window rather than snapping every
+    # one to 9am, which would just trade one predictable time for another.
+    waking = REVEAL_WAKING_END - REVEAL_WAKING_START
+    hour = REVEAL_WAKING_START + (seed // span) % waking
+    if due.hour >= REVEAL_WAKING_END:
+        due += timedelta(days=1)
+    return due.replace(hour=hour)
+
+
 def plant(
     hook_text: str,
     kind: str = _DEFAULT_TYPE,
@@ -249,7 +289,9 @@ def plant(
         "hook_text": hook_text[:200],
         "payoff_ref": payoff_ref,
         "created_at": _iso(now),
-        "due_at": due_at or _iso(now),
+        # A reveal waits and turns up by itself; every other type is live the
+        # moment it is planted, because it is answering something just discussed.
+        "due_at": due_at or _iso(_reveal_due(now) if kind == "reveal" else now),
         "decay_at": _iso(now + timedelta(hours=half_life)),
         "strength": float(strength) if strength is not None else _BASE_STRENGTH[kind],
         "state": "open",
@@ -270,9 +312,13 @@ def live(character: str | None = None) -> list[dict]:
     character = character or _character()
     if _sweep(store, character):
         _save(store)
+    now = _now()
     active = [
         l for l in _bucket(store, character)
         if l.get("state") in LIVE_STATES and not l.get("backlog")
+        # A loop waiting for its moment is not shown yet. This is what makes a
+        # reveal arrive on its own rather than the instant the call ends.
+        and (_parse(l.get("due_at")) or now) <= now
     ]
     return sorted(active, key=_score, reverse=True)
 
@@ -371,6 +417,26 @@ def surface_text(loop: dict | None) -> str | None:
     # which imports this module.
     import nudges
     return softened if nudges.is_healthy(softened) else hook
+
+
+def newly_due(character: str | None = None) -> dict | None:
+    """A loop that has just reached its moment and has not been announced yet.
+
+    Read once: announcing is recorded on the loop, so the surprise happens a
+    single time and never becomes a repeating ping.
+    """
+    store = _load()
+    character = character or _character()
+    now = _now()
+    for loop in _bucket(store, character):
+        if loop.get("state") not in LIVE_STATES or loop.get("announced_at"):
+            continue
+        due = _parse(loop.get("due_at"))
+        if due and due <= now and loop.get("type") == "reveal":
+            loop["announced_at"] = _iso(now)
+            _save(store)
+            return loop
+    return None
 
 
 def counts(character: str | None = None) -> dict:

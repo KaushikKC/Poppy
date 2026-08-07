@@ -53,6 +53,7 @@ _DEFAULTS = {
     "daily_goal": None,           # "light" | "regular" | "deep", chosen by the user (§4.2)
     "quests_state": {},           # {"day": ISO, "done": [quest ids]} (§4.3)
     "daily_layer_off": False,     # §4.9 kill switch: "just let me talk to her"
+    "last_reveal_notified": None, # ISO date she last surprised them with a reveal
     # Bloom Points carry ALL the counting (§4.4); the garden carries none of it (§3).
     "bloom_points": 0,
     "bloom_day": {},              # {"day": ISO, "earned": {source: bp}} for the daily caps
@@ -260,6 +261,30 @@ def closeness() -> dict:
         if calls >= need_calls and memories >= need_memories:
             stage = idx
     return {"stage": stage, "label": CLOSENESS_STAGES[stage]}
+
+
+# How rarely a reveal may arrive unannounced. Unpredictability is the one lever
+# that creates urgency without pressure, but it stops being a delight the moment
+# it becomes a schedule, so it is capped well below daily.
+REVEAL_NOTIFY_EVERY_DAYS = 3
+
+
+def reveal_notifiable() -> bool:
+    """Whether she may surface a reveal on her own right now."""
+    p = _load()
+    if p.get("daily_layer_off"):
+        return True  # this is her, not the counting layer, so it stays
+    last = p.get("last_reveal_notified")
+    if not last:
+        return True
+    try:
+        return (date.today() - date.fromisoformat(last)).days >= REVEAL_NOTIFY_EVERY_DAYS
+    except (ValueError, TypeError):
+        return True
+
+
+def mark_reveal_notified() -> None:
+    update(last_reveal_notified=date.today().isoformat())
 
 
 def daily_layer_off() -> bool:

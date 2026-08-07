@@ -87,6 +87,24 @@ async def _ritual_notifier_loop():
                 if text:
                     await asyncio.to_thread(notify.send, prof.get("companion_name", "Poppy"), text)
                 await asyncio.to_thread(companion.mark_notified)
+            # A reveal that has reached its moment (§ Octalysis: unpredictability).
+            # Separate from the ritual reminder on purpose: the ritual is the habit
+            # cue and must stay at the time the user picked, while this is her
+            # having something of her own to say and can arrive whenever.
+            #
+            # Capped hard. Once every few days at most, and never while a ritual
+            # reminder is also pending, so the two can't stack into nagging.
+            if not due.get("due") and await asyncio.to_thread(companion.reveal_notifiable):
+                loop = await asyncio.to_thread(loops.newly_due)
+                if loop:
+                    prof = await asyncio.to_thread(companion.profile)
+                    text = await asyncio.to_thread(loops.surface_text, loop)
+                    if text and nudges.is_healthy(text):
+                        await asyncio.to_thread(
+                            notify.send, prof.get("companion_name", "Poppy"), text,
+                        )
+                        await asyncio.to_thread(companion.mark_reveal_notified)
+                        await asyncio.to_thread(db.record_event, "reveal_surfaced")
         except Exception as e:
             print(f"[ritual] notifier loop error: {e}")
         await asyncio.sleep(30)
