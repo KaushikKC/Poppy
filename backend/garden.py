@@ -41,6 +41,9 @@ KINDS = {
     "plan":  {"label": "plan",      "petals": 4, "hue": "#63a85b"},
     "talk":  {"label": "talk",      "petals": 6, "hue": "#e0554f"},
     "ritual": {"label": "ritual",   "petals": 7, "hue": "#8b7bd8"},
+    # §4.1's Long Year. Obtainable exactly one way, by being here a year, which is
+    # what makes it worth anything. Never planted by an ordinary call.
+    "longyear": {"label": "the long year", "petals": 12, "hue": "#e8b53f", "rare": True},
 }
 DEFAULT_KIND = "talk"
 
@@ -102,6 +105,28 @@ def bloom_last(when: datetime | None = None) -> dict | None:
             companion.update(garden=flowers)
             return f
     return None
+
+
+def plant_long_year(when: datetime | None = None) -> dict | None:
+    """Grow the flower that only exists at 365 days (§4.1).
+
+    Idempotent, and it always blooms: this is not a bud that might not open. It is
+    placed near the front of the field so it is the first thing seen, and it is
+    never removed, because the streak that earned it may break later and taking it
+    away would make a year of showing up conditional on the next day.
+    """
+    flowers = _flowers()
+    if any(f.get("kind") == "longyear" for f in flowers):
+        return None
+    f = plant("longyear", bloomed=True, when=when)
+    # Front and centre, unless the user moves it themselves.
+    f["x"], f["y"] = 0.5, 0.86
+    flowers = _flowers()
+    for existing in flowers:
+        if existing.get("id") == f["id"]:
+            existing["x"], existing["y"] = 0.5, 0.86
+    companion.update(garden=flowers)
+    return f
 
 
 def arrange(positions: dict) -> int:
