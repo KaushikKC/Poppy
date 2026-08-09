@@ -54,6 +54,9 @@ _DEFAULTS = {
     "quests_state": {},           # {"day": ISO, "done": [quest ids]} (§4.3)
     "daily_layer_off": False,     # §4.9 kill switch: "just let me talk to her"
     "last_reveal_notified": None, # ISO date she last surprised them with a reveal
+    # Rules the user set for her: what to never raise, what to always ask about.
+    "avoid_topics": [],
+    "always_topics": [],
     # Bloom Points carry ALL the counting (§4.4); the garden carries none of it (§3).
     "bloom_points": 0,
     "bloom_day": {},              # {"day": ISO, "earned": {source: bp}} for the daily caps
