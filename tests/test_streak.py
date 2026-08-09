@@ -163,5 +163,62 @@ check("marks only the days they actually showed up",
 froz = [w["date"] for w in week if w["frozen"]]
 check("a covered day is shown as frozen, not as met", froz == ["2026-08-02"], str(froz))
 
+
+print("\n== the Long Year: the endgame (§4.1) ==")
+import garden
+reset()
+ly = streak.long_year()
+check("visible from day one", ly["days"] == 365)
+check("not reached", ly["reached"] is False)
+check("no countdown when it's far off", ly["days_left"] is None, str(ly["days_left"]))
+check("nothing to lose by not getting there", "lose" not in str(ly) and "fail" not in str(ly))
+
+companion.update(current_streak=300)
+ly = streak.long_year()
+check("distance withheld while still far off (65 days)",
+      ly["days_left"] is None, str(ly["days_left"]))
+check("and not flagged near", ly["near"] is False)
+companion.update(current_streak=350)
+ly = streak.long_year()
+check("distance appears once close", ly["days_left"] == 15, str(ly["days_left"]))
+check("flagged as near", ly["near"] is True)
+
+print("\n== the flower only exists at a year ==")
+reset()
+check("cannot be planted early", streak.mark_long_year() is False)
+check("no rare flower in the garden",
+      not any(f["kind"] == "longyear" for f in garden.state()["flowers"]))
+
+companion.update(current_streak=365)
+check("granted at 365", streak.mark_long_year() is True)
+f = garden.plant_long_year()
+check("the flower grows", f and f["kind"] == "longyear", str(f))
+check("it always blooms, never a bud", f["state"] == "bloom")
+check("it is marked rare", garden.KINDS["longyear"].get("rare") is True)
+check("more petals than anything else",
+      garden.KINDS["longyear"]["petals"] > max(
+          v["petals"] for k, v in garden.KINDS.items() if k != "longyear"))
+
+check("granted exactly once", streak.mark_long_year() is False)
+check("and never duplicated", garden.plant_long_year() is None)
+check("still only one in the garden",
+      sum(1 for x in garden.state()["flowers"] if x["kind"] == "longyear") == 1)
+
+print("\n== a year of showing up is not taken back ==")
+companion.update(current_streak=0, streak_last_date=None)
+check("the flower survives a broken streak",
+      any(x["kind"] == "longyear" for x in garden.state()["flowers"]))
+check("and it still reads as earned", streak.long_year()["reached"] is True)
+check("it is never re-granted", streak.mark_long_year() is False)
+
+print("\n== she says something different at a year ==")
+import opening
+week = opening._milestone_line(7)
+year = opening._milestone_line(365)
+check("a year is not phrased like a week", year != week)
+check("she names it", "year" in year.lower())
+check("she mentions the flower", "garden" in year.lower())
+check("no em dash", "—" not in year and "—" not in week)
+
 print("\n" + ("ALL PASS" if ok else "FAILURES ABOVE"))
 sys.exit(0 if ok else 1)

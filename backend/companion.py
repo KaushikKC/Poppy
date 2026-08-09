@@ -50,6 +50,7 @@ _DEFAULTS = {
     "streak_freeze_notice": 0,    # freezes spent since the user was last told
     "streak_history": [],         # local ISO dates that met the floor
     "streak_frozen_days": [],     # local ISO dates a freeze covered for them
+    "long_year_marked": False,    # the 365-day flower has been granted (§4.1)
     "daily_goal": None,           # "light" | "regular" | "deep", chosen by the user (§4.2)
     "quests_state": {},           # {"day": ISO, "done": [quest ids]} (§4.3)
     "daily_layer_off": False,     # §4.9 kill switch: "just let me talk to her"
@@ -414,6 +415,14 @@ def as_prompt_block(with_loop: bool = True) -> str:
     p = _load()
     name = p.get("companion_name", "Poppy")
     line = f"\n\nYour name is {name}." if name and name != "Poppy" else ""
+    # §4.1: after a year, how she refers to your history changes. A small line,
+    # but it is the difference between a long relationship and a long streak.
+    if p.get("long_year_marked"):
+        line += (
+            "\nYou and the user have been talking every day for over a year. Refer "
+            "to that shared history naturally when it fits, the way someone would "
+            "with an old friend. Never as a statistic."
+        )
     loop = latest_open_loop() if with_loop else None
     if loop:
         line += (

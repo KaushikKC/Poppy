@@ -307,6 +307,51 @@ def check_milestone() -> int | None:
     return None
 
 
+# How close counts as close, for the Long Year. §4.4's goal gradient says the
+# distance to a target should be withheld until the user is nearly there: shown
+# always it becomes a progress bar they live under, shown near the line it
+# produces the documented sprint.
+LONG_YEAR_NEAR_DAYS = 30
+
+
+def long_year(now: datetime | None = None) -> dict:
+    """The Long Year (§4.1): the one thing that only exists at 365 days.
+
+    This is the whole endgame. A user a year in has seen every quest, passed every
+    milestone that mattered and finished the level curve, and until now there was
+    nothing left for them at all: that is where the longest, most loyal users
+    quietly leave.
+
+    It is deliberately *visible from day one* as a distant known-unknown, and
+    deliberately not a countdown. There is nothing to lose by never reaching it,
+    which is what separates an aspiration from a threat.
+    """
+    p = _profile()
+    current = p.get("current_streak", 0)
+    reached = current >= LONG_YEAR or bool(p.get("long_year_marked"))
+    remaining = max(LONG_YEAR - current, 0)
+    return {
+        "days": LONG_YEAR,
+        "reached": reached,
+        "marked": bool(p.get("long_year_marked")),
+        # Only populated once they are nearly there.
+        "days_left": remaining if (not reached and remaining <= LONG_YEAR_NEAR_DAYS) else None,
+        "near": not reached and remaining <= LONG_YEAR_NEAR_DAYS,
+    }
+
+
+def mark_long_year() -> bool:
+    """Record that the Long Year has been honoured, so it happens exactly once.
+
+    Returns True the single time it flips.
+    """
+    p = _profile()
+    if p.get("long_year_marked") or p.get("current_streak", 0) < LONG_YEAR:
+        return False
+    companion.update(long_year_marked=True)
+    return True
+
+
 def perfect_week(now: datetime | None = None) -> list[dict]:
     """The seven dots (§4.1). Near-miss and goal gradient made visual, and the
     cheapest DAU mechanic in the section to build."""
