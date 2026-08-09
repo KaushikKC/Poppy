@@ -813,6 +813,11 @@ button:not(:disabled):active { transform: scale(0.94); }
 .today-item { display: flex; gap: 0.6rem; align-items: flex-start; font-size: 0.95rem; color: var(--ink); }
 .today-item.done { color: rgba(7,18,7,0.45); text-decoration: line-through; }
 .today-tick { color: var(--poppy); font-size: 0.8rem; line-height: 1.5; }
+.today-longyear {
+  font-family: var(--font-mono); font-size: 0.66rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: #a1791b; padding-top: 0.2rem;
+}
 .today-week { display: flex; gap: 0.4rem; }
 .week-dot {
   width: 14px; height: 14px; border-radius: 50%;

@@ -257,6 +257,19 @@
     ctx.shadowBlur = (pos.lifted ? 16 : 7) * pos.depth;
     ctx.shadowOffsetY = 3 * pos.depth;
 
+    // §4.1's Long Year flower gets a glow nothing else has. It is the only thing
+    // in the garden that cannot be earned any other way, so it should not look
+    // like the others.
+    if (kind.rare && bloomed) {
+      const halo = ctx.createRadialGradient(0, 0, 0, 0, 0, petal * 2.6);
+      halo.addColorStop(0, "rgba(255, 226, 138, 0.55)");
+      halo.addColorStop(1, "rgba(255, 226, 138, 0)");
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.arc(0, 0, petal * 2.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     if (bloomed) {
       // Flowers have identity: the petal count and hue come from what kind of
       // call it was, so the garden reads as an emotional record of the year.

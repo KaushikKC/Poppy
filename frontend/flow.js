@@ -289,6 +289,7 @@
     }
 
     _streakWeek = (h.streak && h.streak.week) || null;
+    try { _longYear = await (await fetch(`${BACKEND}/long-year`)).json(); } catch {}
     renderFreezeNotice(h.freeze_notice);
     renderRepair(h.streak);
     loadToday();
@@ -393,6 +394,22 @@
     ring.style.setProperty("--pct", pct);
     ring.textContent = t.goal_met ? "✓" : `${t.completed}/${t.total}`;
 
+    // §4.1: the Long Year, visible from day one as a distant known-unknown.
+    // Never a countdown, and never a bar: there is nothing to lose by not getting
+    // there, which is the whole difference between an aspiration and a threat.
+    const ly = document.getElementById("today-longyear");
+    if (ly) {
+      const l = _longYear || {};
+      if (l.reached) {
+        ly.textContent = "The Long Year · earned";
+      } else if (l.near && l.days_left != null) {
+        ly.textContent = `The Long Year · ${l.days_left} days away`;
+      } else {
+        ly.textContent = "The Long Year · a flower that only grows at 365 days";
+      }
+      ly.classList.remove("hidden");
+    }
+
     const week = document.getElementById("today-week");
     week.innerHTML = "";
     (_streakWeek || []).forEach((d) => {
@@ -405,6 +422,7 @@
   }
 
   let _streakWeek = null;
+  let _longYear = null;
 
   document.getElementById("home-today")?.addEventListener("click", () => {
     renderToday();
