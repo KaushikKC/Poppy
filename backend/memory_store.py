@@ -304,7 +304,18 @@ def relevant(query: str | None, limit: int = _PROMPT_FACTS) -> list[str]:
     facts are always pinned; the rest are ranked by lexical overlap with the current
     message, with recency as the tiebreak, so a zero-match turn degrades gracefully
     to 'most recent'. Returns fact texts, oldest-relevant first for stable prefills."""
-    recs = records()
+    # A subject she was told never to raise is withheld from her prompt entirely.
+    #
+    # Telling her not to mention it is not enough on its own: measured against the
+    # on-device 3B with a memory about that subject in the prompt, she raised it in
+    # 3 of 4 replies anyway. The memory block was handing her the topic while the
+    # instruction asked her to ignore it, and the instruction lost.
+    #
+    # The fact is not deleted. The user may lift the rule, and deleting what they
+    # asked her not to discuss would be a second, worse decision made on their
+    # behalf. It simply stops being fed to her.
+    import boundaries
+    recs = [r for r in records() if not boundaries.is_blocked(r["text"])]
     if len(recs) <= limit:
         return [r["text"] for r in recs]
 
