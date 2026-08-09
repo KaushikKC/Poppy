@@ -21,6 +21,7 @@ import bloom
 import garden
 import opening
 import ritual_pact
+import boundaries
 import nudges
 import notify
 import metrics
@@ -426,6 +427,20 @@ async def close_call(payload: dict = Body(default={})):
             await asyncio.to_thread(db.record_event, "ritual_set")
             await asyncio.to_thread(db.record_event, "ritual_set_by_pact")
 
+    # Rules she was given out loud in this call ("never ask me about my dad").
+    # Read from the transcript for the same reason the ritual is: the natural way
+    # to tell someone a boundary is to say it, not to find a settings screen.
+    rules_set = []
+    if spoke:
+        for rule in await asyncio.to_thread(boundaries.parse_from_turns, turns):
+            await asyncio.to_thread(boundaries.add, rule["kind"], rule["topic"])
+            rules_set.append(rule)
+        if rules_set:
+            counts = await asyncio.to_thread(boundaries.counts)
+            await asyncio.to_thread(
+                db.record_event, "boundary_set", counts["avoid"] + counts["always"],
+            )
+
     # §1.3 Rule 5: the end of every payoff is the start of the next hook, so a
     # call that had a real conversation never ends without planting one.
     planted = None
@@ -518,6 +533,7 @@ async def close_call(payload: dict = Body(default={})):
         "open_loop": planted.get("hook_text") if planted else None,
         "ritual": ritual,
         "streak": streak_status,
+        "rules_set": rules_set,
     }
 
 
@@ -540,6 +556,30 @@ async def set_entitlement(payload: dict = Body(...)):
 async def get_referral():
     """The user's share code + copy for the referral loop (§7)."""
     return await asyncio.to_thread(billing.referral)
+
+
+@app.get("/boundaries")
+async def get_boundaries():
+    """What she was told never to raise, and what to always ask about."""
+    return await asyncio.to_thread(boundaries.get)
+
+
+@app.post("/boundaries")
+async def set_boundary(payload: dict = Body(default={})):
+    """Add or remove a rule. `{"kind": "avoid"|"always", "topic": str, "remove": bool}`
+
+    Only counts are logged. A boundary is the user's own words about their own
+    life, so the text stays in the local store.
+    """
+    data = payload or {}
+    kind, topic = data.get("kind", ""), data.get("topic", "")
+    if data.get("remove"):
+        result = await asyncio.to_thread(boundaries.remove, kind, topic)
+    else:
+        result = await asyncio.to_thread(boundaries.add, kind, topic)
+    counts = await asyncio.to_thread(boundaries.counts)
+    await asyncio.to_thread(db.record_event, "boundary_set", counts["avoid"] + counts["always"])
+    return result
 
 
 @app.get("/garden")
