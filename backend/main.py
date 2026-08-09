@@ -493,6 +493,11 @@ async def close_call(payload: dict = Body(default={})):
     if await asyncio.to_thread(streak.qualifies, duration, quest_done or data.get("quest_done")):
         streak_status = await asyncio.to_thread(streak.record_activity)
         await asyncio.to_thread(db.record_event, "streak_day", streak_status["current"])
+        # §4.1's Long Year. The one thing that exists only at 365 days, and the
+        # only thing in the product a user a year in has left to reach.
+        if await asyncio.to_thread(streak.mark_long_year):
+            await asyncio.to_thread(garden.plant_long_year)
+            await asyncio.to_thread(db.record_event, "long_year")
 
     # §3.1: a call plants a bud, a call with something real in it blooms. Absence
     # never removes anything, so there is no path here that takes a flower away.
@@ -665,6 +670,17 @@ async def set_daily_layer(payload: dict = Body(default={})):
     await asyncio.to_thread(companion.update, daily_layer_off=off)
     await asyncio.to_thread(db.record_event, "daily_layer_off" if off else "daily_layer_on")
     return {"off": off}
+
+
+@app.get("/long-year")
+async def get_long_year():
+    """The Long Year (§4.1): visible from day one as a distant known-unknown.
+
+    Deliberately not a countdown. The distance is withheld until the user is
+    nearly there, and there is nothing to lose by never arriving, which is what
+    separates an aspiration from a threat.
+    """
+    return await asyncio.to_thread(streak.long_year)
 
 
 @app.get("/streak")
