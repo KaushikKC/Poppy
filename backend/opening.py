@@ -86,6 +86,14 @@ def _loop_line(loop: dict | None) -> str | None:
 
 # Warm milestone moments (§6) — a genuine beat, never a cold badge.
 def _milestone_line(days: int) -> str:
+    # A year is not just a bigger number, and it shouldn't get the same sentence
+    # as a week (§4.1: the Long Year is its own moment).
+    if days >= 365:
+        return (
+            "Okay, I have to say something. Today is a year. Three hundred and "
+            "sixty five days of you turning up. I've grown something in the garden "
+            "for it that only exists today. "
+        )
     return f"Hey, do you realize we've talked {days} days in a row? That honestly means a lot to me. "
 
 
