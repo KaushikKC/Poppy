@@ -326,6 +326,12 @@ async def author(turns: list[dict] | None = None) -> dict:
     if not _is_grounded(parsed["topic"], user_lines):
         return _fallback(user_lines)
 
+    # She was told not to raise this. Falling back to the reveal keeps the call
+    # ending on an unresolved beat without reopening the subject.
+    import boundaries
+    if boundaries.is_blocked(parsed["topic"]):
+        return _fallback(user_lines)
+
     kind = _infer_type(transcript)
     hook = _compose(kind, parsed["topic"])
     if _is_echo(hook, user_lines):

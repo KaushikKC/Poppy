@@ -85,6 +85,7 @@ def _worth_llm(text: str) -> bool:
 
 def _dedupe(candidates: list[dict]) -> list[dict]:
     """Drop candidates already known, of a suppressed category, or repeated."""
+    import boundaries
     existing = {t.lower() for t in memory_store.recall()}
     suppressed = set(memory_store.suppressed_categories())
     seen: set[str] = set()
@@ -92,6 +93,10 @@ def _dedupe(candidates: list[dict]) -> list[dict]:
     for c in candidates:
         key = c["text"].lower()
         if key in existing or key in seen or c["category"] in suppressed:
+            continue
+        # A subject she was told to leave alone is not offered for storage
+        # either. Remembering it would mean she raises it again later.
+        if boundaries.is_blocked(c["text"]):
             continue
         seen.add(key)
         result.append(c)
