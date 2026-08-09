@@ -18,6 +18,7 @@ import memory_store
 import companion
 import disclosure
 import ritual_pact
+import boundaries
 import characters
 import avatar
 import emotion as emotion_mod
@@ -246,9 +247,13 @@ async def handle_chat(ws: WebSocket):
             identity_block = await asyncio.to_thread(
                 companion.as_prompt_block, not pact_block,
             )
+            # What she was told to leave alone, and what to keep track of. This
+            # is a constraint list rather than a placement rule, so unlike the
+            # directives above it composes and is always present.
+            rules_block = await asyncio.to_thread(boundaries.as_prompt_block)
             system_prompt = (
                 char["system_prompt"] + identity_block + disclosure_block + pact_block
-                + SAFETY_ADDENDUM + memory_block
+                + rules_block + SAFETY_ADDENDUM + memory_block
             )
             if risk["level"] == "crisis":
                 system_prompt += CRISIS_ADDENDUM
