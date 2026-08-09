@@ -839,6 +839,11 @@ button:not(:disabled):active { transform: scale(0.94); }
   pointer-events: none;
 }
 .garden-bar > * { pointer-events: auto; }
+.memory-rules { margin-bottom: 1rem; padding-bottom: 0.8rem; border-bottom: 1px solid var(--line); }
+.memory-rule {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+  padding: 0.35rem 0; font-size: 0.92rem; color: var(--ink);
+}
 .garden-name { display: flex; gap: 0.5rem; align-items: center; }
 .garden-name-input {
   padding: 0.45rem 0.7rem; border-radius: 8px; border: 1px solid rgba(255,248,234,0.5);

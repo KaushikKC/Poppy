@@ -18,6 +18,7 @@ test_ritual_pact.py
 test_streak.py
 test_quests.py
 test_garden_bloom.py
+test_boundaries.py
 "
 
 fail=0

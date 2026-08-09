@@ -137,6 +137,10 @@ async function renderMemory() {
 
   memPanel.innerHTML = "";
 
+  // The rules she's been told, first. A rule you can't see or undo is worse than
+  // no rule at all, and these ones change what she will and won't say.
+  await renderRules();
+
   const title = document.createElement("div");
   title.className = "memory-title";
   title.textContent = records.length
@@ -229,4 +233,50 @@ if (memBtn && memPanel) {
       memPanel.classList.add("hidden");
     }
   });
+}
+
+
+// The rules the user has set for her: never raise this, always ask about that.
+// Set by saying so in a call ("don't ask me about my dad"); shown here so they
+// can be checked and undone.
+async function renderRules() {
+  let rules = { avoid: [], always: [] };
+  try {
+    rules = await (await fetch(`${MEM_BACKEND}/boundaries`)).json();
+  } catch {}
+  if (!rules.avoid?.length && !rules.always?.length) return;
+
+  const wrap = document.createElement("div");
+  wrap.className = "memory-rules";
+
+  [["avoid", "Never brings up"], ["always", "Always asks about"]].forEach(([kind, heading]) => {
+    const list = rules[kind] || [];
+    if (!list.length) return;
+    const h = document.createElement("div");
+    h.className = "memory-title";
+    h.textContent = heading;
+    wrap.appendChild(h);
+    list.forEach((topic) => {
+      const row = document.createElement("div");
+      row.className = "memory-rule";
+      const txt = document.createElement("span");
+      txt.textContent = topic;
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "memory-forget";
+      del.title = "Remove this rule";
+      del.textContent = "×";
+      del.addEventListener("click", async () => {
+        await fetch(`${MEM_BACKEND}/boundaries`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kind, topic, remove: true }),
+        }).catch(() => {});
+        renderMemory();
+      });
+      row.append(txt, del);
+      wrap.appendChild(row);
+    });
+  });
+  memPanel.appendChild(wrap);
 }
