@@ -49,9 +49,22 @@ async function startRecording() {
   };
 
   mediaRecorder.onstop = async () => {
-    stream.getTracks().forEach((t) => t.stop());
-    const blob = new Blob(audioChunks, { type: mimeType });
-    await transcribeAndSend(blob, mimeType);
+    // Release the microphone first and unconditionally. If anything below throws,
+    // the device must not stay held: a mic still open is why a retry then failed
+    // too, and why only a full page reload recovered it.
+    releaseStream(stream);
+    try {
+      const blob = new Blob(audioChunks, { type: mimeType });
+      await transcribeAndSend(blob, mimeType);
+    } catch (err) {
+      // transcribeAndSend handles its own STT errors; this catches anything
+      // after it, such as the send failing on a closed socket. Without it the
+      // rejection escaped and the UI sat on "transcribing" forever.
+      console.error("mic: turn failed after recording", err);
+    } finally {
+      isRecording = false;
+      setMicState("idle");
+    }
   };
 
   mediaRecorder.start(250);
@@ -59,18 +72,42 @@ async function startRecording() {
   setMicState("recording");
 }
 
+function releaseStream(stream) {
+  try { stream?.getTracks?.().forEach((t) => t.stop()); } catch {}
+}
+
 function stopRecording() {
-  if (mediaRecorder && isRecording) {
+  if (!mediaRecorder || !isRecording) return;
+  isRecording = false;
+  setMicState("transcribing");
+  try {
     mediaRecorder.stop();
-    isRecording = false;
-    setMicState("transcribing");
+  } catch (err) {
+    // The recorder was already inactive, so onstop will never fire and nothing
+    // would ever put the UI back. Recover here instead of stranding it.
+    console.error("mic: stop failed", err);
+    releaseStream(mediaRecorder.stream);
+    setMicState("idle");
   }
 }
 
 micBtn.addEventListener("click", () => {
   if (vadActive) return;
-  if (isRecording) stopRecording();
-  else             startRecording();
+  if (isRecording) {
+    stopRecording();
+    return;
+  }
+  // If a previous turn left the mic mid-flight, clicking should recover it
+  // rather than silently do nothing, which is what forced a page reload.
+  if (mediaRecorder && mediaRecorder.state === "recording") {
+    console.warn("mic: recorder was left running, resetting");
+    try { mediaRecorder.stop(); } catch {}
+    releaseStream(mediaRecorder.stream);
+    mediaRecorder = null;
+    setMicState("idle");
+    return;
+  }
+  startRecording();
 });
 
 // ── VAD toggle ────────────────────────────────────────────────────────────────
