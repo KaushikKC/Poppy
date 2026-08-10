@@ -204,6 +204,18 @@ async def handle_chat(ws: WebSocket):
             if not user_text:
                 continue
 
+            # A rule takes effect the moment it is said, not when the call ends.
+            #
+            # It used to be read only at /call/close, which meant telling her to
+            # drop a subject did nothing for the rest of that conversation, and
+            # the memory panel could not show the rule yet either. Raising
+            # something straight after being asked not to is the most expensive
+            # mistake this product can make, so it is applied before this turn's
+            # reply is even built.
+            rule = await asyncio.to_thread(boundaries.parse, user_text)
+            if rule:
+                await asyncio.to_thread(boundaries.add, rule["kind"], rule["topic"])
+
             # The chosen character is the personality + voice. (Mood modes frame the
             # opener; the character itself stays constant.)
             profile = await asyncio.to_thread(companion.profile)

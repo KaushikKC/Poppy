@@ -177,5 +177,15 @@ c = boundaries.counts()
 check("counts are numbers", isinstance(c["avoid"], int) and c["avoid"] == 1, str(c))
 check("no text in the counts", "private" not in str(c), str(c))
 
+print("\n== a rule buried mid-sentence is still heard ==")
+reset()
+real = ("And also I'm feeling lonely over here because I'm missing my family. "
+        "I'm alone in UK. I'm from India. So while preparing all these things, "
+        "I'm feeling lonely. And also main thing is don't ask. Don't ask about "
+        "my dad. Don't talk about my dad. Yeah, I'm missing my family.")
+got = boundaries.parse(real)
+check("found inside a long spoken paragraph", got and got["topic"] == "dad", str(got))
+check("it is an avoid rule", got and got["kind"] == "avoid", str(got))
+
 print("\n" + ("ALL PASS" if ok else "FAILURES ABOVE"))
 sys.exit(0 if ok else 1)
