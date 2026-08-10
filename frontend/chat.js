@@ -448,6 +448,18 @@ window.sendMessage = async function sendMessage(text) {
     setInputLocked(false);
     setStatus("idle");
   };
+
+  ws.onclose = () => {
+    // Last resort. The input is unlocked on "done", on "error" and on a socket
+    // error, but a socket that simply closes mid-turn hit none of them, and the
+    // typing field stayed locked with no way back except reloading the page.
+    if (ws !== currentWs) return; // superseded or deliberately interrupted
+    if (llmDone) return;          // the turn finished normally
+    replyBubble.classList.remove("streaming");
+    endReply(ws);
+    setInputLocked(false);
+    setStatus("idle");
+  };
 };
 
 form.addEventListener("submit", (e) => {
