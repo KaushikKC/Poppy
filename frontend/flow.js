@@ -542,13 +542,11 @@
     const b = document.createElement("button");
     b.id = "home-switch";
     b.type = "button";
+    // Styled in the stylesheet like everything else. It was inline-styled for a
+    // dark background (a white border over a translucent white fill), which on
+    // this cream home screen read as a washed-out slab next to the mood pills.
+    b.className = "home-switch";
     b.textContent = "Change companion";
-    Object.assign(b.style, {
-      display: "block", margin: "14px auto 0", padding: "10px 16px",
-      borderRadius: "10px", border: "1px solid rgba(255,255,255,0.28)",
-      background: "rgba(255,255,255,0.06)", color: "inherit",
-      fontWeight: "700", cursor: "pointer",
-    });
     b.addEventListener("click", openCharacterSwitch);
     host.appendChild(b);
   }
