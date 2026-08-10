@@ -861,6 +861,18 @@ button:not(:disabled):active { transform: scale(0.94); }
   background: var(--poppy); color: var(--cream);
   font-family: var(--font-sans); font-weight: 700; font-size: 0.85rem; cursor: pointer;
 }
+/* The garden's own close button. It used the outro's ghost style, which is dark
+   green on a pale panel: over the field it was invisible. This one reads on
+   grass, sky or a dark scrim. */
+.garden-close {
+  padding: 0.5rem 1.1rem; border-radius: 20px;
+  border: 1px solid rgba(255,248,234,0.55);
+  background: rgba(7,18,7,0.45); color: var(--cream);
+  font-family: var(--font-sans); font-weight: 700; font-size: 0.88rem;
+  cursor: pointer; backdrop-filter: blur(4px);
+  transition: background 0.2s, border-color 0.2s;
+}
+.garden-close:hover { background: rgba(7,18,7,0.68); border-color: var(--cream); }
 .garden-note {
   font-family: var(--font-mono); font-size: 0.68rem; font-weight: 800;
   text-transform: uppercase; letter-spacing: 0.09em; color: var(--cream);
@@ -883,6 +895,15 @@ button:not(:disabled):active { transform: scale(0.94); }
 .home-call:hover { transform: translateY(-3px) scale(1.02); background: #f6303b; }
 .home-call-label { font-family: var(--font-mono); font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; opacity: 0.85; }
 .home-call strong { font-family: var(--font-display); font-weight: 400; font-size: 1.9rem; line-height: 1; }
+.home-switch {
+  display: block; margin: 0.2rem auto 0;
+  padding: 0.45rem 1rem; border-radius: 20px;
+  border: 1px solid var(--line); background: transparent;
+  font-family: var(--font-sans); font-size: 0.82rem; color: var(--field-deep);
+  cursor: pointer; opacity: 0.8;
+  transition: opacity 0.2s, background 0.2s, color 0.2s;
+}
+.home-switch:hover { opacity: 1; background: rgba(255,248,234,0.72); color: var(--leaf); }
 .home-modes { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; }
 .home-mode {
   padding: 0.5rem 1.05rem; border-radius: 20px;
