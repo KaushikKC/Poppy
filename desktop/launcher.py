@@ -295,6 +295,19 @@ _PROGRESS_HTML = _page(
 )
 
 
+# Quiet splash shown on EVERY launch while the local server + model load (~15s).
+# This is NOT the first-run setup screen: no "download"/"one-time setup" language, so
+# returning users just see a brief "Opening Poppys" instead of the setup flow. The
+# full _PROGRESS_HTML setup screen is only swapped in when first-run setup is needed.
+_SPLASH_HTML = _page(
+    "<main class='card'>" + _LOGO_TAG +
+    "<div class='eyebrow'>Private &middot; on-device</div>"
+    "<h1>Opening Poppys&hellip;</h1>"
+    "<div class='bar'><span class='fill'></span></div>"
+    "</main>"
+)
+
+
 def _report_html(rep: preflight.Report) -> str:
     items = ""
     for c in rep.checks:
@@ -353,12 +366,17 @@ def _download_models_subprocess(window) -> bool:
 
 def _bootstrap(window) -> None:
     try:
-        _push(window, "Checking what's already set up…")
+        # Quiet first check while the window is still the minimal splash. These
+        # notify() calls no-op here (the splash has no setup log), so nothing
+        # setup-related is shown to a returning user.
         rep = preflight.run(auto_fix=False, notify=lambda m: _push(window, m))
 
         if not all(c.ok for c in rep.checks):
-            # Something's missing — try the fixes that need work (downloads etc.),
-            # streaming progress, then re-check.
+            # FIRST RUN / setup needed: only NOW swap in the full setup screen with
+            # the download-progress UI. Returning users with everything already
+            # cached never reach this branch — they stay on the quiet splash.
+            window.load_html(_PROGRESS_HTML)
+            time.sleep(0.2)  # let the setup page's JS load before pushing logs
             models_missing = any(
                 not c.ok for c in rep.checks
                 if "model" in c.name.lower() or "speech" in c.name.lower()
@@ -378,7 +396,8 @@ def _bootstrap(window) -> None:
         os.environ["HF_HUB_OFFLINE"] = "1"
         os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
-        _push(window, "Starting Poppys (loading the AI, about 15s the first time)…")
+        # Regular launch stays on the quiet "Opening Poppys…" splash while the
+        # local server + model load, then swaps straight to the app.
         _start_server()
         if _wait_health():
             window.load_url(APP_URL)
@@ -397,7 +416,7 @@ def main() -> None:
     _setup_logging()
     log.info("launcher starting (LLM_BACKEND=%s)", os.environ.get("LLM_BACKEND"))
     window = webview.create_window(
-        "Poppys", html=_PROGRESS_HTML,
+        "Poppys", html=_SPLASH_HTML,
         width=1120, height=840, min_size=(860, 640),
     )
     webview.start(_bootstrap, window)
