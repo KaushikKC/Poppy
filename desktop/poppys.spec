@@ -13,6 +13,7 @@
 #   with progress (keeps the app ~a few GB smaller; App Store-style hygiene).
 
 import os
+import re
 
 from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metadata
 
@@ -100,6 +101,11 @@ for _dist in ("en_core_web_sm", "spacy", "thinc", "spacy-legacy"):
     except Exception:
         pass
 
+# Read the version from the app itself, so the bundle and the in-app update check
+# can never drift apart.
+_ver_src = open(os.path.join(ROOT, "backend", "config.py")).read()
+APP_VERSION = re.search(r'APP_VERSION\s*=\s*"([^"]+)"', _ver_src).group(1)
+
 a = Analysis(
     [os.path.join(SPECPATH, "launcher.py")],
     pathex=[os.path.join(ROOT, "backend"), SPECPATH],
@@ -133,11 +139,11 @@ app = BUNDLE(
     name="Poppys.app",
     icon=os.path.join(SPECPATH, "icons", "poppys.icns"),
     bundle_identifier="com.poppys.companion",
-    version="1.0.0",
+    version=APP_VERSION,
     info_plist={
         "CFBundleName": "Poppys",
         "CFBundleDisplayName": "Poppys",
-        "CFBundleShortVersionString": "1.0.0",
+        "CFBundleShortVersionString": APP_VERSION,
         "NSHighResolutionCapable": True,
         "LSMinimumSystemVersion": "13.0",
         # Voice-first app: without this string macOS silently denies the mic.
