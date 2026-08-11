@@ -760,6 +760,17 @@ button:not(:disabled):active { transform: scale(0.94); }
 /* §4.1: the freeze notice and the repair offer. Both deliberately quiet and in
    the warm palette, never red or urgent. Loss aversion fires either way; only the
    threatening version produces the "already broke it, why bother" cascade. */
+.home-update-avail {
+  max-width: 520px; margin: 0.8rem auto 0;
+  display: flex; align-items: center; justify-content: center; gap: 0.7rem;
+  flex-wrap: wrap; font-size: 0.86rem; color: rgba(7,18,7,0.66);
+}
+.update-link { color: var(--leaf); font-weight: 700; }
+.update-off {
+  border: none; background: none; cursor: pointer;
+  font-family: var(--font-sans); font-size: 0.8rem;
+  color: rgba(7,18,7,0.45); text-decoration: underline;
+}
 .home-freeze, .home-repair {
   max-width: 520px; margin: 0.8rem auto 0; text-align: center;
   font-size: 0.9rem; color: rgba(7,18,7,0.72);

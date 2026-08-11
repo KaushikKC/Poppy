@@ -22,6 +22,7 @@ import garden
 import opening
 import ritual_pact
 import boundaries
+import updates
 import nudges
 import notify
 import metrics
@@ -561,6 +562,29 @@ async def set_entitlement(payload: dict = Body(...)):
 async def get_referral():
     """The user's share code + copy for the referral loop (§7)."""
     return await asyncio.to_thread(billing.referral)
+
+
+@app.get("/update")
+async def get_update():
+    """Whether a newer version has been released.
+
+    The only network request this app makes. Off with one switch, once a day at
+    most, sends nothing about the user, and silently reports nothing on any
+    failure: an offline app that complains about being offline is worse than one
+    that says nothing.
+    """
+    state = await asyncio.to_thread(updates.check)
+    state["notice"] = await asyncio.to_thread(updates.notice)
+    return state
+
+
+@app.post("/update/check")
+async def set_update_check(payload: dict = Body(default={})):
+    """Turn the version check on or off. Off means no network request is built."""
+    on = bool((payload or {}).get("on", True))
+    enabled = await asyncio.to_thread(updates.set_enabled, on)
+    await asyncio.to_thread(db.record_event, "update_check_on" if enabled else "update_check_off")
+    return {"enabled": enabled}
 
 
 @app.get("/boundaries")

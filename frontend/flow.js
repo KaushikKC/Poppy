@@ -290,6 +290,7 @@
 
     _streakWeek = (h.streak && h.streak.week) || null;
     try { _longYear = await (await fetch(`${BACKEND}/long-year`)).json(); } catch {}
+    renderUpdateNotice();
     renderFreezeNotice(h.freeze_notice);
     renderRepair(h.streak);
     loadToday();
@@ -314,6 +315,44 @@
     // Tint the orb to the current character, and offer a way to switch companion.
     tintOrbForCurrent(h.character || (profile && profile.character));
     ensureSwitchButton();
+  }
+
+  // A newer version exists. Deliberately flat: no badge, no colour, no modal.
+  // It never downloads or installs anything, it shows a line and a link, and
+  // what happens next is the user's decision.
+  async function renderUpdateNotice() {
+    const box = document.getElementById("home-update-avail");
+    if (!box) return;
+    let u = {};
+    try { u = await (await fetch(`${BACKEND}/update`)).json(); } catch {}
+    if (!u.notice || !u.url) { box.classList.add("hidden"); return; }
+
+    box.innerHTML = "";
+    const msg = document.createElement("span");
+    msg.textContent = u.notice;
+    const link = document.createElement("a");
+    link.href = u.url;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.className = "update-link";
+    link.textContent = "See what's new";
+    // Turning it off has to be as easy as being told, or it isn't really a choice.
+    const off = document.createElement("button");
+    off.type = "button";
+    off.className = "update-off";
+    off.textContent = "Stop checking";
+    off.addEventListener("click", async () => {
+      try {
+        await fetch(`${BACKEND}/update/check`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ on: false }),
+        });
+      } catch {}
+      box.classList.add("hidden");
+    });
+    box.append(msg, link, off);
+    box.classList.remove("hidden");
   }
 
   // §4.1: the user learns a freeze was spent after the fact, in her voice. It is
