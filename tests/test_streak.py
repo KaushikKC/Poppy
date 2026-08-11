@@ -220,5 +220,31 @@ check("she names it", "year" in year.lower())
 check("she mentions the flower", "garden" in year.lower())
 check("no em dash", "—" not in year and "—" not in week)
 
+
+print("\n== upgrading from the shipped 1.0 app ==")
+# A profile written by the released version: it has a streak but no streak date,
+# because that field did not exist. Without adoption, record_activity sees no
+# previous day and restarts at 1, so a nine-day run becomes day one on the first
+# call after updating.
+companion._PATH.unlink(missing_ok=True)
+companion.update()  # create the file
+companion.update(onboarded=True, current_streak=9, longest_streak=14,
+                 total_calls=37, last_call_date="2026-08-10")
+companion.update(streak_last_date=None)
+check("legacy profile has no streak date", companion.profile()["streak_last_date"] is None)
+s = streak.record_activity(D("2026-08-11T20:00:00"))
+check("the run continues instead of restarting", s["current"] == 10, str(s["current"]))
+check("longest is untouched", s["longest"] == 14, str(s["longest"]))
+
+# Someone with no streak at all must not have one invented for them.
+companion._PATH.unlink(missing_ok=True)
+companion.update()
+companion.update(onboarded=True, current_streak=0, last_call_date="2026-08-01")
+companion.update(streak_last_date=None)
+streak.status(D("2026-08-11T20:00:00"))
+check("no streak is not conjured from an old date",
+      companion.profile()["streak_last_date"] is None,
+      str(companion.profile()["streak_last_date"]))
+
 print("\n" + ("ALL PASS" if ok else "FAILURES ABOVE"))
 sys.exit(0 if ok else 1)

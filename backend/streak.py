@@ -56,7 +56,12 @@ def _profile() -> dict:
     `streak_*` fields and their defaults. Kept in one place because `update()`
     only writes keys the profile knows about, so a field declared only here would
     be silently dropped on every save."""
-    return companion.profile()
+    p = companion.profile()
+    # A profile written by the shipped 1.0 app has a streak but no streak date.
+    # Adopt the old field once, before anything reads the streak.
+    if p.get("current_streak", 0) > 0 and not p.get("streak_last_date") and p.get("last_call_date"):
+        return _adopt_legacy_date()
+    return p
 
 
 def today(now: datetime | None = None) -> date:
@@ -88,6 +93,28 @@ def _unlimited_freezes() -> bool:
     """Plus sells safety, not the relationship (§4.1, 🟡). Charging to *repair* a
     break would be the red version; this only ever adds cushion."""
     return companion.profile().get("plan") == "plus"
+
+
+def _adopt_legacy_date() -> dict:
+    """Carry a pre-1.1 streak across the upgrade.
+
+    Before the rebuild the only record of when someone last called was
+    `last_call_date`, written on a UTC clock. `streak_last_date` did not exist, so
+    a profile written by the shipped app arrives here with a streak number and no
+    date attached to it. `record_activity` would then see no previous day and
+    start again from 1: someone with a nine-day run would open the update, call,
+    and be told they were on day one.
+
+    Adopting the old date is not exact, since it was UTC and this is local, but it
+    is out by at most a day and it errs toward keeping the streak. Losing a run to
+    a version bump is the one outcome worth avoiding.
+    """
+    p = companion.profile()
+    if p.get("streak_last_date") or not p.get("last_call_date"):
+        return p
+    if p.get("current_streak", 0) <= 0:
+        return p
+    return companion.update(streak_last_date=p["last_call_date"])
 
 
 def _settle(now: datetime | None = None) -> dict:
