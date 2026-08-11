@@ -19,6 +19,7 @@ test_streak.py
 test_quests.py
 test_garden_bloom.py
 test_boundaries.py
+test_updates.py
 "
 
 fail=0
