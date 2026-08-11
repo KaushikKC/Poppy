@@ -1,11 +1,14 @@
 # Privacy Policy
 
-**Effective date: August 1, 2026**
+**Effective date: August 11, 2026**
 
 Poppy ("Poppy", "the app", "we", "us") is a personal AI voice companion. This policy
 explains what the app does with your information. The short version: **Poppy runs
 entirely on your device. We do not collect, transmit, sell, or share your personal
 data.** There are no accounts, no cloud servers, and no third-party AI services.
+
+The app makes **one** network request, and only if you leave it switched on: a check
+for whether a newer version has been released. It is described in full below.
 
 If anything here is unclear, contact us at **poppysdotsocial@gmail.com**.
 
@@ -15,6 +18,24 @@ If anything here is unclear, contact us at **poppysdotsocial@gmail.com**.
 
 Everything you say to Poppy, everything she remembers, and every conversation stays
 **on your own device**. It never leaves your machine, and we never see it.
+
+## The one network request: checking for a new version
+
+Poppy is distributed as a download rather than through an app store, so there is no
+other way to tell you an update exists. Once a day at most, the app asks a public
+GitHub endpoint what the latest released version number is.
+
+What that request contains: **nothing about you.** It is a plain request for a public
+version number. No account, no identifier, no device information, no usage data, and
+nothing you have said to Poppy. GitHub will see that some computer asked what the
+newest version is, along with the IP address any web request carries.
+
+What it does with the answer: shows a line on the home screen if a newer version
+exists, with a link. **It never downloads or installs anything.** Updating stays
+entirely your decision.
+
+**Turning it off:** tap "Stop checking" on that notice. Once off, no request is made
+at all. If the check fails, or you are offline, the app says nothing and carries on.
 
 ## What Poppy processes, and where
 
