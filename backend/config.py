@@ -102,9 +102,13 @@ DISTRESS_ADDENDUM = (
 #     WHISPER_MODEL=small.en
 # After changing the MLX repo, run `python3 backend/download_models.py` once online
 # (run.sh refuses to start until every configured model is cached for offline use).
+# base.en handles clean speech fine but mishears accented or noisy microphone
+# input badly ("marathon" came back as "matter down"). small.en costs about a
+# quarter of a second more per turn on Metal, measured, which is a small price
+# for being understood. Set WHISPER_MLX_REPO/WHISPER_MODEL to go back to base.en.
 WHISPER_BACKEND = os.getenv("WHISPER_BACKEND", "mlx")
-WHISPER_MLX_REPO = os.getenv("WHISPER_MLX_REPO", "mlx-community/whisper-base.en-mlx")
-WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base.en")  # faster-whisper CPU fallback
+WHISPER_MLX_REPO = os.getenv("WHISPER_MLX_REPO", "mlx-community/whisper-small.en-mlx")
+WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small.en")  # faster-whisper CPU fallback
 WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
 WHISPER_COMPUTE = os.getenv("WHISPER_COMPUTE", "int8")
 
