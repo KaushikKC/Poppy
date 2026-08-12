@@ -50,7 +50,9 @@ any third party.
 - **Poppy's voice.** Her spoken replies are synthesized **on your device**.
 - **Conversation history.** Your chats are stored **locally on your device** so the app
   works and you can review them. They are not uploaded.
-- **Memory.** With your explicit consent, Poppy remembers facts you choose to save. These
+- **Memory.** Poppy writes down what seems worth remembering from what you say, and tells
+  you each time she does. Every memory is listed in one place, each is editable and
+  deletable in a tap, and "forget everything" erases all of it at once. These
   memories are stored **locally and encrypted** on your device (using industry-standard
   encryption). Each character keeps its own separate memory. You can view, edit, or delete
   any memory, or clear all of them, at any time in the app.
