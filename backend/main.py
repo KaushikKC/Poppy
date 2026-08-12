@@ -789,10 +789,31 @@ async def get_memory():
 
 @app.post("/memory/extract")
 async def extract_memory(payload: dict = Body(...)):
-    """Propose (never store) candidate memories from what the user just said (§3.1).
-    The frontend turns these into "Want me to remember that?" consent prompts."""
+    """Pull out what is worth remembering from what the user just said, and keep it.
+
+    This used to only propose, and every single memory required tapping "Save" on
+    a prompt. In use that was constant interruption during a conversation, and
+    anything not tapped in time was simply lost, which is why she kept failing to
+    remember things that had plainly been said.
+
+    Saving is automatic now. The promise it replaces was consent-before-storing,
+    so the guarantees that remain have to carry the weight, and they do: nothing
+    leaves the device, every memory is listed in one place, each one is editable
+    and deletable in a tap, "forget everything" is one button, and a subject she
+    has been told to avoid is never captured at all.
+    """
     candidates = await memory_extract.propose(payload.get("text", ""))
-    return {"candidates": candidates}
+    saved = []
+    for c in candidates:
+        rec = await asyncio.to_thread(
+            memory_store.remember, c["text"], c.get("category", "ongoing"), c.get("why"),
+        )
+        if rec:
+            saved.append(rec)
+            await asyncio.to_thread(db.record_event, "memory_saved")
+    return {"candidates": candidates, "saved": [
+        {"id": r["id"], "text": r["text"], "category": r["category"]} for r in saved
+    ]}
 
 
 @app.post("/memory/confirm")

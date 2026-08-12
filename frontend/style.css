@@ -855,6 +855,13 @@ button:not(:disabled):active { transform: scale(0.94); }
   pointer-events: none;
 }
 .garden-bar > * { pointer-events: auto; }
+.consent-row.saved { opacity: 0.95; }
+.consent-undo {
+  border: none; background: none; cursor: pointer;
+  font-family: var(--font-sans); font-size: 0.78rem;
+  color: rgba(7,18,7,0.5); text-decoration: underline; white-space: nowrap;
+}
+.consent-undo:hover { color: var(--poppy); }
 .memory-rules { margin-bottom: 1rem; padding-bottom: 0.8rem; border-bottom: 1px solid var(--line); }
 .memory-rule {
   display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;

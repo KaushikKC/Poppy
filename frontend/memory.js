@@ -23,20 +23,58 @@ let _consentTimer = null;
 
 window.proposeMemory = async function proposeMemory(text) {
   if (!text || !memConsent) return;
-  let candidates = [];
+  let saved = [];
   try {
     const res = await fetch(`${MEM_BACKEND}/memory/extract`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
     });
-    candidates = (await res.json()).candidates || [];
+    saved = (await res.json()).saved || [];
   } catch {
     return;
   }
-  if (!candidates.length) return;
-  renderConsent(candidates);
+  if (!saved.length) return;
+  // It is already kept. This is a receipt, not a request: a prompt in the middle
+  // of a conversation interrupted the thing the app exists for, and anything not
+  // tapped in time was lost.
+  showSavedNotice(saved);
 };
+
+// What she just wrote down, shown briefly and then out of the way. Every item
+// stays editable and deletable in the memory panel for as long as it exists.
+function showSavedNotice(saved) {
+  clearTimeout(_consentTimer);
+  memConsent.innerHTML = "";
+  const head = document.createElement("div");
+  head.className = "consent-head";
+  head.textContent = saved.length > 1 ? "I'll remember these" : "I'll remember that";
+  memConsent.appendChild(head);
+
+  saved.forEach((s) => {
+    const row = document.createElement("div");
+    row.className = "consent-row saved";
+    const txt = document.createElement("span");
+    txt.className = "consent-text";
+    txt.textContent = s.text;
+    // One tap to take it back, right where it is announced, so correcting her is
+    // easier than letting something wrong stand.
+    const undo = document.createElement("button");
+    undo.type = "button";
+    undo.className = "consent-undo";
+    undo.textContent = "Forget it";
+    undo.addEventListener("click", async () => {
+      await fetch(`${MEM_BACKEND}/memory/${s.id}`, { method: "DELETE" }).catch(() => {});
+      row.remove();
+      if (!memConsent.querySelector(".consent-row")) dismissConsent();
+    });
+    row.append(txt, undo);
+    memConsent.appendChild(row);
+  });
+
+  memConsent.classList.remove("hidden");
+  _consentTimer = setTimeout(dismissConsent, 6000);
+}
 
 function renderConsent(candidates) {
   memConsent.innerHTML = "";
