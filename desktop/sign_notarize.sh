@@ -56,7 +56,7 @@ xcrun stapler staple "$APP"
 xcrun stapler validate "$APP"
 spctl -a -vvv --type execute "$APP" || true   # should say: accepted / Notarized Developer ID
 
-echo "==> 5/5  Building a drag-to-Applications DMG"
+echo "==> 5/6  Building a drag-to-Applications DMG"
 STAGE="$(mktemp -d)"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
@@ -64,6 +64,17 @@ rm -f "$DMG"
 hdiutil create -volname "Poppys" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
 rm -rf "$STAGE"
 
+# The DMG is built after the app is notarized, so it starts out unsigned: spctl
+# rejected it with "no usable signature" while the app inside was accepted. The
+# app would still run, but the disk image a user actually downloads is the thing
+# Gatekeeper checks first, so sign and notarize the container too.
+echo "==> 6/6  Signing and notarizing the DMG itself"
+codesign --force --timestamp --options runtime -s "$SIGN_IDENTITY" "$DMG"
+codesign --verify --strict "$DMG"
+xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
+xcrun stapler staple "$DMG"
+spctl -a -t open --context context:primary-signature -vv "$DMG" || true
+
 echo
 echo "Done ->  $DMG"
-echo "Ship that DMG. It's signed, notarized, and stapled — opens with no Gatekeeper warning."
+echo "Ship that DMG. Both it and the app inside are signed, notarized and stapled."
