@@ -364,6 +364,29 @@ def _download_models_subprocess(window) -> bool:
     return proc.wait() == 0
 
 
+def _models_missing(rep) -> bool:
+    """Is there something we can actually download right now?"""
+    return any(
+        not c.ok for c in rep.checks
+        if "model" in c.name.lower() or "speech" in c.name.lower()
+    )
+
+
+def _needs_setup(rep) -> bool:
+    """Whether to replace the quiet splash with the first-run setup screen.
+
+    Only when setup can achieve something: a critical failure the user has to
+    see, or models we are about to fetch.
+
+    This used to be "any check failed". espeak-ng is a system dependency Poppy
+    does not install, so on a Mac without it that non-critical check failed on
+    every launch, and every launch reopened the first-run setup screen even
+    though the app worked perfectly. It was reported as the setup screen never
+    going away, and no amount of downloading could ever clear it.
+    """
+    return _models_missing(rep) or not rep.critical_ok
+
+
 def _bootstrap(window) -> None:
     try:
         # Quiet first check while the window is still the minimal splash. These
@@ -371,16 +394,10 @@ def _bootstrap(window) -> None:
         # setup-related is shown to a returning user.
         rep = preflight.run(auto_fix=False, notify=lambda m: _push(window, m))
 
-        if not all(c.ok for c in rep.checks):
-            # FIRST RUN / setup needed: only NOW swap in the full setup screen with
-            # the download-progress UI. Returning users with everything already
-            # cached never reach this branch — they stay on the quiet splash.
+        models_missing = _models_missing(rep)
+        if _needs_setup(rep):
             window.load_html(_PROGRESS_HTML)
             time.sleep(0.2)  # let the setup page's JS load before pushing logs
-            models_missing = any(
-                not c.ok for c in rep.checks
-                if "model" in c.name.lower() or "speech" in c.name.lower()
-            )
             if models_missing:
                 _push(window, "Downloading models. This is a one-time setup…")
                 _download_models_subprocess(window)

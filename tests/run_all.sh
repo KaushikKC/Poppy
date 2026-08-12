@@ -21,6 +21,7 @@ test_garden_bloom.py
 test_boundaries.py
 test_updates.py
 test_memory_capture.py
+test_launcher_setup.py
 "
 
 fail=0
