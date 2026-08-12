@@ -72,6 +72,37 @@ def _present(repo_id: str) -> bool:
         return False
 
 
+def _loadable(repo_id: str) -> bool:
+    """True if transformers can load this classifier offline.
+
+    The accent and emotion models are fetched with `from_pretrained`, which pulls
+    only the files it actually needs, but presence was checked with
+    `snapshot_download`, which demands the *whole* repo. On any machine where the
+    repo carries extra files, the check could never pass: setup ran, transformers
+    downloaded its subset, the check failed again, and the first-run screen came
+    back on every single launch. It was reported exactly that way.
+
+    So verify them the same way they are loaded.
+    """
+    from huggingface_hub import try_to_load_from_cache
+
+    def cached(name: str) -> bool:
+        got = try_to_load_from_cache(repo_id, name)
+        return isinstance(got, str)
+
+    # The files transformers needs to build this classifier. Checked by presence
+    # rather than by loading them: actually loading the weights on every launch
+    # would put seconds back onto startup, which is the thing being fixed.
+    if not (cached("config.json") and cached("preprocessor_config.json")):
+        return False
+    return any(cached(w) for w in ("model.safetensors", "pytorch_model.bin"))
+
+
+# Which repos are verified the way transformers loads them rather than as a
+# complete snapshot. Keep this in step with what `download()` fetches above.
+_LOADABLE_REPOS = {ACCENT_MODEL_REPO, EMOTION_MODEL_REPO}
+
+
 def _gguf_present() -> bool:
     """True if the single GGUF LLM file (llamacpp backend) is cached."""
     from huggingface_hub import hf_hub_download
@@ -88,7 +119,7 @@ def check() -> bool:
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
     all_ok = True
     for label, repo in REPOS:
-        ok = _present(repo)
+        ok = _loadable(repo) if repo in _LOADABLE_REPOS else _present(repo)
         all_ok = all_ok and ok
         print(f"  [{OK if ok else MISS}] {label}  ({repo})")
     # GGUF LLM is a single file (not a whole repo), so it's checked separately.
