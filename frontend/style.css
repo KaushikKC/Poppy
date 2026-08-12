@@ -785,13 +785,26 @@ button:not(:disabled):active { transform: scale(0.94); }
 }
 /* §4.7: the entry point to Today. Small and quiet, because it is the third thing
    on the screen and must never compete with her open loop. */
-.home-today {
-  background: none; border: none; cursor: pointer;
-  font-family: var(--font-mono); font-size: 0.68rem; font-weight: 800;
-  text-transform: uppercase; letter-spacing: 0.08em;
-  color: var(--field-deep); opacity: 0.75; padding: 0.3rem 0.5rem;
+/* §4.7 keeps home to her open loop plus one number, so these two carry no count:
+   they are ways in, not readouts. They were styled as faint uppercase labels,
+   which made them invisible and gave no hint they could be tapped at all. */
+.home-nav { display: flex; gap: 0.6rem; justify-content: center; flex-wrap: wrap; }
+.home-nav-btn {
+  position: relative; display: inline-flex; align-items: center; gap: 0.45rem;
+  padding: 0.55rem 1.1rem; border-radius: 20px;
+  border: 1px solid var(--line); background: var(--panel);
+  font-family: var(--font-sans); font-size: 0.9rem; color: var(--ink);
+  cursor: pointer; box-shadow: var(--shadow);
+  transition: transform 0.2s var(--ease-spring), background 0.2s, color 0.2s;
 }
-.home-today:hover { opacity: 1; }
+.home-nav-btn:hover { transform: translateY(-2px); background: var(--leaf); color: var(--cream); }
+.home-nav-icon { font-size: 0.95rem; opacity: 0.75; }
+.home-nav-btn:hover .home-nav-icon { opacity: 1; }
+/* Something is waiting. A dot, never a count: a number here would be a score. */
+.home-nav-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--poppy); margin-left: 0.1rem;
+}
 
 #today { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(7,18,7,0.45); z-index: 60; }
 .today-card {

@@ -100,10 +100,19 @@
       <div class="home-modes" id="home-modes"></div>
       <!-- §4.7: today's quests live behind a tap, not on the home surface, so the
            screen never carries more than two progress indicators at once -->
-      <button type="button" id="home-today" class="home-today hidden"></button>
+      <div class="home-nav">
+        <button type="button" id="home-today" class="home-nav-btn hidden">
+          <span class="home-nav-icon" aria-hidden="true">◍</span>
+          <span class="home-nav-label">Today</span>
+          <span class="home-nav-dot hidden" id="home-today-dot" aria-hidden="true"></span>
+        </button>
       <!-- §3.1: the garden. Carries no number, so it isn't one of §4.7's two
            progress indicators; it's the record, not the score. -->
-      <button type="button" id="home-garden" class="home-today hidden">Your garden</button>
+        <button type="button" id="home-garden" class="home-nav-btn hidden">
+          <span class="home-nav-icon" aria-hidden="true">✿</span>
+          <span class="home-nav-label">Your garden</span>
+        </button>
+      </div>
       <!-- §6: opt-in daily ritual the user picks themselves -->
       <div class="home-ritual" id="home-ritual"></div>
     </div>

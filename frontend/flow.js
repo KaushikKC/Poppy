@@ -404,8 +404,12 @@
     try { t = await (await fetch(`${BACKEND}/quests`)).json(); } catch {}
     if (t.off || !t.quests) { btn.classList.add("hidden"); return; }
 
-    // Ending the day at 2 of 3 is the loop, not a failure state (§4.3).
-    btn.textContent = `Today · ${t.completed} of ${t.total}`;
+    // The count lives inside the panel, not on the button. Home already carries
+    // her open loop and one number in the corner; a third would break §4.7's cap
+    // and turn the screen into a dashboard. A dot says "something is waiting"
+    // without being a score.
+    const dot = document.getElementById("home-today-dot");
+    if (dot) dot.classList.toggle("hidden", t.completed >= t.total);
     btn.classList.remove("hidden");
     _today = t;
   }
