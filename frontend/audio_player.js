@@ -50,8 +50,18 @@ class AudioPlayer {
     let audioBuffer;
     try {
       audioBuffer = await this._ctx.decodeAudioData(arrayBuffer);
-    } catch {
-      return;
+    } catch (err) {
+      // A chunk that fails to decode is a phrase the user never hears, and this
+      // used to happen silently with nothing logged anywhere, which is exactly
+      // the reported "it skips words while speaking". decodeAudioData detaches
+      // the buffer on failure, so retry from a copy before giving up, and say so
+      // if it still fails.
+      try {
+        audioBuffer = await this._ctx.decodeAudioData(arrayBuffer.slice(0));
+      } catch (err2) {
+        console.error("[audio] dropped a phrase: could not decode", err2);
+        return;
+      }
     }
     if (!this._ctx || this._ctx.state === "closed") return; // stopped while decoding
 
