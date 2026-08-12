@@ -24,6 +24,7 @@ _SYSTEM = (
     "companion's long-term memory. Output ONLY a JSON array, nothing else. Each item "
     'is {"text": a short third-person fact, "category": one of '
     "profile|goals|people|ongoing|temporary}. "
+    "Return EVERY distinct fact in the message, not just the first one: one turn often carries several. "
     "Only include things genuinely worth remembering in future conversations: their "
     "name, stable preferences, the people in their life, their goals, and ongoing "
     "situations. Do NOT include questions, small talk, feelings about you, or generic "
@@ -36,10 +37,17 @@ _SYSTEM = (
     '[{"text":"Name: Nina","category":"profile"},{"text":"Training for a marathon","category":"goals"}]\n'
     'Message: "how are you doing today?" -> []\n'
     'Message: "my sister Ava is visiting this weekend" -> '
-    '[{"text":"Sister Ava is visiting this weekend","category":"people"}]'
+    '[{"text":"Sister Ava is visiting this weekend","category":"people"}]\n'
+    'Message: "dad is unwell" -> [{"text":"Dad is unwell","category":"people"}]\n'
+    'Message: "I ran a marathon today and I have an interview on Friday" -> '
+    '[{"text":"Ran a marathon","category":"ongoing"},'
+    '{"text":"Has an interview on Friday","category":"ongoing"}]'
 )
 
-_MAX_CANDIDATES = 3
+# Raised from 3: a single spoken turn often carries several things worth keeping
+# ("I ran a marathon today and I have an interview Friday"), and capping at three
+# was quietly dropping the rest.
+_MAX_CANDIDATES = 6
 
 
 def _parse(raw: str, source: str) -> list[dict]:
@@ -79,8 +87,22 @@ def _parse(raw: str, source: str) -> list[dict]:
 _FIRST_PERSON = re.compile(r"\b(i|i'?m|i'?ve|i'?d|i'?ll|my|we|we'?re|our)\b", re.I)
 
 
+# A question is asking, not telling, so it carries nothing to remember. Anything
+# else that is a real sentence gets looked at.
+_QUESTION = re.compile(r"^\s*(who|what|when|where|why|how|do|does|did|is|are|can|could|"
+                       r"would|will|should|have|has|any)\b|\?\s*$", re.I)
+
+
 def _worth_llm(text: str) -> bool:
-    return len(text.split()) >= 4 and bool(_FIRST_PERSON.search(text))
+    """Is this worth spending a model pass on?
+
+    This used to require a first-person pronoun, which quietly threw away most of
+    what people actually disclose: "dad is unwell" and "Anjali is visiting this
+    weekend" both failed it, and the second is the exact example in the prompt
+    below. Questions are the thing genuinely worth skipping, so skip those.
+    """
+    text = (text or "").strip()
+    return len(text.split()) >= 3 and not _QUESTION.match(text)
 
 
 def _dedupe(candidates: list[dict]) -> list[dict]:
@@ -113,14 +135,57 @@ async def propose(user_text: str) -> list[dict]:
     if not _worth_llm(user_text):
         return _dedupe(memory_store.regex_candidates(user_text))
 
+    # The 3B is inconsistent here: asked the same substantive sentence six times
+    # it returned nothing on three of them. That inconsistency is what users
+    # experience as "she didn't remember what I just told her", so an empty
+    # answer is asked once more before believing it. Only the empty case pays for
+    # the retry, and the whole thing runs off the reply's latency path anyway.
     candidates: list[dict] = []
-    try:
-        raw = await llm.complete(user_text, _SYSTEM, max_tokens=120)
-        candidates = _parse(raw, user_text)
-    except Exception as e:
-        print(f"[memory] LLM extraction failed, using regex fallback: {e}")
+    for attempt in range(2):
+        try:
+            raw = await llm.complete(user_text, _SYSTEM, max_tokens=120)
+            candidates = _parse(raw, user_text)
+        except Exception as e:
+            print(f"[memory] LLM extraction failed, using regex fallback: {e}")
+            break
+        if candidates:
+            break
 
     if not candidates:
         candidates = memory_store.regex_candidates(user_text)
 
+    # Last resort: keep what was actually said.
+    #
+    # The model is a coin flip on this task, and the regex only recognises a
+    # handful of shapes, so between them a real disclosure was often lost
+    # outright. Losing something the user told her is far worse than keeping a
+    # sentence that turns out not to matter: one is a broken promise, the other is
+    # a line they can delete in a tap.
+    if not candidates and _worth_keeping(user_text):
+        candidates = [{
+            "text": _as_fact(user_text),
+            "category": "ongoing",
+            "why": user_text[:140],
+        }]
+
     return _dedupe(candidates)
+
+
+# Filler that carries nothing even when it passes the question test.
+_FILLER = re.compile(
+    r"^(yeah|yes|no|ok|okay|sure|thanks|thank you|hi|hey|hello|bye|goodbye|"
+    r"nothing much|not much|i see|got it|right|fine|cool|nice|good|alright)\b[\s.!,]*$",
+    re.I,
+)
+
+
+def _worth_keeping(text: str) -> bool:
+    """Substantial enough that losing it would be the bigger mistake."""
+    text = (text or "").strip()
+    return len(text.split()) >= 4 and not _FILLER.match(text) and not _QUESTION.match(text)
+
+
+def _as_fact(text: str) -> str:
+    """The user's sentence, tidied into something she can read back later."""
+    text = " ".join((text or "").split())[:140].rstrip(" ,.;")
+    return text[0].upper() + text[1:] if text else text
