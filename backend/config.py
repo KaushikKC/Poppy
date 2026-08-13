@@ -2,7 +2,7 @@ import os
 
 # The shipped version. Single source of truth: desktop/poppys.spec reads this so
 # the bundle and the update check can never disagree about what is running.
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.0"
 
 import model_tier
 
