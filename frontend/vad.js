@@ -1,5 +1,9 @@
 class VAD {
-  constructor({ threshold = 0.018, silenceMs = 800, minSpeechMs = 200 } = {}) {
+  // minSpeechMs raised from 200. Two tenths of a second above the threshold is a
+  // cough, a keyboard click or a door, and auto-listen was firing on those and
+  // sending them to be transcribed, which is where invented words came from.
+  // 300ms still catches a real short answer like "yeah" or "okay".
+  constructor({ threshold = 0.018, silenceMs = 800, minSpeechMs = 300 } = {}) {
     this._threshold   = threshold;
     this._silenceMs   = silenceMs;
     this._minSpeechMs = minSpeechMs;
