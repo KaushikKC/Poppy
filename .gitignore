@@ -36,3 +36,7 @@ frontend/avatar/idle.webm
 frontend/avatar/talk.mp4
 frontend/avatar/talk.webm
 frontend/avatar/*.glb
+
+# Runtime logs. poppys.log lands in the repo root when the app is run from here,
+# and a log sent in for debugging is someone's usage data, not source.
+*.log
