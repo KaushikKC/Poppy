@@ -395,6 +395,16 @@ def _bootstrap(window) -> None:
         rep = preflight.run(auto_fix=False, notify=lambda m: _push(window, m))
 
         models_missing = _models_missing(rep)
+        # Log every check and the resulting decision. Without this, a report of
+        # "the setup screen shows every launch" is unanswerable: there is no way
+        # to see which check failed or why the screen was chosen.
+        for c in rep.checks:
+            log.info("preflight  %-42s %s%s", c.name,
+                     "ok" if c.ok else "MISSING",
+                     "" if c.ok else ("  (critical)" if c.critical else "  (non-critical)"))
+        log.info("preflight verdict: models_missing=%s critical_ok=%s -> %s",
+                 models_missing, rep.critical_ok,
+                 "SETUP SCREEN" if _needs_setup(rep) else "quiet splash")
         if _needs_setup(rep):
             window.load_html(_PROGRESS_HTML)
             time.sleep(0.2)  # let the setup page's JS load before pushing logs
@@ -431,7 +441,12 @@ def _bootstrap(window) -> None:
 
 def main() -> None:
     _setup_logging()
-    log.info("launcher starting (LLM_BACKEND=%s)", os.environ.get("LLM_BACKEND"))
+    try:
+        from config import APP_VERSION as _ver
+    except Exception:
+        _ver = "unknown"
+    log.info("launcher starting  version=%s  LLM_BACKEND=%s",
+             _ver, os.environ.get("LLM_BACKEND"))
     window = webview.create_window(
         "Poppys", html=_SPLASH_HTML,
         width=1120, height=840, min_size=(860, 640),

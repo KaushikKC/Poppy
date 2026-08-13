@@ -24,10 +24,25 @@ def reset():
 
 
 print("\n== comparing versions ==")
-for tag, newer in (("v1.2.0", True), ("1.2.0", True), ("v2.0.0", True),
-                   ("v1.1.1", True), ("v1.1.0", False), ("v1.0.9", False),
-                   ("v0.9.9", False)):
-    check(f"{tag:8s} newer than {APP_VERSION}: {newer}", updates.is_newer(tag) is newer)
+# Derived from APP_VERSION rather than hardcoded. Hardcoding broke this suite on
+# the version bump, which was the test's fault, not the code's.
+maj, mino, pat = (int(x) for x in APP_VERSION.split(".")[:3])
+cases = [
+    (f"v{maj}.{mino}.{pat + 1}", True),
+    (f"v{maj}.{mino + 1}.0", True),
+    (f"v{maj + 1}.0.0", True),
+    (f"{maj}.{mino + 1}.0", True),
+    (f"v{APP_VERSION}", False),
+    (APP_VERSION, False),
+    ("v0.0.1", False),
+]
+if pat > 0:
+    cases.append((f"v{maj}.{mino}.{pat - 1}", False))
+if mino > 0:
+    cases.append((f"v{maj}.{mino - 1}.99", False))
+for tag, newer in cases:
+    check(f"{tag:10s} newer than {APP_VERSION}: {newer}",
+          updates.is_newer(tag) is newer, f"got {updates.is_newer(tag)}")
 
 print("\n== a malformed tag can never claim an update ==")
 for tag in ("banana", "", "v", "...", "v1.x.y", None):
