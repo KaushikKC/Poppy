@@ -10,9 +10,12 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 # ── Guard: free disk ─────────────────────────────────────────────────────────
+# 8 GB, not 15. Measured across several real builds: dist/ peaks at ~3.9 GB and
+# build/ at ~0.3 GB, so ~4.2 GB total. The old 15 GB figure was a guess that
+# blocked builds on a machine with three times the space actually required.
 FREE_GB=$(df -g . | awk 'NR==2 {print $4}')
-if [ "$FREE_GB" -lt 15 ]; then
-  echo "Only ${FREE_GB} GB free on disk — the build needs ~15 GB of scratch space."
+if [ "$FREE_GB" -lt 8 ]; then
+  echo "Only ${FREE_GB} GB free on disk — the build needs ~4.2 GB plus headroom."
   echo "Free up space (or empty ~/Library/Caches) and re-run."
   exit 1
 fi
