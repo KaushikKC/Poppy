@@ -22,6 +22,8 @@ test_boundaries.py
 test_updates.py
 test_memory_capture.py
 test_launcher_setup.py
+test_stt_silence.py
+test_model_presence.py
 "
 
 fail=0

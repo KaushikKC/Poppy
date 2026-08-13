@@ -98,8 +98,37 @@ def _loadable(repo_id: str) -> bool:
     return any(cached(w) for w in ("model.safetensors", "pytorch_model.bin"))
 
 
-# Which repos are verified the way transformers loads them rather than as a
-# complete snapshot. Keep this in step with what `download()` fetches above.
+def _faster_whisper_present() -> bool:
+    """True if faster-whisper can load its model offline.
+
+    Same trap as the classifiers, and this is the one that actually bit a user.
+    `download_model()` fetches a subset (config.json, model.bin, tokenizer.json,
+    vocabulary.*) while presence was checked with `snapshot_download`, which
+    wants the entire repo. The download succeeded in 0.4s and the very next line
+    of the log said MISSING, so setup ran on every single launch: one user's log
+    showed 49 of them.
+
+    It never reproduced locally because this machine happened to hold a complete
+    snapshot from earlier work. Checking the way the model is loaded removes the
+    guesswork entirely.
+    """
+    from huggingface_hub import try_to_load_from_cache
+
+    def cached(name: str) -> bool:
+        return isinstance(try_to_load_from_cache(WHISPER_REPO_ID, name), str)
+
+    # The file set faster_whisper's own download_model fetches. Checked by
+    # presence rather than by calling the loader: the loader takes ~3.5s, and
+    # this runs on every launch.
+    if not (cached("config.json") and cached("model.bin")):
+        return False
+    if not cached("tokenizer.json"):
+        return False
+    return any(cached(v) for v in ("vocabulary.txt", "vocabulary.json"))
+
+
+# Which repos are verified the way they are loaded rather than as a complete
+# snapshot. Keep this in step with what `download()` fetches above.
 _LOADABLE_REPOS = {ACCENT_MODEL_REPO, EMOTION_MODEL_REPO}
 
 
@@ -119,7 +148,12 @@ def check() -> bool:
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
     all_ok = True
     for label, repo in REPOS:
-        ok = _loadable(repo) if repo in _LOADABLE_REPOS else _present(repo)
+        if repo in _LOADABLE_REPOS:
+            ok = _loadable(repo)
+        elif repo == WHISPER_REPO_ID:
+            ok = _faster_whisper_present()
+        else:
+            ok = _present(repo)
         all_ok = all_ok and ok
         print(f"  [{OK if ok else MISS}] {label}  ({repo})")
     # GGUF LLM is a single file (not a whole repo), so it's checked separately.
