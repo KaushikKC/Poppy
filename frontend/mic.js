@@ -115,7 +115,10 @@ micBtn.addEventListener("click", () => {
 if (vadBtn) {
   vadBtn.addEventListener("click", async () => {
     if (!vadActive) {
-      vadInstance = new VAD({ threshold: 0.018, silenceMs: 800, minSpeechMs: 200 });
+      // No minSpeechMs here on purpose. This used to pass 200, which silently
+      // overrode the 300ms default and let coughs and key presses through to be
+      // transcribed as words. The class owns that number.
+      vadInstance = new VAD({ threshold: 0.018, silenceMs: 800 });
 
       vadInstance.onStart = () => {
         // Barge-in: speaking while the assistant talks cuts it off immediately.
