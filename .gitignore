@@ -40,3 +40,9 @@ frontend/avatar/*.glb
 # Runtime logs. poppys.log lands in the repo root when the app is run from here,
 # and a log sent in for debugging is someone's usage data, not source.
 *.log
+
+# Companion state written when the app is run from the repo root (the default
+# POPPY_DATA_DIR). This is one person's conversation history and streaks, not
+# source, and it should never end up in a commit.
+companion_*.json
+companion.json
