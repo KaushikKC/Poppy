@@ -60,6 +60,17 @@ check("no notice while off", updates.notice() is None)
 updates.set_enabled(True)
 check("can be turned back on", updates.enabled() is True)
 
+print("\n== the running version is always reported ==")
+# The home screen prints this so a screenshot identifies the build. It has to
+# survive the two states where the app says nothing about updates: the check
+# switched off, and no network. Otherwise the one situation where knowing the
+# version matters most is the one where it disappears.
+reset()
+check("reported normally", updates.check()["version"] == APP_VERSION)
+updates.set_enabled(False)
+check("reported while the check is off", updates.check()["version"] == APP_VERSION)
+updates.set_enabled(True)
+
 print("\n== a failed check says nothing at all ==")
 reset()
 real = updates.urllib.request.urlopen
