@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 from audio_utils import TARGET_RATE
 from config import (
@@ -56,6 +58,28 @@ def _is_invented(text: str) -> bool:
     }
 
 
+# ── Being able to diagnose this from a log ───────────────────────────────────
+# A user reported mishearing three times and every log they sent was useless,
+# because nothing about transcription was ever written down: not how long the
+# clip was, not how loud, not what the model's own confidence was, not what it
+# decided. Diagnosis was guesswork across three releases.
+#
+# So the shape of every transcription is logged: duration, level, and the
+# confidence numbers the gates below act on. That is enough to tell a clipped
+# word from a quiet mic from an over-eager gate, without recording anyone.
+#
+# The words themselves are NOT logged by default. This is an app whose promise is
+# that speech never leaves the machine, and a log file is still a transcript of
+# someone's private conversation sitting on disk. Set POPPY_LOG_TRANSCRIPTS=1 to
+# include the text when deliberately debugging a mishearing.
+LOG_TRANSCRIPTS = os.getenv("POPPY_LOG_TRANSCRIPTS") == "1"
+
+
+def _redact(text: str) -> str:
+    """What was heard, or just its shape."""
+    return repr(text) if LOG_TRANSCRIPTS else f"<{len(text)} chars>"
+
+
 def _carries_speech(pcm: np.ndarray) -> bool:
     """Enough signal, and enough of it, to be worth transcribing."""
     if len(pcm) < int(TARGET_RATE * MIN_SECONDS):
@@ -72,15 +96,24 @@ def _transcribe_mlx(pcm: np.ndarray) -> str:
     if not segments:
         # No segments but text anyway is exactly the invented case.
         text = (result.get("text") or "").strip()
+        print(f"[stt] mlx no segments, text={_redact(text)} invented={_is_invented(text)}")
         return "" if _is_invented(text) else text
 
-    kept = [
-        s.get("text", "") for s in segments
-        if s.get("no_speech_prob", 0.0) <= NO_SPEECH_MAX
-        and s.get("avg_logprob", 0.0) >= AVG_LOGPROB_MIN
-    ]
+    kept = []
+    for s in segments:
+        nsp = s.get("no_speech_prob", 0.0)
+        alp = s.get("avg_logprob", 0.0)
+        good = nsp <= NO_SPEECH_MAX and alp >= AVG_LOGPROB_MIN
+        print(f"[stt] seg no_speech={nsp:.3f} avg_logprob={alp:.2f} "
+              f"{'kept' if good else 'DROPPED'} {_redact(s.get('text', '').strip())}")
+        if good:
+            kept.append(s.get("text", ""))
+
     text = " ".join(x.strip() for x in kept).strip()
-    return "" if _is_invented(text) else text
+    if _is_invented(text):
+        print(f"[stt] dropped as invented: {_redact(text)}")
+        return ""
+    return text
 
 
 def _transcribe_faster(pcm: np.ndarray) -> str:
@@ -89,13 +122,21 @@ def _transcribe_faster(pcm: np.ndarray) -> str:
     segments, _ = _faster_model().transcribe(
         pcm, beam_size=5, language="en", vad_filter=True,
     )
-    kept = [
-        s.text for s in segments
-        if getattr(s, "no_speech_prob", 0.0) <= NO_SPEECH_MAX
-        and getattr(s, "avg_logprob", 0.0) >= AVG_LOGPROB_MIN
-    ]
+    kept = []
+    for s in segments:
+        nsp = getattr(s, "no_speech_prob", 0.0)
+        alp = getattr(s, "avg_logprob", 0.0)
+        good = nsp <= NO_SPEECH_MAX and alp >= AVG_LOGPROB_MIN
+        print(f"[stt] seg no_speech={nsp:.3f} avg_logprob={alp:.2f} "
+              f"{'kept' if good else 'DROPPED'} {_redact(s.text.strip())}")
+        if good:
+            kept.append(s.text)
+
     text = " ".join(x.strip() for x in kept).strip()
-    return "" if _is_invented(text) else text
+    if _is_invented(text):
+        print(f"[stt] dropped as invented: {_redact(text)}")
+        return ""
+    return text
 
 
 def transcribe(pcm: np.ndarray) -> str:
@@ -103,9 +144,16 @@ def transcribe(pcm: np.ndarray) -> str:
     global _use_mlx
     if pcm is None or len(pcm) == 0:
         return ""
+
+    secs = len(pcm) / TARGET_RATE
+    rms = float(np.sqrt(np.mean(np.square(pcm))))
+    print(f"[stt] clip {secs:.2f}s rms={rms:.4f} backend={'mlx' if _use_mlx else 'cpu'}")
+
     # Silence and room noise never reach the model: asked to transcribe nothing,
     # it answers with something.
     if not _carries_speech(pcm):
+        why = "too short" if secs < MIN_SECONDS else "too quiet"
+        print(f"[stt] not transcribed ({why}; need >={MIN_SECONDS}s and rms>={MIN_RMS})")
         return ""
     if _use_mlx:
         try:
