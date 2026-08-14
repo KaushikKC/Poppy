@@ -26,12 +26,33 @@ test_stt_silence.py
 test_model_presence.py
 "
 
+# The VAD pre-roll suite is JavaScript, because the bug it guards lives in the
+# browser half of the app and testing a Python re-implementation of it would
+# prove nothing. Skipped rather than failed when node is absent.
+JS_SUITES="test_vad_preroll.js"
+
 fail=0
 for s in $SUITES; do
   d="$TMP/$(basename "$s" .py)"
   mkdir -p "$d"
   printf "%-34s " "$s"
   if POPPY_DATA_DIR="$d" python3 "$ROOT/tests/$s" "$d" > "$TMP/out.txt" 2>&1; then
+    tail -1 "$TMP/out.txt"
+  else
+    tail -1 "$TMP/out.txt"
+    echo "  ---- failures in $s ----"
+    grep "FAIL" "$TMP/out.txt" || cat "$TMP/out.txt"
+    fail=1
+  fi
+done
+
+for s in $JS_SUITES; do
+  printf "%-34s " "$s"
+  if ! command -v node > /dev/null 2>&1; then
+    echo "SKIPPED (node not installed)"
+    continue
+  fi
+  if node "$ROOT/tests/$s" > "$TMP/out.txt" 2>&1; then
     tail -1 "$TMP/out.txt"
   else
     tail -1 "$TMP/out.txt"
