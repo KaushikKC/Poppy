@@ -291,6 +291,7 @@
     _streakWeek = (h.streak && h.streak.week) || null;
     try { _longYear = await (await fetch(`${BACKEND}/long-year`)).json(); } catch {}
     renderUpdateNotice();
+    renderVersion();
     renderFreezeNotice(h.freeze_notice);
     renderRepair(h.streak);
     loadToday();
@@ -320,6 +321,22 @@
   // A newer version exists. Deliberately flat: no badge, no colour, no modal.
   // It never downloads or installs anything, it shows a line and a link, and
   // what happens next is the user's decision.
+  // Which build this is, in small grey text at the bottom of the home screen.
+  // Not decoration: three mishearing reports were diagnosed across three
+  // releases without ever being certain which version was installed, and a
+  // screenshot of the home screen is what users actually send. The log records
+  // it too, but a screenshot arrives first and more often.
+  async function renderVersion() {
+    const el = document.getElementById("home-version");
+    if (!el) return;
+    // The update endpoint reports the running version whether or not the
+    // version check is switched on, so this shows up offline too.
+    let u = {};
+    try { u = await (await fetch(`${BACKEND}/update`)).json(); } catch {}
+    if (!u.version) { el.textContent = ""; return; }
+    el.textContent = `Version ${u.version}`;
+  }
+
   async function renderUpdateNotice() {
     const box = document.getElementById("home-update-avail");
     if (!box) return;
