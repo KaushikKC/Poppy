@@ -135,21 +135,40 @@ async def _start_ritual_notifier():
 
 @app.on_event("startup")
 async def _warmup_models():
-    # Warm the heavy models in the background so the first turn is fast instead of
-    # paying cold-load costs mid-conversation: Kokoro TTS and the Ollama LLM (which
-    # then stays resident via keep_alive=-1).
+    """Warm the heavy models in the background so the first turn is fast.
+
+    Two things this deliberately does not do any more.
+
+    It no longer pre-loads the accent and emotion classifiers unconditionally.
+    Voice adaptation is off by default (DETECTION_DEFAULT), so on most machines
+    those two wav2vec2 models were loaded, every launch, and then never used.
+    Measured over three runs each, skipping them takes startup from ~11.2s to
+    ~8.4s. They still load lazily the moment someone turns detection on, which
+    costs that person a few seconds once.
+
+    It also no longer fires every warmup at the same instant. Loading Kokoro,
+    Whisper and the language model concurrently spikes memory and saturates the
+    CPU exactly while the window is opening, which is what an 8 GB machine feels
+    as the app being heavy. They run one after another instead: the same total
+    work, spread out, and each is ready earlier than it would have been under
+    contention.
+    """
     import tts
     import llm
     import stt
-    import accent_detect
-    import emotion_detect
-    asyncio.create_task(asyncio.to_thread(tts.warmup))
-    asyncio.create_task(llm.warmup())
-    asyncio.create_task(asyncio.to_thread(stt.warmup))
-    # Pre-load the wav2vec2 classifiers too, so the first /stt doesn't pay their
-    # (multi-second) lazy load on top of transcription.
-    asyncio.create_task(asyncio.to_thread(accent_detect._ensure_model))
-    asyncio.create_task(asyncio.to_thread(emotion_detect._ensure_model))
+
+    async def _warm_in_order():
+        # STT first: the user can start talking before the reply path is needed.
+        await asyncio.to_thread(stt.warmup)
+        await llm.warmup()
+        await asyncio.to_thread(tts.warmup)
+        if DETECTION_DEFAULT:
+            import accent_detect
+            import emotion_detect
+            await asyncio.to_thread(accent_detect._ensure_model)
+            await asyncio.to_thread(emotion_detect._ensure_model)
+
+    asyncio.create_task(_warm_in_order())
 
 
 @app.get("/health")
