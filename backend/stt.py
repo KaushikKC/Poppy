@@ -168,8 +168,22 @@ def transcribe(pcm: np.ndarray) -> str:
 
 def warmup() -> None:
     """Load + compile the STT model so the first real transcription isn't slow
-    (MLX downloads the Metal weights and JIT-compiles on first use)."""
+    (MLX downloads the Metal weights and JIT-compiles on first use).
+
+    This has to bypass the silence gate. It used to pass a second of zeros, but
+    once transcribe() started refusing silence outright the warmup returned
+    before the model was ever touched: measured at 0.00s and 0MB, doing nothing
+    at all, so the first thing the user said paid a 2.3s cold load instead.
+
+    Faint noise rather than zeros keeps the gate satisfied. The result is
+    discarded, and nothing is spoken into a real conversation.
+    """
     try:
-        transcribe(np.zeros(16000, dtype=np.float32))
+        rng = np.random.default_rng(0)
+        noise = (rng.standard_normal(TARGET_RATE) * 0.02).astype(np.float32)
+        if _use_mlx:
+            _transcribe_mlx(noise)
+        else:
+            _transcribe_faster(noise)
     except Exception:
         pass
