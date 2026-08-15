@@ -117,6 +117,49 @@ async function run(preRollMs) {
   check("and that is measurably less audio than with pre-roll",
         firstLoudNone < preRollSamples);
 
+  console.log("\n== hysteresis: a dip mid-word does not end the turn ==");
+  // With one threshold, any frame below it starts the silence timer, so a voice
+  // trailing off can cut the turn short. Continuing only needs the lower level.
+  {
+    const v = new VAD({ silenceMs: 100, minSpeechMs: 100 });
+    let out = null;
+    v.onSpeech = (b) => { out = b; };
+    await v.start();
+    for (let i = 0; i < 10; i++) node.onaudioprocess({ inputBuffer: { getChannelData: () => silence() } });
+    for (let i = 0; i < 5; i++) node.onaudioprocess({ inputBuffer: { getChannelData: () => speech() } });
+    const enter = v.enterLevel();
+    // a dip: below the enter level, above the release level
+    const dipAmp = enter * 0.75 * Math.SQRT2;
+    for (let i = 0; i < 3; i++) node.onaudioprocess({ inputBuffer: { getChannelData: () => frame(dipAmp) } });
+    check("a dip below the trigger keeps the turn open", v._speaking === true && out === null);
+    for (let i = 0; i < 5; i++) node.onaudioprocess({ inputBuffer: { getChannelData: () => speech() } });
+    for (let i = 0; i < 3; i++) node.onaudioprocess({ inputBuffer: { getChannelData: () => silence() } });
+    await new Promise((r) => setTimeout(r, 200));
+    check("real silence still ends it", out !== null);
+    v.stop();
+  }
+
+  console.log("\n== the trigger adapts to the room instead of assuming it ==");
+  {
+    // A noisy room: constant hiss well above the default 0.018 floor.
+    const v = new VAD({});
+    await v.start();
+    for (let i = 0; i < 60; i++) node.onaudioprocess({ inputBuffer: { getChannelData: () => frame(0.04) } });
+    check("bar rises above a noisy room", v.enterLevel() > 0.018,
+          `enter=${v.enterLevel().toFixed(4)}`);
+    check("and the room alone does not open a turn", v._speaking === false);
+    v.stop();
+  }
+  {
+    // A quiet microphone: the case where a fixed threshold never triggers.
+    const v = new VAD({});
+    await v.start();
+    for (let i = 0; i < 60; i++) node.onaudioprocess({ inputBuffer: { getChannelData: () => frame(0.0002) } });
+    check("in a quiet room the bar stays at the configured floor",
+          Math.abs(v.enterLevel() - 0.018) < 1e-9, `enter=${v.enterLevel().toFixed(4)}`);
+    v.stop();
+  }
+
   console.log("\n== the ring buffer does not grow without bound ==");
   const vad = new VAD({ preRollMs: 200 });
   await vad.start();
