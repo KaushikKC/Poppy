@@ -28,13 +28,22 @@ class VAD {
   // minSpeechMs: 200ms above the threshold is a cough, a key press or a door.
   // 300 still catches a real short answer like "yeah". Callers should not lower
   // this; mic.js used to pass 200 and quietly undid it.
-  constructor({ threshold = 0.018, silenceMs = 800, minSpeechMs = 300,
-                preRollMs = 400, maxUtteranceMs = 30000 } = {}) {
+  // threshold is a floor, not a fixed value. A single hard-coded number is tuned
+  // to one microphone in one room: on a machine whose input runs quieter it
+  // fails to trigger, and on a noisier one it triggers on the room. That is the
+  // "works on mine, not on his" report. The real trigger level tracks the
+  // measured noise floor and never drops below this floor.
+  constructor({ threshold = 0.018, silenceMs = 1000, minSpeechMs = 300,
+                preRollMs = 400, maxUtteranceMs = 30000,
+                floorMultiple = 4, releaseRatio = 0.55 } = {}) {
     this._threshold   = threshold;
     this._silenceMs   = silenceMs;
     this._minSpeechMs = minSpeechMs;
     this._preRollMs   = preRollMs;
     this._maxUttMs    = maxUtteranceMs;
+    this._floorMult   = floorMultiple;
+    this._releaseRto  = releaseRatio;
+    this._noiseFloor  = null;   // learned from the room, not assumed
 
     this._stream    = null;
     this._actx      = null;
@@ -93,6 +102,14 @@ class VAD {
       this._utt.push(frame);
       if (this._uttMs() >= this._maxUttMs) { this._send(); return; }
     } else {
+      // Learn the room while nobody is talking. Rises slowly and falls quickly,
+      // so a passing noise lifts the bar only briefly, and a room going quiet is
+      // noticed almost at once.
+      this._noiseFloor = this._noiseFloor === null
+        ? rms
+        : (rms > this._noiseFloor ? this._noiseFloor * 0.98 + rms * 0.02
+                                  : this._noiseFloor * 0.80 + rms * 0.20);
+
       this._ring.push(frame);
       this._ringLen += frame.length;
       // Drop whole frames from the front while the rest still covers the
@@ -105,7 +122,16 @@ class VAD {
       }
     }
 
-    if (rms >= this._threshold) {
+    // Two levels, not one. Speech has to be clearly above the room to *start* a
+    // turn, but only has to stay above a lower line to *continue* it. With a
+    // single threshold a dip inside a word, or a voice trailing off at the end
+    // of a sentence, starts the silence timer and can cut the turn short. That
+    // is a large part of why auto-listen felt worse than holding the button,
+    // where the speaker decides when they are finished.
+    const enter = this.enterLevel();
+    const exit = enter * this._releaseRto;
+
+    if (rms >= (this._speaking ? exit : enter)) {
       clearTimeout(this._silTimer);
       this._silTimer = null;
 
@@ -130,6 +156,15 @@ class VAD {
         }
       }, this._silenceMs);
     }
+  }
+
+  // The level speech must reach to start a turn: whichever is higher, the
+  // configured floor or a clear margin above the room. In a quiet room this is
+  // just the floor and nothing changes; in a noisy one the bar rises so the room
+  // itself stops opening turns.
+  enterLevel() {
+    if (this._noiseFloor === null) return this._threshold;
+    return Math.max(this._threshold, this._noiseFloor * this._floorMult);
   }
 
   _uttMs() {
