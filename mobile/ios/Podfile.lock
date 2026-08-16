@@ -2057,8 +2057,6 @@ PODS:
     - ReactNativeDependencies
     - RNWorklets
     - Yoga
-  - RNFS (2.20.0):
-    - React-Core
   - RNGestureHandler (3.1.0):
     - hermes-engine
     - RCTRequired
@@ -2379,7 +2377,6 @@ DEPENDENCIES:
   - ReactNativeDependencies (from `../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec`)
   - "ReactNativeFs (from `../node_modules/@dr.pogodin/react-native-fs`)"
   - RNAudioAPI (from `../node_modules/react-native-audio-api`)
-  - RNFS (from `../node_modules/react-native-fs`)
   - RNGestureHandler (from `../node_modules/react-native-gesture-handler`)
   - RNReanimated (from `../node_modules/react-native-reanimated`)
   - RNWorklets (from `../node_modules/react-native-worklets`)
@@ -2545,8 +2542,6 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@dr.pogodin/react-native-fs"
   RNAudioAPI:
     :path: "../node_modules/react-native-audio-api"
-  RNFS:
-    :path: "../node_modules/react-native-fs"
   RNGestureHandler:
     :path: "../node_modules/react-native-gesture-handler"
   RNReanimated:
@@ -2639,7 +2634,6 @@ SPEC CHECKSUMS:
   ReactNativeDependencies: fa0a54b3f5319ae0e3b9aff32bfee7a424b88e66
   ReactNativeFs: 48dea2af8842528577d3ca1e8537e54ee95b1f3c
   RNAudioAPI: 53440df7380b97a594baae459517ef6d2aba6f03
-  RNFS: 89de7d7f4c0f6bafa05343c578f61118c8282ed8
   RNGestureHandler: a426f18ab9021991fe2cbc8bf1677b740e20e70c
   RNReanimated: 230d297a3eebba7eb9fc7331afdcafb095373a4b
   RNWorklets: f0734080219ea54d479c179da498c9b24611faed

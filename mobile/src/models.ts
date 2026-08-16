@@ -1,4 +1,10 @@
-import RNFS from 'react-native-fs';
+// The @dr.pogodin fork, not plain react-native-fs. Both are forks of the same
+// source and their native halves declare the same Objective-C classes
+// (RNFSDownloader, RNFSUploader, ...), so linking both fails outright with
+// duplicate symbols. sherpa-onnx requires this one as a peer dependency, so it
+// is the one that stays, and the API used here is identical.
+// Named exports, not a default export, unlike the package it replaces.
+import { DocumentDirectoryPath, exists } from '@dr.pogodin/react-native-fs';
 
 /**
  * Where the spike looks for model files. Nothing is bundled in the app — you
@@ -10,7 +16,7 @@ import RNFS from 'react-native-fs';
  *   models/kokoro/                        <- sherpa-onnx Kokoro dir (model.onnx,
  *                                            voices.bin, tokens.txt, espeak-ng-data/)
  */
-export const MODELS_ROOT = `${RNFS.DocumentDirectoryPath}/models`;
+export const MODELS_ROOT = `${DocumentDirectoryPath}/models`;
 
 export const LLM_PATH = `${MODELS_ROOT}/llm/model.gguf`;
 export const WHISPER_PATH = `${MODELS_ROOT}/whisper/ggml-base.en.bin`;
@@ -27,7 +33,7 @@ export async function checkModels(): Promise<ModelCheck[]> {
   ];
   const out: ModelCheck[] = [];
   for (const [label, path] of targets) {
-    out.push({ label, path, present: await RNFS.exists(path) });
+    out.push({ label, path, present: await exists(path) });
   }
   return out;
 }
