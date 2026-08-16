@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  The spike holds three models in memory at once: a 1B GGUF language model,
+	  a Whisper ggml model and Kokoro. iOS gives an app a per-process memory
+	  budget well under the device's physical RAM and kills it on the spot when
+	  it is exceeded, with no warning and nothing useful in the crash log.
+
+	  Without this, "does it fit" is not something the spike can answer: it just
+	  dies. With it, the app gets the larger budget on devices that support it,
+	  and the M0 measurement of peak memory becomes a real number rather than a
+	  termination.
+	-->
+	<key>com.apple.developer.kernel.increased-memory-limit</key>
+	<true/>
+</dict>
+</plist>
