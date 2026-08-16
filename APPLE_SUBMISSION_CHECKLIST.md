@@ -22,7 +22,7 @@ disclosure, an age rating, and, for the Mac App Store specifically, sandboxing.
 
 | # | Requirement | Status | Notes |
 |---|---|---|---|
-| A1 | **Privacy Policy URL** (mandatory for *every* app, even zero-data) | ❌ to do | Must be publicly hosted; link in App Store Connect + in-app. Even for on-device, it must state: mic use, what's stored locally + encrypted, that nothing is collected/transmitted, and how to delete it. |
+| A1 | **Privacy Policy URL** (mandatory for *every* app, even zero-data) | ✅ done (2026-08) — written, hosted at `/privacy` on the landing site | Must be publicly hosted; link in App Store Connect + in-app. Even for on-device, it must state: mic use, what's stored locally + encrypted, that nothing is collected/transmitted, and how to delete it. |
 | A2 | **App Privacy nutrition label** in App Store Connect | ⚠️ verify | We can almost certainly select **"Data Not Collected."** Confirm no SDK/telemetry transmits anything. Must be accurate — Apple cross-checks. |
 | A3 | **Privacy Manifest** (`PrivacyInfo.xcprivacy`) declaring required-reason APIs | ⚠️ verify | iOS scaffold already has one (`mobile/ios/PoppysSpike/PrivacyInfo.xcprivacy`). Verify it declares every *required-reason API* we hit: **UserDefaults, file-timestamp, disk-space, system-boot-time**. Each needs an approved reason code. Third-party SDKs must ship their own (RN pods already do). |
 | A4 | **AI transparency** — user must know they're talking to a bot | ✅ have / ⚠️ extend | In-app Poppy states she's an AI. Also state it in the **App Store description** and, ideally, a first-run notice. 2026 guidelines emphasize this. |
