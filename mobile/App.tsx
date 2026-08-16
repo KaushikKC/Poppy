@@ -36,6 +36,7 @@ export default function App() {
   const [transcript, setTranscript] = useState('');
   const [reply, setReply] = useState('');
   const [timing, setTiming] = useState<Timing | null>(null);
+  const [micInfo, setMicInfo] = useState('');
 
   const engines = useRef<Engines | null>(null);
   const recorder = useRef(new MicRecorder());
@@ -80,6 +81,7 @@ export default function App() {
   const stopRec = async () => {
     setPhase('thinking');
     const pcm = await recorder.current.stop();
+    setMicInfo(MicRecorder.lastDiagnostic);
     if (!pcm || !engines.current) {
       setStatus('No audio captured.');
       setPhase('ready');
@@ -152,6 +154,12 @@ export default function App() {
           <View style={styles.card}>
             <Text style={styles.cardHead}>You said</Text>
             <Text style={styles.body}>{transcript}</Text>
+            {/* If the transcript is wrong, this line says why. A mismatch here
+                means the mic handed over audio at a different rate than it
+                reported, which feeds Whisper sped-up audio and produces
+                confident nonsense. Shown in-app so it can be read without
+                attaching Xcode. */}
+            {!!micInfo && <Text style={styles.micInfo}>{micInfo}</Text>}
           </View>
         )}
         {!!reply && (
@@ -227,6 +235,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   metricCell: { width: '45%', backgroundColor: '#2b3c50', borderRadius: 12, padding: 12 },
+  micInfo: { color: '#8a8f98', fontSize: 11, marginTop: 8, fontVariant: ['tabular-nums'] },
   metricVal: { fontSize: 22, fontWeight: '600', color: 'white' },
   metricLabel: { fontSize: 12, color: '#9db0c4' },
   gate: { fontSize: 12, color: '#9db0c4', marginTop: 16, textAlign: 'center', lineHeight: 17 },
