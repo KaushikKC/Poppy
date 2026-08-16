@@ -10,6 +10,104 @@ for release · **P2** polish.
 
 ---
 
+## 0.1 Revision 2026-08-16 — read this before the rest
+
+The body of this plan was written on 2026-07-18 and is still right about the *stack*. It
+is out of date about the *scope*, because most of the product was built after it.
+
+### What changed since it was written
+
+**The retention engine did not exist yet.** Every one of these files was created after
+this plan was committed, and all of it is product logic that a mobile build has to carry:
+
+| Module | Lines | Created |
+|---|---|---|
+| `loops.py` + `loop_author.py` | 873 | 2026-07-27 |
+| `streak.py` | 422 | 2026-08-05 |
+| `ritual_pact.py` | 268 | 2026-08-04 |
+| `quests.py` | 235 | 2026-08-05 |
+| `garden.py` | 235 | 2026-08-05 |
+| `bloom.py` | 188 | 2026-08-05 |
+| `boundaries.py` | 176 | 2026-08-09 |
+| `disclosure.py` | 157 | 2026-08-04 |
+| **Total unaccounted for** | **~2,550** | |
+
+§3 (Orchestration) lists O1–O6 and none of them cover this. Treat the retention engine as
+a **separate phase**, not a footnote. The good news: it is deterministic logic with 13
+existing test suites, so the port is mechanical and verifiable rather than exploratory.
+
+**The desktop UI grew.** 5,756 lines of frontend (1,430 CSS, 1,071 `flow.js`, 512
+`garden.js`). Eight files draw on `<canvas>`. A native rewrite replaces all of it; see the
+route decision below.
+
+**Distribution facts have moved on.** The Mac app ships signed + notarized (v1.3.2), the
+privacy policy is written and hosted, and the Apple Developer account is active. The
+`APPLE_SUBMISSION_CHECKLIST.md` entry A1 is stale — that one is done.
+
+### Scope decision: **iOS only for v1**
+
+This plan covers iOS and Android together. For the first launch, drop Android. §5 already
+identifies fragmentation ("RAM varies 3–12 GB") as the hard part, and carrying it doubles
+the device-QA matrix for the release that has the least to gain from it. The TS core stays
+platform-agnostic, so Android remains a later build, not a rewrite.
+
+### The one thing that gates everything: **M0 is still unrun**
+
+The spike at `mobile/` is 530 lines with all pods linked, and it has **never been run on a
+real iPhone**. Until it is, every estimate below is conditional. What it has to answer:
+
+1. First-audio latency (mic stop → first sound) with a 1B GGUF on a real device.
+2. Thermals and battery across a sustained 10-minute conversation.
+3. Peak memory against the iOS per-app limit, with LLM + Whisper + Kokoro all resident.
+
+If those numbers are bad, the fix is an MLX-Swift fast path (§5 I3) and the timeline moves.
+**Do not build anything else until this number is on the table.** One week.
+
+### Route decision: how the UI gets onto the phone
+
+The stack (RN + `llama.rn` + `whisper.rn` + `sherpa-onnx`) is locked and not reopened here.
+What is genuinely open is whether the *interface* is rebuilt native or reused.
+
+**Route A — reuse the web UI in a WebView.** Native modules do inference; the existing
+HTML/CSS/JS renders the screens. Reuses ~5,750 lines already designed, tested and iterated,
+including the canvas garden and orb. Fastest to a submittable build. Risks: sustained
+canvas animation in a WebView is a real battery cost on a phone, and it must not look like
+a wrapped website (Guideline 4.2). The substantial on-device AI is what answers 4.2, and
+that argument is strong here.
+
+**Route B — rebuild the UI in React Native.** Better feel and battery, native gestures,
+Skia for the garden and orb. Costs roughly 4–6 additional weeks and re-solves design
+problems that are already solved.
+
+**Recommendation: Route A for v1**, with the battery measurement folded into M0 so the
+decision is made on data. If M0 shows the WebView orb is what cooks the phone, fall back to
+a native call screen only, and keep the web UI for the screens that are not animating
+(home, garden, memory, settings). Route B in full is a v2 decision.
+
+### Timeline (solo, iOS only, Route A)
+
+| Phase | Work | Estimate |
+|---|---|---|
+| 0 | **M0 spike on a real iPhone** — latency, thermals, memory | 1 week **(gate)** |
+| 1 | Voice loop in TS: STT → LLM stream → phrase chunker → TTS, barge-in, VAD | 3–4 weeks |
+| 2 | App shell, WebView bridge, first-run, mic permission | 2 weeks |
+| 3 | Port core backend to TS: companion, memory, safety, personas, prompt build | 3 weeks |
+| 4 | Port the retention engine (~2,550 lines) + its 13 suites | 4–5 weeks |
+| 5 | Model download, storage, device tiering | 1–2 weeks |
+| 6 | Performance, thermal and battery tuning | 2–3 weeks |
+| 7 | Privacy manifest, age rating, review notes, TestFlight, submission | 2 weeks |
+| | **Total** | **18–22 weeks (~4.5–5.5 months)** |
+
+Route B adds 4–6 weeks. Android adds 4–6 weeks after that. Apple review is 1–3 days
+typically but budget a fortnight for a first submission of an AI companion app, which
+attracts more scrutiny than average (§D of the submission checklist).
+
+These are working-week estimates for one person. They assume the M0 numbers come back
+acceptable; if they do not, phase 1 grows an MLX-Swift path and the total moves toward
+6–7 months.
+
+---
+
 ## 0. The honest framing: this is a rebuild of the shell, not a repackage
 
 The desktop app is a **Python FastAPI server + web UI in a native window**. None of that
