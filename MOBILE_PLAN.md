@@ -84,6 +84,98 @@ decision is made on data. If M0 shows the WebView orb is what cooks the phone, f
 a native call screen only, and keep the web UI for the screens that are not animating
 (home, garden, memory, settings). Route B in full is a v2 decision.
 
+### M0 result (2026-08-16) — **PASSED on architecture, build can start**
+
+Run on a real iPhone 15. All three engines loaded and a full turn completed:
+transcripts word-perfect, replies sensible, voice audible.
+
+| | Turn 1 | Turn 2 |
+|---|---|---|
+| STT | 0.43s | 0.81s |
+| LLM first token | 0.64s | 1.28s |
+| First chunk ready | 1.19s | 1.99s |
+| First audio | 4.65s | 7.07s |
+
+**The gate existed to decide one thing: whether on-device inference is fast
+enough, or whether an MLX-Swift native path is needed.** First token at 0.64s and
+STT at 0.43s answer that: it is fast enough. **No native rewrite. React Native
+stands. The 7-month branch is closed.**
+
+First-audio missed the 1.5s target, but the breakdown shows why and it is not
+architectural: the gap between "chunk ready" (1.19s) and "first audio" (4.65s)
+was Kokoro rendering a 110-character sentence before emitting a sample. The
+desktop phrase_chunker (first chunk capped at 18 chars) is now ported. Expected
+to land near the target; **unverified on device**.
+
+Two bugs found and fixed along the way, both worth knowing because they are
+easy to repeat: whisper.rn's ArrayBuffer path reads **int16**, not float32,
+despite its docs; and `react-native-fs` cannot be linked alongside
+`@dr.pogodin/react-native-fs` (duplicate Objective-C classes).
+
+Still unmeasured: **thermals over 10 minutes** and **peak memory**. Neither
+blocks starting. The memory one is the only one that could still bite, and its
+worst case is a smaller model tier, which is a day of work.
+
+---
+
+## 0.2 Implementation plan — desktop to iOS, step by step
+
+### The key structural fact
+
+The frontend already routes every backend call through `window.BACKEND` and
+`window.WS_BACKEND` (43 `fetch` call sites, WebSocket for the turn loop). It has
+no other coupling to Python. So the port is not "rewrite the app" — it is:
+
+> **Reimplement the 45-endpoint HTTP surface plus the chat WebSocket in
+> TypeScript, and shim `fetch`/`WebSocket` inside the WebView to reach it.**
+
+The UI does not need to be rewritten to match; it needs the same contract.
+
+### What copies, what is rebuilt
+
+| Layer | Lines | Fate |
+|---|---|---|
+| `frontend/` (JS, CSS, HTML) | 6,181 | **Reused as-is** in a WebView |
+| Voice loop (`ws_handler`, `phrase_chunker`) | 434 | Rebuilt in TS |
+| Core state (`companion`, `memory_*`, `safety`) | 1,089 | Rebuilt in TS |
+| Retention engine (9 modules) | 2,554 | Rebuilt in TS |
+| Model layer (MLX/Kokoro/Whisper) | — | Replaced by llama.rn / whisper.rn / sherpa-onnx |
+| 13 Python test suites | — | Ported alongside their modules |
+
+Python cannot ship to iOS, so "copy the backend across" is not available. But the
+logic is deterministic and already covered by tests, so rebuilding it is
+mechanical rather than exploratory: port a module, port its suite, run it.
+
+### Phases
+
+**P1 · Shell and bridge (2 weeks).** WebView hosting `frontend/`, a `fetch`/
+`WebSocket` shim routed to a TS request router, the three engines behind the
+interfaces the core expects. Done when onboarding renders and `/health` answers
+through the shim.
+
+**P2 · The voice loop (3-4 weeks).** Port `ws_handler` + `phrase_chunker`, VAD,
+barge-in, the paced text reveal. Done when a real conversation runs end to end
+with the first-audio number at target. **This is the product; get it feeling
+right before anything else.**
+
+**P3 · Core state (3 weeks).** `companion`, `memory_store`, `memory_extract`,
+`safety`, personas. Storage moves from JSON files to on-device SQLite. Done when
+memory persists across launches and the safety layer fires.
+
+**P4 · Retention engine (4-5 weeks).** The nine modules and their suites: loops,
+loop_author, disclosure, ritual_pact, streak, quests, bloom, garden, boundaries.
+Done when the ported suites pass.
+
+**P5 · First run and models (1-2 weeks).** In-app download with progress, resume
+and a Wi-Fi-only option; device tiering (mirror `model_tier.py`); integrity check
+and re-download.
+
+**P6 · Performance (2-3 weeks).** Thermals, peak memory, unload on background,
+the two numbers M0 did not get.
+
+**P7 · App Store (2 weeks).** Privacy manifest, nutrition label, age rating, AI
+disclosure, review notes, TestFlight. `APPLE_SUBMISSION_CHECKLIST.md` covers it.
+
 ### Timeline (solo, iOS only, Route A)
 
 | Phase | Work | Estimate |
