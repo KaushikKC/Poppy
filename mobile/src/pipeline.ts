@@ -1,7 +1,7 @@
 import { initLlama, LlamaContext } from 'llama.rn';
 import { initWhisper, WhisperContext } from 'whisper.rn';
 import { createTTS, TtsEngine } from 'react-native-sherpa-onnx/tts';
-import { PcmPlayer } from './audio';
+import { floatToPcm16, PcmPlayer } from './audio';
 import { KOKORO_DIR, LLM_PATH, WHISPER_PATH } from './models';
 
 /**
@@ -89,9 +89,11 @@ export async function runTurn(
   const t0 = Date.now(); // mic-stop reference
   const mark = () => Date.now() - t0;
 
-  // 1) STT — feed 16 kHz mono float PCM straight in (no WAV round-trip).
+  // 1) STT — 16 kHz mono, converted to int16 because that is what the native
+  // ArrayBuffer path actually reads (see floatToPcm16). No WAV round-trip.
+  const pcmBytes = floatToPcm16(pcm16k);
   const { promise: sttPromise } = e.whisper.transcribeData(
-    pcm16k.buffer as ArrayBuffer,
+    pcmBytes.buffer as ArrayBuffer,
     { language: 'en' },
   );
   const stt = await sttPromise;

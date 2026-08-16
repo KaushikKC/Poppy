@@ -19,6 +19,28 @@ function resampleTo16k(input: Float32Array, inRate: number): Float32Array {
 }
 
 /**
+ * Float samples in -1..1 to signed 16-bit PCM.
+ *
+ * whisper.rn's `transcribeData` takes an ArrayBuffer straight to `decodePcm16`
+ * on the native side, which reads it as int16 and divides by 32767. Its
+ * TypeScript comment says "float32 PCM data or ArrayBuffer", which reads as
+ * though floats are fine; they are not, for the ArrayBuffer path.
+ *
+ * Handing it float32 meant every four bytes of one sample were read as two
+ * bogus int16s. That is not silence and not noise: it is a low rumble, and
+ * Whisper dutifully transcribed it as "(engine revving)" no matter what was
+ * actually said.
+ */
+export function floatToPcm16(input: Float32Array): Int16Array {
+  const out = new Int16Array(input.length);
+  for (let i = 0; i < input.length; i++) {
+    const s = Math.max(-1, Math.min(1, input[i]));
+    out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return out;
+}
+
+/**
  * Mic capture that yields **16 kHz mono float PCM** — exactly what whisper.cpp
  * needs — by streaming raw buffers via `onAudioReady` and resampling on stop.
  * (Recording at the hardware rate and resampling avoids depending on the OS
