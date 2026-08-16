@@ -65,14 +65,53 @@ const SYSTEM_PROMPT =
   'You are Poppys, a warm, calm voice companion. Reply in 2 to 4 short spoken ' +
   'sentences. Be gentle and natural, never clinical.';
 
-// First speakable clause: stop at the first sentence end so the voice can start
-// while the model is still generating (the desktop first-chunk latency trick).
-const SENTENCE_END = /[.!?](\s|$)/;
+// Chunking, ported from the desktop phrase_chunker + its tuned constants.
+//
+// Measured on an iPhone 15: the first clause was ready at 1.19s but first audio
+// did not play until 4.65s. The whole 3.5s gap was Kokoro synthesising, because
+// waiting for a sentence end handed it a 110-character sentence to render before
+// a single sample came out.
+//
+// So the FIRST chunk is deliberately tiny, breaking on the first comma after a
+// few characters ("Well," / "I'm just taking a quiet stroll,") and the rest run
+// at normal size. Same trick, same numbers, as desktop.
+const SENTENCE_BREAKS = '.!?';
+const SOFT_BREAKS = ',;:—';
 
-function firstClause(text: string): string | null {
-  const m = text.match(SENTENCE_END);
-  if (!m || m.index === undefined) return null;
-  return text.slice(0, m.index + 1).trim();
+const CHUNK_MIN_CHARS = 15;
+const SOFT_BREAK_MIN_CHARS = 35;
+const CHUNK_MAX_CHARS = 110;
+const FIRST_CHUNK_MIN_CHARS = 6;
+const FIRST_SOFT_MIN_CHARS = 4;
+const FIRST_CHUNK_MAX_CHARS = 18;
+
+/**
+ * The next speakable piece of `text`, or null if it should keep buffering.
+ * Returns the character count consumed so the caller can advance.
+ */
+function nextChunk(text: string, isFirst: boolean): string | null {
+  const [sentenceMin, softMin, maxChars] = isFirst
+    ? [FIRST_CHUNK_MIN_CHARS, FIRST_SOFT_MIN_CHARS, FIRST_CHUNK_MAX_CHARS]
+    : [CHUNK_MIN_CHARS, SOFT_BREAK_MIN_CHARS, CHUNK_MAX_CHARS];
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const upto = i + 1;
+    if (SENTENCE_BREAKS.includes(ch) && upto >= sentenceMin) {
+      return text.slice(0, upto);
+    }
+    if (SOFT_BREAKS.includes(ch) && upto >= softMin) {
+      return text.slice(0, upto);
+    }
+  }
+  // No punctuation in reach: cut at a word boundary rather than let a long
+  // unbroken clause hold up the whole reply.
+  if (text.length >= maxChars) {
+    const cut = text.lastIndexOf(' ', maxChars);
+    if (cut > 0) return text.slice(0, cut);
+    return text.slice(0, maxChars);
+  }
+  return null;
 }
 
 /**
@@ -148,14 +187,15 @@ export async function runTurn(
       // stopped dead after the first sentence while that block was produced.
       for (;;) {
         const pending = acc.slice(spokenUpTo);
-        const clause = firstClause(pending);
-        if (!clause) break;
+        const chunk = nextChunk(pending, !firstClauseText);
+        if (!chunk) break;
         if (!firstClauseText) {
-          firstClauseText = clause;
+          firstClauseText = chunk;
           firstChunkReadyMs = mark();
         }
-        spokenUpTo += pending.indexOf(clause) + clause.length;
-        speak(clause);
+        spokenUpTo += chunk.length;
+        const spoken = chunk.trim();
+        if (spoken) speak(spoken);
       }
     },
   );
