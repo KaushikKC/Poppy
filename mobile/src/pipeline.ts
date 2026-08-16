@@ -107,12 +107,17 @@ export async function runTurn(
   let firstClauseText: string | null = null;
   let firstAudioMs = -1;
 
-  // Queue that plays clauses strictly in order; first play stamps firstAudioMs.
+  // Plays strictly in order, but synthesis starts the moment the text exists
+  // rather than waiting its turn in the queue. Chaining both together meant the
+  // gap between one clause and the next was the entire synthesis time of the
+  // next one, heard as: half a sentence, silence, half a sentence. Now clause
+  // N+1 is being synthesised while clause N is still playing.
   let playChain: Promise<void> = Promise.resolve();
   const speak = (text: string) => {
     if (!text) return;
+    const synth = e.tts.generateSpeech(text, { sid: 0, speed: 1.0 });
     playChain = playChain.then(async () => {
-      const audio = await e.tts.generateSpeech(text, { sid: 0, speed: 1.0 });
+      const audio = await synth;
       if (firstAudioMs < 0) {
         firstAudioMs = mark();
         ev.onFirstAudio?.();
@@ -135,23 +140,28 @@ export async function runTurn(
       if (llmFirstTokenMs < 0) llmFirstTokenMs = mark();
       acc += data.token;
       ev.onToken?.(acc);
-      if (!firstClauseText) {
-        const clause = firstClause(acc);
-        if (clause) {
+      // Hand over every sentence as soon as it is complete, not just the first.
+      // Previously only the opening clause was spoken during generation and the
+      // entire rest was synthesised in one block afterwards, so the voice always
+      // stopped dead after the first sentence while that block was produced.
+      for (;;) {
+        const pending = acc.slice(spokenUpTo);
+        const clause = firstClause(pending);
+        if (!clause) break;
+        if (!firstClauseText) {
           firstClauseText = clause;
           firstChunkReadyMs = mark();
-          spokenUpTo = clause.length;
-          speak(clause); // start the voice ASAP; generation keeps going
         }
+        spokenUpTo += pending.indexOf(clause) + clause.length;
+        speak(clause);
       }
     },
   );
 
-  // 3) Speak whatever came after the first clause.
+  // 3) Anything the model left without final punctuation.
   const reply = acc.trim();
-  const remainder = reply.slice(spokenUpTo).trim();
+  const remainder = acc.slice(spokenUpTo).trim();
   if (remainder) speak(remainder);
-  else if (!firstClauseText && reply) speak(reply); // model never punctuated
 
   await playChain; // wait until the whole reply has finished speaking
 
