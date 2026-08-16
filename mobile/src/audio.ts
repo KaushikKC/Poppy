@@ -28,6 +28,10 @@ export class MicRecorder {
   private recorder: AudioRecorder | null = null;
   private chunks: Float32Array[] = [];
   private inRate = 48000;
+  private startedAt = 0;
+
+  /** Filled in on stop(): what the API claimed, and what the audio actually was. */
+  static lastDiagnostic = '';
 
   async start(): Promise<void> {
     // iOS: a play-and-record session so we can capture the mic and later speak.
@@ -38,6 +42,7 @@ export class MicRecorder {
     await AudioManager.setAudioSessionActivity(true);
 
     this.chunks = [];
+    this.startedAt = Date.now();
     const r = new AudioRecorder();
     r.onAudioReady({ sampleRate: TARGET_RATE, bufferLength: 1600, channelCount: 1 }, (e) => {
       this.inRate = e.buffer.sampleRate; // actual rate the OS gave us
@@ -64,7 +69,34 @@ export class MicRecorder {
       off += c.length;
     }
     this.chunks = [];
-    return resampleTo16k(merged, this.inRate);
+
+    // Do not trust the reported rate. The recorder is *asked* for 16 kHz, and
+    // some builds echo the request back as e.buffer.sampleRate while iOS
+    // actually hands over hardware-rate audio. When that happens the resample
+    // below is skipped, Whisper is fed audio running three times too fast, and
+    // it returns confident nonsense that barely changes with what was said.
+    //
+    // Samples divided by how long the mic was actually open gives the true rate
+    // regardless of what the API claims. Wall clock is crude, but the answer
+    // only has to be good enough to tell 16000 from 48000, and it snaps to the
+    // nearest standard rate rather than resampling by a noisy ratio.
+    const elapsedS = (Date.now() - this.startedAt) / 1000;
+    const measured = elapsedS > 0.3 ? total / elapsedS : this.inRate;
+    const standard = [8000, 16000, 22050, 24000, 44100, 48000];
+    const snapped = standard.reduce((best, r) =>
+      Math.abs(r - measured) < Math.abs(best - measured) ? r : best,
+    );
+    // Only override when the two genuinely disagree, so a correct report wins.
+    const disagrees = Math.abs(snapped - this.inRate) / this.inRate > 0.15;
+    const useRate = disagrees ? snapped : this.inRate;
+
+    MicRecorder.lastDiagnostic =
+      `reported ${this.inRate}Hz, measured ${Math.round(measured)}Hz ` +
+      `(~${snapped}), used ${useRate}Hz, ${total} samples over ${elapsedS.toFixed(1)}s` +
+      (disagrees ? '  <-- REPORTED RATE IS WRONG' : '');
+    console.log('[mic]', MicRecorder.lastDiagnostic);
+
+    return resampleTo16k(merged, useRate);
   }
 }
 
