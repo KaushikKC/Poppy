@@ -273,7 +273,9 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "org.reactjs.native.example.$(PRODUCT_NAME:rfc1034identifier)";
+				CODE_SIGN_ENTITLEMENTS = PoppysSpike/PoppysSpike.entitlements;
+				DEVELOPMENT_TEAM = VJWKHQRK66;
+				PRODUCT_BUNDLE_IDENTIFIER = social.poppys.spike;
 				PRODUCT_NAME = PoppysSpike;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -302,7 +304,9 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "org.reactjs.native.example.$(PRODUCT_NAME:rfc1034identifier)";
+				CODE_SIGN_ENTITLEMENTS = PoppysSpike/PoppysSpike.entitlements;
+				DEVELOPMENT_TEAM = VJWKHQRK66;
+				PRODUCT_BUNDLE_IDENTIFIER = social.poppys.spike;
 				PRODUCT_NAME = PoppysSpike;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;
