@@ -29,6 +29,60 @@ the timings; the big number is the metric that decides the stack.
   - `react-native-sherpa-onnx` — Kokoro TTS (the exact desktop voice)
   - `react-native-audio-api` — mic capture + PCM playback
 
+## Ready-to-run status (2026-08-16)
+
+Prepared so the run is: plug in an iPhone, drag one folder, press play.
+
+- ✅ **Models downloaded** to `~/Documents/Poppys-spike-models/models/` (1.2 GB) in
+  exactly the layout `src/models.ts` expects. Drag that `models` folder into the
+  device (see below) — no renaming, no unpacking.
+- ✅ **Bundle id** set to `social.poppys.spike` (was still the React Native template
+  default `org.reactjs.native.example.*`, which will not sign).
+- ✅ **Signing team** set to `VJWKHQRK66`, the same team as the Mac app.
+- ✅ **Increased-memory-limit entitlement** added
+  (`PoppysSpike/PoppysSpike.entitlements`). Without it iOS caps the process well
+  below physical RAM and kills the app outright when the LLM, Whisper and Kokoro are
+  all resident, so "does it fit" would come back as a crash rather than a number.
+- ✅ Mic permission string and file sharing already in `Info.plist`; privacy manifest
+  present.
+- ✅ TypeScript compiles clean; pods installed (llama-rn, whisper-rn, SherpaOnnx,
+  RNAudioAPI).
+
+**Use Node 22, not the system Node.** RN 0.86 needs ≥20.19.4 and this machine
+defaults to 20.18.2, which fails at metro with an engine error:
+
+```bash
+nvm use 22        # v22.0.0 is already installed
+```
+
+### The run, start to finish
+
+```bash
+nvm use 22
+cd mobile && npm start          # leave metro running
+```
+
+Then in Xcode: open `ios/PoppysSpike.xcworkspace`, pick the connected iPhone, press
+Run. First launch will fail to find models, which is expected.
+
+Copy the models across: Finder → the connected iPhone → **Files** tab → drag
+`~/Documents/Poppys-spike-models/models` onto **PoppysSpike**. Relaunch the app; the
+first screen should list all three as found.
+
+Then **Load engines** → **Tap to talk** → say one sentence → **Stop & reply**.
+
+### What to write down
+
+The gate is in `MOBILE_PLAN.md` §0.1. Three numbers, none of which a simulator can
+answer:
+
+1. **mic-stop → first audio**, the big number on the panel. Take it on turn 1 and
+   again on turn 3 (turn 2+ should be faster from the warm KV cache).
+2. **Thermals over ~10 minutes** of continuous back-and-forth: does the phone get
+   hot, does the reply speed fall off.
+3. **Peak memory** with all three models loaded (Xcode → Debug navigator, or
+   Instruments). This is the one the entitlement above exists to let you measure.
+
 ## Prerequisites
 
 - **Node ≥ 20.19.4** (RN 0.86 prefers Node 22; this machine has 20.18.2 — bump Node
