@@ -110,6 +110,7 @@
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
+				A1B2C3D40000000000000001 /* Copy Poppys web UI */,
 				00EEFC60759A1932668264C0 /* [CP] Embed Pods Frameworks */,
 				E235C05ADACE081382539298 /* [CP] Copy Pods Resources */,
 			);
@@ -200,6 +201,20 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-PoppysSpike/Pods-PoppysSpike-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
+		A1B2C3D40000000000000001 /* Copy Poppys web UI */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Copy Poppys web UI";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\n# The desktop web UI is the app's interface (MOBILE_PLAN.md Route A). It is\n# copied in rather than duplicated in the repo, so there is exactly one copy of\n# every screen and a change to the desktop UI reaches iOS on the next build.\nSRC=\"$SRCROOT/../../frontend\"\nDEST=\"$BUILT_PRODUCTS_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/web\"\nif [ ! -d \"$SRC\" ]; then echo \"error: frontend not found at $SRC\"; exit 1; fi\nmkdir -p \"$DEST\"\n# Excludes what only the desktop build needs: model weights and video loops are\n# large and unused on device.\nrsync -a --delete --exclude '*.glb' --exclude '*.mp4' --exclude '*.webm' \\\n  --exclude '.DS_Store' \"$SRC/\" \"$DEST/\"\necho \"copied web UI -> $DEST\"\n";
+		};
 		C38B50BA6285516D6DCD4F65 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -259,7 +274,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = PoppysSpike/PoppysSpike.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = VJWKHQRK66;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = PoppysSpike/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
@@ -273,8 +290,6 @@
 					"-ObjC",
 					"-lc++",
 				);
-				CODE_SIGN_ENTITLEMENTS = PoppysSpike/PoppysSpike.entitlements;
-				DEVELOPMENT_TEAM = VJWKHQRK66;
 				PRODUCT_BUNDLE_IDENTIFIER = social.poppys.spike;
 				PRODUCT_NAME = PoppysSpike;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -291,7 +306,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = PoppysSpike/PoppysSpike.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = VJWKHQRK66;
 				INFOPLIST_FILE = PoppysSpike/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -304,8 +321,6 @@
 					"-ObjC",
 					"-lc++",
 				);
-				CODE_SIGN_ENTITLEMENTS = PoppysSpike/PoppysSpike.entitlements;
-				DEVELOPMENT_TEAM = VJWKHQRK66;
 				PRODUCT_BUNDLE_IDENTIFIER = social.poppys.spike;
 				PRODUCT_NAME = PoppysSpike;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
