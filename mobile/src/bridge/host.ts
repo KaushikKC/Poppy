@@ -39,7 +39,15 @@ function dispatch(send: Send, msg: unknown): void {
   send(`window.__poppysBridge && window.__poppysBridge(${JSON.stringify(msg)}); true;`);
 }
 
-export function createHost(send: Send, sockets?: SocketHandler) {
+/** Same, for the microphone channel the replacement mic.js listens on. */
+export function dispatchMic(send: Send, msg: unknown): void {
+  send(`window.__poppysMic && window.__poppysMic(${JSON.stringify(msg)}); true;`);
+}
+
+/** Anything the page sends that is not fetch or socket traffic, e.g. the mic. */
+export type ExtraHandler = (msg: { t?: string }) => Promise<boolean> | boolean;
+
+export function createHost(send: Send, sockets?: SocketHandler, extra?: ExtraHandler) {
   function replyFor(id: number): SocketReply {
     return {
       text: (data) => dispatch(send, { t: 'ws:msg', id, data }),
@@ -56,6 +64,10 @@ export function createHost(send: Send, sockets?: SocketHandler) {
     } catch {
       return; // not ours
     }
+
+    // Non-transport messages (microphone control) first, so they are not mistaken
+    // for malformed socket traffic.
+    if (extra && (await extra(msg as { t?: string }))) return;
 
     if (msg.t === 'fetch') {
       try {
