@@ -23,7 +23,7 @@ const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, '.test-build');
 execFileSync(
   path.join(ROOT, 'node_modules', '.bin', 'tsc'),
-  ['--outDir', OUT, '--module', 'commonjs', '--target', 'es2020',
+  ['--outDir', OUT, '--rootDir', 'src', '--module', 'commonjs', '--target', 'es2020',
    '--esModuleInterop', '--skipLibCheck', '--moduleResolution', 'node',
    'src/core/router.ts', 'src/core/handlers.ts', 'src/core/companion.ts',
    'src/core/characters.ts', 'src/core/store.ts', 'src/bridge/shim.ts'],
