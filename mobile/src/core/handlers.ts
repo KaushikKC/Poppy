@@ -9,6 +9,9 @@
  */
 
 import * as companion from './companion';
+import * as memory from './memory_store';
+import * as boundaries from './boundaries';
+import * as safety from './safety';
 import { CAST } from './characters';
 import { ok, route, type Res } from './router';
 
@@ -39,4 +42,62 @@ export function registerHandlers(): void {
   route('POST', '/companion/update', async (req): Promise<Res> =>
     ok(await companion.update((req.body ?? {}) as Partial<companion.Profile>)),
   );
+
+  // ── memory (§5: visible, editable, deletable) ─────────────────────────────
+  route('GET', '/memory', async () => {
+    const profile = await companion.profile();
+    memory.setCharacter(profile.character);
+    return ok({
+      records: await memory.records(),
+      suppressed: await memory.suppressedCategories(),
+    });
+  });
+
+  route('POST', '/memory/confirm', async (req): Promise<Res> => {
+    const b = (req.body ?? {}) as {
+      text?: string;
+      category?: memory.Category;
+      why?: string;
+      sensitive?: boolean;
+    };
+    const rec = await memory.remember(b.text ?? '', b.category ?? 'ongoing', b.why ?? null,
+      Boolean(b.sensitive));
+    return ok({ saved: rec !== null, record: rec });
+  });
+
+  route('POST', '/memory/update', async (req): Promise<Res> => {
+    const b = (req.body ?? {}) as { id?: string; text?: string };
+    return ok({ record: await memory.update(b.id ?? '', b.text ?? '') });
+  });
+
+  route('POST', '/memory/delete', async (req): Promise<Res> => {
+    const b = (req.body ?? {}) as { id?: string };
+    return ok({ deleted: await memory.remove(b.id ?? '') });
+  });
+
+  route('POST', '/memory/suppress', async (req): Promise<Res> => {
+    const b = (req.body ?? {}) as { category?: memory.Category };
+    if (b.category) await memory.suppressCategory(b.category);
+    return ok({ suppressed: await memory.suppressedCategories() });
+  });
+
+  route('POST', '/memory/forget-all', async () => {
+    await memory.forgetAll();
+    return ok({ forgotten: true });
+  });
+
+  // ── standing rules ────────────────────────────────────────────────────────
+  route('GET', '/boundaries', async () => ok(await boundaries.get()));
+
+  route('POST', '/boundaries', async (req): Promise<Res> => {
+    const b = (req.body ?? {}) as { kind?: 'avoid' | 'always'; topic?: string; remove?: boolean };
+    const kind = b.kind === 'always' ? 'always' : 'avoid';
+    if (!b.topic) return ok(await boundaries.get());
+    return ok(b.remove
+      ? await boundaries.remove(kind, b.topic)
+      : await boundaries.add(kind, b.topic));
+  });
+
+  // The safety resources, so the UI can show the card without a turn.
+  route('GET', '/safety/resources', () => ok({ resources: safety.CRISIS_RESOURCES }));
 }

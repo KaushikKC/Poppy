@@ -26,7 +26,8 @@ execFileSync(
   ['--outDir', OUT, '--rootDir', 'src', '--module', 'commonjs', '--target', 'es2020',
    '--esModuleInterop', '--skipLibCheck', '--moduleResolution', 'node',
    'src/core/turn.ts', 'src/core/socket.ts', 'src/core/engines.ts',
-   'src/core/handlers.ts', 'src/bridge/host.ts', 'src/core/wav.ts'],
+   'src/core/handlers.ts', 'src/bridge/host.ts', 'src/core/wav.ts',
+   'src/core/safety.ts', 'src/core/memory_store.ts', 'src/core/boundaries.ts'],
   { cwd: ROOT, stdio: 'inherit' },
 );
 
@@ -207,6 +208,45 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
     frames.length = 0;
     await host(JSON.stringify({ t: 'ws:open', id: 2, url: 'ws://poppys.local/ws/nope' }));
     check('refused with a close', frames.some((f) => f.t === 'ws:closed'));
+  }
+
+  console.log('\n== the safety card reaches the page before the reply ==');
+  {
+    fakes({ reply: 'I hear you. I am right here with you.' });
+    const mem = require(path.join(OUT, 'core/memory_store.js'));
+    store.configureStore(store.memoryFs(), '/d2');
+    await companion.create('poppy');
+    socket.resetSessions();
+
+    const frames = [];
+    const host = createHost((js) => {
+      const m = js.match(/__poppysBridge\((.*)\); true;$/);
+      if (m) frames.push(JSON.parse(m[1]));
+    }, socket.createSocketHandler());
+    await host(JSON.stringify({ t: 'ws:open', id: 9, url: 'ws://poppys.local/ws/chat' }));
+    await host(JSON.stringify({
+      t: 'ws:send', id: 9,
+      data: JSON.stringify({ type: 'chat', text: 'I want to kill myself' }),
+    }));
+
+    const msgs = frames.filter((f) => f.t === 'ws:msg' && !f.b64).map((f) => JSON.parse(f.data));
+    const types = msgs.map((m) => m.type);
+    const safetyMsg = msgs.find((m) => m.type === 'safety');
+    check('a safety frame was sent', !!safetyMsg);
+    check('it carries the helplines', !!safetyMsg && /1800-599-0019|988/.test(safetyMsg.resources));
+    // Someone in the acute tier should not have to sit through a spoken reply first.
+    check('it arrives before the first token',
+      types.indexOf('safety') < types.indexOf('token'), types.slice(0, 4).join(','));
+    check('the turn still completes', types[types.length - 1] === 'done');
+
+    console.log('\n== ordinary talk sends no safety frame ==');
+    frames.length = 0;
+    await host(JSON.stringify({
+      t: 'ws:send', id: 9,
+      data: JSON.stringify({ type: 'chat', text: 'work was busy today' }),
+    }));
+    const calm = frames.filter((f) => f.t === 'ws:msg' && !f.b64).map((f) => JSON.parse(f.data));
+    check('no card for a normal turn', !calm.some((m) => m.type === 'safety'));
   }
 
   console.log('\n' + (ok ? 'ALL PASS' : 'FAILURES ABOVE'));

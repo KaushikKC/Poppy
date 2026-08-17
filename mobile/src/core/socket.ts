@@ -20,6 +20,10 @@
 import { runTurn } from './turn';
 import type { SocketHandler, SocketReply } from '../bridge/host';
 import * as companion from './companion';
+import * as safety from './safety';
+import * as memory from './memory_store';
+import * as boundaries from './boundaries';
+import { CRISIS_ADDENDUM, DISTRESS_ADDENDUM, SAFETY_ADDENDUM } from './prompts';
 
 /** Kept small on purpose: replies are 2-4 spoken sentences. */
 const SYSTEM_PROMPT =
@@ -65,7 +69,30 @@ export function createSocketHandler(): SocketHandler {
       }
 
       const profile = await companion.profile();
-      const system = SYSTEM_PROMPT.replace('{name}', profile.companion_name);
+      memory.setCharacter(profile.character);
+
+      // Assembled in the same order as ws_handler.py: identity, then the standing
+      // rules, then safety framing, then what she remembers. The memory block is
+      // selected for this turn rather than dumped wholesale, which is what keeps
+      // time-to-first-token from drifting as the relationship gets longer.
+      const rules = await boundaries.asPromptBlock();
+      const remembered = await memory.asPromptBlock(msg.text);
+      let system =
+        SYSTEM_PROMPT.replace('{name}', profile.companion_name) +
+        rules +
+        SAFETY_ADDENDUM +
+        remembered;
+
+      // Checked before a single token is generated, and the resource card is sent
+      // straight away rather than after the reply: someone in the acute tier should
+      // not have to wait through a spoken answer to see a helpline.
+      const risk = safety.check(msg.text);
+      if (risk.level === 'crisis') {
+        system += CRISIS_ADDENDUM;
+        reply.text(JSON.stringify({ type: 'safety', resources: risk.resources }));
+      } else if (risk.level === 'distress') {
+        system += DISTRESS_ADDENDUM;
+      }
 
       try {
         const said = await runTurn(
