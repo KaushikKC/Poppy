@@ -10,15 +10,11 @@
  *        {type:"done",   sessionId?}   end of turn
  *        {type:"error",  message}
  *
- * One deliberate divergence: **no binary audio frames.** On desktop the server
- * streams WAV bytes and the page plays them. Here playback is native, because the
- * WebView is loaded from file:// (where browser audio capture is not reliably
- * available) and because pushing WAV through a JSON bridge as base64 would spend
- * the latency the chunker was tuned to save. The UI's audio path simply never
- * receives a binary frame, and its `event.data instanceof ArrayBuffer` branch does
- * not fire.
- *
- * `config` is still sent, because the UI uses it to know a reply has started.
+ * Audio is sent as binary frames, the same as the Python server, because the page
+ * plays it: chat.js sets binaryType to "arraybuffer" and hands each frame to
+ * audio_player.js, whose AnalyserNode is what animates the orb. The only part of
+ * the pipeline that is native is capture, which the WebView cannot do reliably
+ * from a file:// origin.
  */
 
 import { runTurn } from './turn';
@@ -83,6 +79,7 @@ export function createSocketHandler(): SocketHandler {
           {
             onConfig: (sampleRate) =>
               reply.text(JSON.stringify({ type: 'config', sampleRate })),
+            onAudio: (b64) => reply.binary(b64),
             onToken: (text) => reply.text(JSON.stringify({ type: 'token', text })),
             onError: (message) => reply.text(JSON.stringify({ type: 'error', message })),
           },

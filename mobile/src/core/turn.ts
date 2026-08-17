@@ -16,16 +16,25 @@
  * **A failed phrase must not kill the turn.** If one phrase cannot be synthesised
  * the rest of the reply still plays; the failure is logged with the phrase so it
  * can be recognised in a user's log.
+ *
+ * Audio is *emitted*, not played. The WebView plays it, exactly as the browser
+ * does on desktop, because `audio_player.js`'s AnalyserNode is what drives the
+ * orb; playing natively would leave the orb motionless. So this hands WAV bytes
+ * up to the socket layer, which sends them as binary frames like the Python
+ * server does, and playback ordering is the page's job.
  */
 
 import { PhraseChunker } from './chunker';
 import { getEngines } from './engines';
+import { wavBase64 } from './wav';
 
 export type TurnEvents = {
   /** A config frame, before any audio: the UI initialises its player from this. */
   onConfig?: (sampleRate: number) => void;
   onToken?: (text: string) => void;
-  /** First audible sample of the reply — the latency number that matters. */
+  /** One spoken phrase as base64 WAV, in order, for the page to play. */
+  onAudio?: (wavBase64: string) => void;
+  /** First phrase handed over — the latency number that matters. */
   onFirstAudio?: () => void;
   onDone?: (reply: string) => void;
   onError?: (message: string) => void;
@@ -71,7 +80,7 @@ class SpeechStream {
       });
     }
 
-    const { speech, audio } = getEngines();
+    const { speech } = getEngines();
     while (this.queue.length) {
       // On barge-in the queue is emptied, not merely abandoned. Leaving phrases
       // behind meant close() saw work outstanding with no worker running, started
@@ -91,7 +100,7 @@ class SpeechStream {
           this.firstAudioSent = true;
           this.events.onFirstAudio?.();
         }
-        await audio.play(out.samples, out.sampleRate);
+        this.events.onAudio?.(wavBase64(out.samples, out.sampleRate));
       } catch (err) {
         // One bad phrase must not silence the rest of the reply.
         const msg = err instanceof Error ? err.message : String(err);
@@ -160,20 +169,17 @@ export async function runTurn(
 
     await speech.close();
 
-    // Barge-in can land after generation finished, while the queued phrases were
-    // still being spoken. That path throws nothing, so it has to be checked here
-    // too or the turn would report done for a reply the user cut off.
-    if (opts.signal?.aborted) {
-      getEngines().audio.stop();
-      return reply.trim();
-    }
+    // Barge-in can land after generation finished, while queued phrases were
+    // still being synthesised. That path throws nothing, so it is checked here too
+    // or the turn would report done for a reply the user cut off. Cutting the
+    // audio itself is the page's job: it owns the player.
+    if (opts.signal?.aborted) return reply.trim();
 
     events.onDone?.(reply.trim());
     return reply.trim();
   } catch (err) {
     if (opts.signal?.aborted) {
-      // Barge-in, not a failure: stop the voice and leave quietly.
-      getEngines().audio.stop();
+      // Barge-in, not a failure: leave quietly.
       return reply.trim();
     }
     const msg = err instanceof Error ? err.message : String(err);

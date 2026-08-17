@@ -43,18 +43,15 @@ export type Speech = {
   ) => Promise<{ samples: Float32Array | number[]; sampleRate: number }>;
 };
 
-export type Audio = {
-  /** Play PCM, resolving when it has finished. Calls are serialised by the caller. */
-  play: (samples: Float32Array | number[], sampleRate: number) => Promise<void>;
-  /** Drop anything queued or playing, for barge-in. */
-  stop: () => void;
-};
-
+/**
+ * No playback engine. The WebView plays the audio, as the browser does on
+ * desktop, because audio_player.js's AnalyserNode is what animates the orb.
+ * Native playback would be marginally faster and leave the orb dead still.
+ */
 export type Engines = {
   stt: Stt;
   llm: Llm;
   speech: Speech;
-  audio: Audio;
 };
 
 let engines: Engines | null = null;
