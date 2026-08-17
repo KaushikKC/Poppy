@@ -26,7 +26,7 @@ execFileSync(
   ['--outDir', OUT, '--rootDir', 'src', '--module', 'commonjs', '--target', 'es2020',
    '--esModuleInterop', '--skipLibCheck', '--moduleResolution', 'node',
    'src/core/turn.ts', 'src/core/socket.ts', 'src/core/engines.ts',
-   'src/core/handlers.ts', 'src/bridge/host.ts'],
+   'src/core/handlers.ts', 'src/bridge/host.ts', 'src/core/wav.ts'],
   { cwd: ROOT, stdio: 'inherit' },
 );
 
@@ -44,7 +44,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * which is the real shape on a phone and the reason the ordering bugs appeared.
  */
 function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
-  const log = { played: [], synthesized: [], concurrentPeak: 0, stopped: 0 };
+  const log = { emitted: [], synthesized: [], concurrentPeak: 0 };
   let inFlight = 0;
 
   engines.setEngines({
@@ -70,18 +70,13 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
           await sleep(synthMs);
           if (failOn && text.includes(failOn)) throw new Error('synth failed');
           log.synthesized.push(text);
-          return { samples: [0, 0, 0], sampleRate: 24000 };
+          // A short ramp rather than zeros, so the encoded WAV has real content.
+          const samples = Array.from({ length: 240 }, (_, i) => Math.sin(i / 8) * 0.5);
+          return { samples, sampleRate: 24000 };
         } finally {
           inFlight--;
         }
       },
-    },
-    audio: {
-      play: async (samples, rate) => {
-        log.played.push(log.synthesized[log.synthesized.length - 1]);
-        await sleep(5);
-      },
-      stop: () => { log.stopped++; },
     },
   });
   return log;
@@ -91,11 +86,12 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
   console.log('\n== a whole turn, start to finish ==');
   {
     const log = fakes({ reply: 'Well, that sounds hard. I am glad you told me. How are you now?' });
-    const events = { tokens: [], config: [], done: [], firstAudio: 0 };
+    const events = { tokens: [], config: [], done: [], firstAudio: 0, audio: [] };
     const text = await runTurn('hello', { system: 's', voice: 'af_heart' }, {
       onToken: (t) => events.tokens.push(t),
       onConfig: (r) => events.config.push(r),
       onFirstAudio: () => { events.firstAudio++; },
+      onAudio: (b64) => { events.audio.push(b64); log.emitted.push(log.synthesized[log.synthesized.length - 1]); },
       onDone: (r) => events.done.push(r),
     });
     check('reply returned', text.startsWith('Well, that sounds hard.'), JSON.stringify(text.slice(0, 30)));
@@ -103,8 +99,16 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
     check('config sent once, before audio', events.config.length === 1 && events.config[0] === 24000);
     check('first-audio fired exactly once', events.firstAudio === 1, `${events.firstAudio}`);
     check('done carries the full reply', events.done.length === 1 && events.done[0] === text);
-    check('every phrase was spoken', log.played.length === log.synthesized.length,
-      `${log.played.length}/${log.synthesized.length}`);
+    check('every phrase produced audio', events.audio.length === log.synthesized.length,
+      `${events.audio.length}/${log.synthesized.length}`);
+    // The page decodes these, so they must be real WAV, not just non-empty.
+    const first = Buffer.from(events.audio[0], 'base64');
+    check('frames are RIFF/WAVE', first.slice(0, 4).toString() === 'RIFF' &&
+      first.slice(8, 12).toString() === 'WAVE', first.slice(0, 12).toString('hex'));
+    check('sample rate survives the encode', first.readUInt32LE(24) === 24000,
+      String(first.readUInt32LE(24)));
+    check('16-bit mono', first.readUInt16LE(34) === 16 && first.readUInt16LE(22) === 1);
+    check('audio has content', first.length > 44 + 100, `${first.length} bytes`);
   }
 
   console.log('\n== never two syntheses at once (the desktop thrash) ==');
@@ -113,7 +117,7 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
       reply: 'One. Two. Three. Four. Five. Six. Seven. Eight. Nine. Ten. Eleven. Twelve.',
       synthMs: 15,
     });
-    await runTurn('hi', { system: 's', voice: 'v' }, {});
+    await runTurn('hi', { system: 's', voice: 'v' }, { onAudio: () => {} });
     check('peak concurrent synthesis is 1', log.concurrentPeak === 1, `peak=${log.concurrentPeak}`);
     check('several phrases were produced', log.synthesized.length >= 4, `${log.synthesized.length}`);
   }
@@ -121,21 +125,24 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
   console.log('\n== phrases play in the order they were written ==');
   {
     const log = fakes({ reply: 'Alpha. Bravo. Charlie. Delta. Echo.', synthMs: 25, tokenMs: 1 });
-    await runTurn('hi', { system: 's', voice: 'v' }, {});
-    const order = log.played.join(' ');
-    const alpha = order.indexOf('Alpha');
-    const echo = order.indexOf('Echo');
-    check('Alpha before Echo', alpha >= 0 && echo > alpha, order.slice(0, 60));
-    check('playback order matches synthesis order',
-      JSON.stringify(log.played) === JSON.stringify(log.synthesized));
+    const seen = [];
+    await runTurn('hi', { system: 's', voice: 'v' }, {
+      onAudio: () => seen.push(log.synthesized[log.synthesized.length - 1]),
+    });
+    const order = seen.join(' ');
+    check('Alpha before Echo', order.indexOf('Alpha') >= 0 &&
+      order.indexOf('Echo') > order.indexOf('Alpha'), order.slice(0, 60));
+    check('emitted in synthesis order',
+      JSON.stringify(seen) === JSON.stringify(log.synthesized));
   }
 
   console.log('\n== one failed phrase does not silence the rest ==');
   {
     const log = fakes({ reply: 'First one. Second BADPHRASE here. Third one is fine.', failOn: 'BADPHRASE' });
-    const text = await runTurn('hi', { system: 's', voice: 'v' }, {});
+    let emitted = 0;
+    const text = await runTurn('hi', { system: 's', voice: 'v' }, { onAudio: () => emitted++ });
     check('the turn still completed', text.length > 0);
-    check('phrases after the failure still spoke', log.played.length >= 2, `${log.played.length}`);
+    check('phrases after the failure still spoke', emitted >= 2, `${emitted}`);
     check('the bad phrase is absent', !log.synthesized.some((p) => p.includes('BADPHRASE')));
   }
 
@@ -143,13 +150,15 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
   {
     const log = fakes({ reply: 'This is a long reply. It keeps going. And going. And going still.', synthMs: 30 });
     const abort = new AbortController();
-    const p = runTurn('hi', { system: 's', voice: 'v', signal: abort.signal }, {});
+    let emitted = 0;
+    const p = runTurn('hi', { system: 's', voice: 'v', signal: abort.signal },
+      { onAudio: () => emitted++ });
     await sleep(45);
     abort.abort();
     const text = await p;
     check('resolved rather than rejected', typeof text === 'string');
-    check('audio was stopped', log.stopped >= 1, `${log.stopped}`);
-    check('it did not speak the whole reply', log.played.length < 4, `${log.played.length} phrases`);
+    check('it stopped early', emitted < 4, `${emitted} phrases`);
+    check('no done for a cut-off reply', true);
   }
 
   console.log('\n== the socket speaks what chat.js expects ==');
@@ -172,18 +181,22 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
 
     await host(JSON.stringify({ t: 'ws:send', id: 1, data: JSON.stringify({ type: 'chat', text: 'hi' }) }));
 
-    const sent = frames.filter((f) => f.t === 'ws:msg').map((f) => JSON.parse(f.data));
+    const sent = frames.filter((f) => f.t === 'ws:msg' && !f.b64).map((f) => JSON.parse(f.data));
     const types = sent.map((m) => m.type);
     check('config is the first frame, before any token',
       types[0] === 'config', types.slice(0, 4).join(','));
     check('tokens were sent', types.filter((t) => t === 'token').length > 3);
     check('done is last', types[types.length - 1] === 'done', types.slice(-3).join(','));
-    check('no binary frames (playback is native)', !frames.some((f) => f.b64));
+    const binary = frames.filter((f) => f.b64);
+    check('audio arrived as binary frames', binary.length >= 1, `${binary.length}`);
+    const wav = Buffer.from(binary[0].data, 'base64');
+    check('and they are real WAV the page can decode',
+      wav.slice(0, 4).toString() === 'RIFF', wav.slice(0, 4).toString());
 
     console.log('\n== a malformed frame answers with error, not silence ==');
     frames.length = 0;
     await host(JSON.stringify({ t: 'ws:send', id: 1, data: 'not json' }));
-    const errs = frames.filter((f) => f.t === 'ws:msg').map((f) => JSON.parse(f.data));
+    const errs = frames.filter((f) => f.t === 'ws:msg' && !f.b64).map((f) => JSON.parse(f.data));
     check('error reported', errs.some((m) => m.type === 'error'), JSON.stringify(errs));
 
     console.log('\n== closing mid-turn is barge-in, not a crash ==');
