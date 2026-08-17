@@ -8,7 +8,7 @@
  * or care that there is no server.
  */
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import WebViewComponent from 'react-native-webview';
 import type {
@@ -26,8 +26,12 @@ const WebView = WebViewComponent as unknown as React.ComponentType<
 >;
 
 import { SHIM_JS } from './bridge/shim';
-import { createHost } from './bridge/host';
+import { createHost, dispatchMic } from './bridge/host';
+import { createMic } from './bridge/mic';
 import { registerHandlers } from './core/handlers';
+import { createSocketHandler } from './core/socket';
+import { loadNativeEngines } from './core/native_engines';
+import { allModelsPresent } from './models';
 import { configureStore } from './core/store';
 import {
   DocumentDirectoryPath,
@@ -72,11 +76,33 @@ export default function AppShell() {
   const webRef = useRef<WebViewComponent>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [engineStatus, setEngineStatus] = useState('');
 
   setupCore();
 
+  // The engines are loaded once, in the background, while the UI is already
+  // rendering. Onboarding takes a while to read, and this way the first turn does
+  // not pay the cold load. A failure is surfaced rather than swallowed: without
+  // the models the app can render but cannot talk.
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!(await allModelsPresent())) {
+          setEngineStatus('Models not downloaded yet');
+          return;
+        }
+        await loadNativeEngines(setEngineStatus);
+        setEngineStatus('');
+      } catch (err) {
+        setEngineStatus(`Could not load the models: ${err instanceof Error ? err.message : err}`);
+      }
+    })();
+  }, []);
+
   const onMessage = useMemo(() => {
-    const host = createHost((js) => webRef.current?.injectJavaScript(js));
+    const send = (js: string) => webRef.current?.injectJavaScript(js);
+    const mic = createMic((msg) => dispatchMic(send, msg));
+    const host = createHost(send, createSocketHandler(), (msg) => mic.handle(msg));
     return (e: WebViewMessageEvent) => {
       void host(e.nativeEvent.data);
     };
@@ -116,6 +142,11 @@ export default function AppShell() {
           <ActivityIndicator />
         </View>
       )}
+      {!!engineStatus && (
+        <View style={styles.engineStatus} pointerEvents="none">
+          <Text style={styles.engineStatusText}>{engineStatus}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -129,4 +160,10 @@ const styles = StyleSheet.create({
     position: 'absolute', left: 0, right: 0, top: 0, bottom: 0,
     alignItems: 'center', justifyContent: 'center',
   },
+  engineStatus: {
+    position: 'absolute', left: 0, right: 0, bottom: 0,
+    paddingVertical: 6, alignItems: 'center',
+    backgroundColor: 'rgba(7,18,7,0.06)',
+  },
+  engineStatusText: { fontSize: 11, color: 'rgba(7,18,7,0.55)' },
 });
