@@ -30,7 +30,7 @@ const OUT = path.join(ROOT, '.test-build');
 
 execFileSync(
   path.join(ROOT, 'node_modules', '.bin', 'tsc'),
-  ['--outDir', OUT, '--rootDir', 'src', '--module', 'commonjs', '--target', 'es2020',
+  ['--outDir', OUT, '--rootDir', 'src', '--strict', '--module', 'commonjs', '--target', 'es2020',
    '--esModuleInterop', '--skipLibCheck', '--moduleResolution', 'node',
    'src/core/handlers.ts', 'src/core/router.ts'],
   { cwd: ROOT, stdio: 'inherit' },

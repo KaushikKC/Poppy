@@ -23,7 +23,7 @@ const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, '.test-build');
 execFileSync(
   path.join(ROOT, 'node_modules', '.bin', 'tsc'),
-  ['--outDir', OUT, '--rootDir', 'src', '--module', 'commonjs', '--target', 'es2020',
+  ['--outDir', OUT, '--rootDir', 'src', '--strict', '--module', 'commonjs', '--target', 'es2020',
    '--esModuleInterop', '--skipLibCheck', '--moduleResolution', 'node',
    'src/core/router.ts', 'src/core/handlers.ts', 'src/core/companion.ts',
    'src/core/characters.ts', 'src/core/store.ts', 'src/bridge/shim.ts'],
@@ -134,7 +134,9 @@ async function get(url, init) {
   check('unknown key refused', patched.not_a_real_field === undefined);
 
   console.log('\n== unknown routes 404 rather than throwing ==');
-  const missing = await get('http://poppys.local/garden');
+  // Deliberately a path that will never exist. /garden was used here once and then
+  // became real, which is how a test starts asserting the opposite of the truth.
+  const missing = await get('http://poppys.local/no-such-endpoint-ever');
   check('404 status', missing.status === 404);
   check('ok is false', missing.ok === false);
 
