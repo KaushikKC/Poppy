@@ -18,6 +18,7 @@
 
 import { getEngines } from './engines';
 import * as boundaries from './boundaries';
+import { isHealthy } from './nudges';
 
 const MAX_TURNS = 8;
 const MAX_TOPIC_WORDS = 8;
@@ -212,12 +213,10 @@ function transcriptOf(turns: Array<{ role?: string; content?: string }>): [strin
   return [lines.join('\n'), userLines];
 }
 
-/** Guardrail every outbound line passes: a hook can never guilt the user back. */
-const UNHEALTHY = /\b(you never|you didn'?t|you forgot|you always|disappointed|let me down|abandoned|why haven'?t you|you owe)\b/i;
-
-export function isHealthy(text: string): boolean {
-  return !UNHEALTHY.test(text || '');
-}
+// The guilt guard lives in one place. This module used to carry its own smaller copy
+// of the pattern list, which is exactly how two guards drift apart and the weaker one
+// starts letting things through.
+export { isHealthy } from './nudges';
 
 export async function author(
   turns: Array<{ role?: string; content?: string }> = [],
