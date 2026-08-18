@@ -21,6 +21,7 @@ import { runTurn } from './turn';
 import type { SocketHandler, SocketReply } from '../bridge/host';
 import * as companion from './companion';
 import * as safety from './safety';
+import * as personas from './personas';
 import * as memory from './memory_store';
 import * as boundaries from './boundaries';
 import { CRISIS_ADDENDUM, DISTRESS_ADDENDUM, SAFETY_ADDENDUM } from './prompts';
@@ -55,7 +56,7 @@ export function createSocketHandler(): SocketHandler {
       const session = sessions.get(id);
       if (!session) return;
 
-      let msg: { type?: string; text?: string };
+      let msg: { type?: string; text?: string; persona?: string };
       try {
         msg = JSON.parse(data);
       } catch {
@@ -71,14 +72,20 @@ export function createSocketHandler(): SocketHandler {
       const profile = await companion.profile();
       memory.setCharacter(profile.character);
 
+      // The mode the user picked on the home screen. Sent with every turn by the
+      // UI, and it has to reach the prompt or the buttons only change colour.
+      const persona = personas.get(msg.persona ?? profile.vibe);
+
       // Assembled in the same order as ws_handler.py: identity, then the standing
       // rules, then safety framing, then what she remembers. The memory block is
       // selected for this turn rather than dumped wholesale, which is what keeps
       // time-to-first-token from drifting as the relationship gets longer.
       const rules = await boundaries.asPromptBlock();
       const remembered = await memory.asPromptBlock(msg.text);
+      // Her persona prompt carries the whole of who she is, so it replaces the
+      // placeholder rather than being appended to it.
       let system =
-        SYSTEM_PROMPT.replace('{name}', profile.companion_name) +
+        persona.system_prompt.replace(/\bPoppy\b/g, profile.companion_name) +
         rules +
         SAFETY_ADDENDUM +
         remembered;
