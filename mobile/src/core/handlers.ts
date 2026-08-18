@@ -19,6 +19,8 @@ import * as bloom from './bloom';
 import * as loops from './loops';
 import * as ritual from './ritual';
 import * as extract from './memory_extract';
+import * as author from './loop_author';
+import * as personas from './personas';
 import { CAST } from './characters';
 import { ok, route, type Res } from './router';
 
@@ -216,13 +218,27 @@ export function registerHandlers(): void {
     const ly = await streak.longYear();
     if (ly.reached) await garden.plantLongYear();
 
-    // The hook for the outro card: the next open loop, in her voice.
-    const next = await loops.top();
+    // Plant the hook this call ends on. Without this nothing ever creates a loop,
+    // and the home strip, slot 1 of the daily three and the outro card all fall
+    // back forever. author() always returns something: a call with no unresolved
+    // beat is the one outcome the design does not allow.
+    const written = await author.author(turns);
+    const planted = await loops.add(
+      written.hook,
+      written.type === 'reveal' ? 'reveal' : written.type,
+      // A reveal is hers to give, so it arrives on its own later rather than the
+      // instant the call ends.
+      written.type === 'reveal' ? { dueInHours: 20 } : {},
+    );
+
+    // The hook for the outro card: what she just planted, in her voice.
+    const next = planted ?? (await loops.top());
 
     return ok({
       ok: true,
       meaningful,
       open_loop: loops.surfaceText(next),
+      loop_type: next?.type ?? null,
       ritual: {
         kind: profile.ritual_kind ?? null,
         time: profile.ritual_time ?? null,
@@ -319,5 +335,5 @@ export function registerHandlers(): void {
   route('POST', '/update/check', () => ok({ enabled: false }));
 
   route('GET', '/sessions', () => ok({ sessions: [] }));
-  route('GET', '/personas', () => ok([]));
+  route('GET', '/personas', () => ok(personas.UI_LIST));
 }
