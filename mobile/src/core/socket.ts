@@ -18,6 +18,9 @@
  */
 
 import { runTurn } from './turn';
+import { PhraseChunker } from './chunker';
+import { getEngines } from './engines';
+import { wavBase64 } from './wav';
 import type { SocketHandler, SocketReply } from '../bridge/host';
 import * as companion from './companion';
 import * as safety from './safety';
@@ -48,6 +51,45 @@ const sessions = new Map<number, Session>();
 /** Conversation history for the current session, oldest first. */
 const MAX_HISTORY_TURNS = 6;
 
+/**
+ * Speak a line she initiated herself: the opening line, or a sign-off. Text and audio,
+ * no model turn. The whole line is revealed at once because it is already known, then
+ * its audio streams phrase by phrase so the first sound still arrives quickly.
+ */
+async function say(text: string, reply: SocketReply): Promise<void> {
+  const line = (text || '').trim();
+  if (!line) {
+    reply.text(JSON.stringify({ type: 'done' }));
+    return;
+  }
+  const profile = await companion.profile();
+  const { speech: engine } = getEngines();
+
+  reply.text(JSON.stringify({ type: 'config', sampleRate: engine.sampleRate }));
+  reply.text(JSON.stringify({ type: 'token', text: line }));
+
+  const chunker = new PhraseChunker();
+  const phrases: string[] = [];
+  for (const ch of line) {
+    const phrase = chunker.push(ch);
+    if (phrase) phrases.push(phrase);
+  }
+  const tail = chunker.flush();
+  if (tail) phrases.push(tail);
+
+  // One at a time and in order, the same rule as a reply: concurrent synthesis
+  // thrashes and plays back scrambled.
+  for (const phrase of phrases) {
+    try {
+      const out = await engine.synthesize(phrase, profile.voice);
+      reply.binary(wavBase64(out.samples, out.sampleRate));
+    } catch (err) {
+      console.log(`[tts] dropped phrase in say(): ${err}`);
+    }
+  }
+  reply.text(JSON.stringify({ type: 'done' }));
+}
+
 export function createSocketHandler(): SocketHandler {
   return {
     open(id, url, reply) {
@@ -70,8 +112,17 @@ export function createSocketHandler(): SocketHandler {
         return;
       }
 
+      // Two flows reach this socket, not one. `say` is her speaking first: the line
+      // is already written, so it must never go near the model — it is revealed and
+      // spoken. Missing this is why the opening line came back as an error and she
+      // said nothing.
+      if (msg.type === 'say') {
+        await say(msg.text ?? '', reply);
+        return;
+      }
+
       if (msg.type !== 'chat' || !msg.text) {
-        reply.text(JSON.stringify({ type: 'error', message: 'expected {type:"chat", text}' }));
+        reply.text(JSON.stringify({ type: 'error', message: 'expected {type:"chat", text} or {type:"say", text}' }));
         return;
       }
 
