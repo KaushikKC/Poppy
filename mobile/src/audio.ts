@@ -1,4 +1,5 @@
 import { AudioContext, AudioManager, AudioRecorder } from 'react-native-audio-api';
+import { Vad, type VadConfig } from './core/vad';
 
 const TARGET_RATE = 16000; // whisper.cpp wants 16 kHz mono float PCM
 
@@ -143,5 +144,62 @@ export class PcmPlayer {
 
   close() {
     this.ctx.close();
+  }
+}
+
+
+/**
+ * Continuous listening: the mic stays open and each finished utterance is handed
+ * over, so a conversation needs no button.
+ *
+ * Frames go straight to the VAD, which owns the pre-roll, so nothing is buffered
+ * twice. Resampling happens per utterance rather than per frame: a mic open for ten
+ * minutes must not accumulate anything.
+ */
+export class ContinuousMic {
+  private recorder: AudioRecorder | null = null;
+  private vad: Vad | null = null;
+  private inRate = 48000;
+
+  constructor(
+    private onUtterance: (pcm16k: Float32Array) => void,
+    private onStart?: () => void,
+  ) {}
+
+  async start(cfg?: VadConfig): Promise<void> {
+    AudioManager.setAudioSessionOptions({
+      iosCategory: 'playAndRecord',
+      iosOptions: ['defaultToSpeaker', 'allowBluetoothHFP'],
+    });
+    await AudioManager.setAudioSessionActivity(true);
+
+    const r = new AudioRecorder();
+    r.onAudioReady({ sampleRate: TARGET_RATE, bufferLength: 1600, channelCount: 1 }, (e) => {
+      this.inRate = e.buffer.sampleRate;
+      if (!this.vad) {
+        // Built on the first buffer, because the real rate is only known then and the
+        // pre-roll length depends on it.
+        this.vad = new Vad(this.inRate, {
+          onStart: () => this.onStart?.(),
+          onUtterance: (pcm) => this.onUtterance(resampleTo16k(pcm, this.inRate)),
+        }, cfg);
+      }
+      this.vad.push(Float32Array.from(e.buffer.getChannelData(0)));
+    });
+    await r.start();
+    this.recorder = r;
+  }
+
+  async stop(): Promise<void> {
+    if (!this.recorder) return;
+    await this.recorder.stop();
+    this.recorder.clearOnAudioReady();
+    this.recorder = null;
+    this.vad?.reset();
+    this.vad = null;
+  }
+
+  get running(): boolean {
+    return this.recorder !== null;
   }
 }

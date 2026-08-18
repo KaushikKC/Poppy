@@ -11,7 +11,7 @@
  * actually delivers.
  */
 
-import { MicRecorder } from '../audio';
+import { ContinuousMic, MicRecorder } from '../audio';
 import { transcribe } from '../core/turn';
 
 export type MicSend = (msg: unknown) => void;
@@ -19,6 +19,25 @@ export type MicSend = (msg: unknown) => void;
 export function createMic(send: MicSend) {
   const recorder = new MicRecorder();
   let recording = false;
+
+  // Auto-listen. The mic stays open and each finished utterance is transcribed and
+  // sent, so a conversation needs no button at all.
+  const auto = new ContinuousMic(
+    async (pcm) => {
+      send({ t: 'mic:state', state: 'transcribing' });
+      try {
+        const text = await transcribe(pcm);
+        console.log('[mic]', MicRecorder.lastDiagnostic);
+        send({ t: 'mic:transcript', text });
+      } catch (err) {
+        send({ t: 'mic:error', message: err instanceof Error ? err.message : String(err) });
+      }
+      // Back to listening straight away: a hands-free conversation must not need a
+      // tap between turns.
+      if (auto.running) send({ t: 'mic:state', state: 'recording' });
+    },
+    () => send({ t: 'mic:state', state: 'recording' }),
+  );
 
   async function start(): Promise<void> {
     if (recording) return;
@@ -67,15 +86,24 @@ export function createMic(send: MicSend) {
         return true;
       }
       if (msg.t === 'vad:set') {
-        // Auto-listen is P2 polish: the native VAD is not wired yet, so this is
-        // acknowledged and ignored rather than silently pretending to work.
-        console.log(`[mic] auto-listen requested (${msg.on ? 'on' : 'off'}); not wired yet`);
+        try {
+          if (msg.on && !auto.running) {
+            await auto.start();
+            send({ t: 'mic:state', state: 'recording' });
+          } else if (!msg.on && auto.running) {
+            await auto.stop();
+            send({ t: 'mic:state', state: 'idle' });
+          }
+        } catch (err) {
+          send({ t: 'mic:error', message: err instanceof Error ? err.message : String(err) });
+        }
         return true;
       }
       return false;
     },
     async release(): Promise<void> {
       if (recording) await recorder.stop().catch(() => {});
+      if (auto.running) await auto.stop().catch(() => {});
       recording = false;
     },
   };
