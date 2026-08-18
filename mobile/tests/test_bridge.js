@@ -43,9 +43,18 @@ handlers.registerHandlers();
 // ── stand up the shim exactly as the WebView would ───────────────────────────
 // A minimal window: the shim is written to run before any polyfills, so if it
 // needs more than this it would also fail inside WKWebView.
+const listeners = {};
 const win = {
   ReactNativeWebView: {
     postMessage: (json) => queue.push(JSON.parse(json)),
+  },
+  // The shim attaches touch listeners to unlock the AudioContext. document exists in
+  // WKWebView at before-content-loaded time, so stubbing it here is right; leaving it
+  // out made this fail where the real thing would not.
+  document: {
+    addEventListener: (type, fn) => { (listeners[type] ||= []).push(fn); },
+    removeEventListener: () => {},
+    hidden: false,
   },
   fetch: () => Promise.reject(new Error('real fetch should not be called for core URLs')),
   atob: (b64) => Buffer.from(b64, 'base64').toString('binary'),
@@ -54,8 +63,8 @@ const win = {
 const queue = [];
 
 // Evaluate the real injected source with `window` and `this` bound to our stub.
-new Function('window', 'atob', 'Blob', `with (window) { ${SHIM_JS} }`)(
-  win, win.atob, win.Blob,
+new Function('window', 'atob', 'Blob', 'document', `with (window) { ${SHIM_JS} }`)(
+  win, win.atob, win.Blob, win.document,
 );
 
 check('shim installs itself', win.__poppysShim === true);
@@ -64,6 +73,7 @@ check('BACKEND is set before page scripts run', win.BACKEND === 'http://poppys.l
 check('WS_BACKEND is set too', typeof win.WS_BACKEND === 'string');
 check('fetch was replaced', typeof win.fetch === 'function');
 check('WebSocket was replaced', typeof win.WebSocket === 'function');
+check('audio unlock is armed on touch', Array.isArray(listeners.touchend) && listeners.touchend.length > 0);
 
 /** Pump one queued message through the router and answer the page, like host.ts. */
 async function pump() {

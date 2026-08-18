@@ -113,6 +113,49 @@ export const SHIM_JS = String.raw`
   ShimSocket.CLOSED = 3;
   window.WebSocket = ShimSocket;
 
+  // ── unlocking audio ───────────────────────────────────────────────────────
+  // iOS starts a WKWebView's AudioContext *suspended* and refuses to resume it
+  // outside a user gesture, and the refusal is silent. The symptom is precise: the
+  // reply arrives as text, the status goes to "speaking" (so the WAV decoded and was
+  // scheduled), nothing is audible, and the turn never finishes because playback
+  // never ran.
+  //
+  // audio_player.js does call resume() when it sees a suspended context, but without
+  // a gesture behind it that call is rejected. So it is resumed from a real touch
+  // instead. This lives in the shim rather than in an overlaid index.html, because
+  // copying that file to add one script tag would leave two copies of every screen to
+  // keep in step.
+  var audioUnlocked = false;
+
+  function audioCtx() {
+    // chat.js sets window._player; the player keeps one context for the session.
+    return window._player && window._player._ctx ? window._player._ctx : null;
+  }
+
+  function unlockAudio() {
+    if (audioUnlocked) return;
+    var c = audioCtx();
+    if (!c) return; // player not built yet; a later tap will find it
+    if (c.state === 'running') { audioUnlocked = true; return; }
+    c.resume().then(function () {
+      if (c.state === 'running') {
+        audioUnlocked = true;
+        console.log('[audio] context unlocked');
+      }
+    }).catch(function (e) {
+      console.log('[audio] resume refused, retrying on the next tap: ' + e);
+    });
+  }
+
+  // Capture phase, so it still runs when a handler stops propagation.
+  document.addEventListener('touchend', unlockAudio, true);
+  document.addEventListener('click', unlockAudio, true);
+  // A context can be suspended again on backgrounding, and returning is not a
+  // gesture; often it resumes anyway because the session is still active.
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) { audioUnlocked = false; unlockAudio(); }
+  });
+
   // ── inbound, called by the native side ─────────────────────────────────────
   window.__poppysBridge = function (msg) {
     if (msg.t === 'fetch:res') {

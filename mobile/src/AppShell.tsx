@@ -25,6 +25,8 @@ const WebView = WebViewComponent as unknown as React.ComponentType<
   WebViewProps & { ref?: React.Ref<WebViewComponent> }
 >;
 
+import { AudioManager } from 'react-native-audio-api';
+
 import { SHIM_JS } from './bridge/shim';
 import { createHost, dispatchMic } from './bridge/host';
 import { createMic } from './bridge/mic';
@@ -95,6 +97,26 @@ export default function AppShell() {
     } catch (err) {
       setEngineStatus(`Could not load the models: ${err instanceof Error ? err.message : err}`);
     }
+  }, []);
+
+  // The audio session, set once at startup rather than only when recording begins.
+  //
+  // Two reasons. An ambient category is muted by the ringer switch, so her voice would
+  // be silent for anyone with silent mode on and there would be nothing in any log to
+  // explain it. And playAndRecord with defaultToSpeaker routes to the loud speaker
+  // rather than the earpiece, which is what playAndRecord does by default.
+  useEffect(() => {
+    (async () => {
+      try {
+        AudioManager.setAudioSessionOptions({
+          iosCategory: 'playAndRecord',
+          iosOptions: ['defaultToSpeaker', 'allowBluetoothHFP'],
+        });
+        await AudioManager.setAudioSessionActivity(true);
+      } catch (err) {
+        console.log(`[audio] could not set the audio session: ${err}`);
+      }
+    })();
   }, []);
 
   useEffect(() => {
