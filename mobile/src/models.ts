@@ -10,6 +10,9 @@ import { DocumentDirectoryPath, exists } from '@dr.pogodin/react-native-fs';
  * Where the spike looks for model files. Nothing is bundled in the app — you
  * push these onto the device once (see README "Get the models onto the device").
  *
+ * These paths are the contract between the downloader (core/model_tier.ts) and
+ * the engines. Both sides must agree, so they are declared once, here.
+ *
  * Layout under the app's Documents directory:
  *   models/llm/model.gguf                 <- any small instruct GGUF (1B/3B Q4)
  *   models/whisper/ggml-base.en.bin       <- whisper.cpp ggml model

@@ -8,7 +8,7 @@
  * or care that there is no server.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import WebViewComponent from 'react-native-webview';
 import type {
@@ -31,7 +31,8 @@ import { createMic } from './bridge/mic';
 import { registerHandlers } from './core/handlers';
 import { createSocketHandler } from './core/socket';
 import { loadNativeEngines } from './core/native_engines';
-import { allModelsPresent } from './models';
+import { modelsPresent } from './core/downloader';
+import ModelSetup from './ModelSetup';
 import { configureStore } from './core/store';
 import {
   DocumentDirectoryPath,
@@ -77,6 +78,9 @@ export default function AppShell() {
   const [failed, setFailed] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [engineStatus, setEngineStatus] = useState('');
+  // null while we are still finding out, so the WebView is not flashed up before we
+  // know whether this is a first run.
+  const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
 
   setupCore();
 
@@ -84,20 +88,22 @@ export default function AppShell() {
   // rendering. Onboarding takes a while to read, and this way the first turn does
   // not pay the cold load. A failure is surfaced rather than swallowed: without
   // the models the app can render but cannot talk.
+  const loadEngines = useCallback(async () => {
+    try {
+      await loadNativeEngines(setEngineStatus);
+      setEngineStatus('');
+    } catch (err) {
+      setEngineStatus(`Could not load the models: ${err instanceof Error ? err.message : err}`);
+    }
+  }, []);
+
   useEffect(() => {
     (async () => {
-      try {
-        if (!(await allModelsPresent())) {
-          setEngineStatus('Models not downloaded yet');
-          return;
-        }
-        await loadNativeEngines(setEngineStatus);
-        setEngineStatus('');
-      } catch (err) {
-        setEngineStatus(`Could not load the models: ${err instanceof Error ? err.message : err}`);
-      }
+      const have = await modelsPresent();
+      setNeedsSetup(!have);
+      if (have) void loadEngines();
     })();
-  }, []);
+  }, [loadEngines]);
 
   const onMessage = useMemo(() => {
     const send = (js: string) => webRef.current?.injectJavaScript(js);
@@ -107,6 +113,27 @@ export default function AppShell() {
       void host(e.nativeEvent.data);
     };
   }, []);
+
+  // First run: download before anything else. The web UI cannot help here, because
+  // she has no voice and no mind until this finishes.
+  if (needsSetup === true) {
+    return (
+      <ModelSetup
+        onReady={() => {
+          setNeedsSetup(false);
+          void loadEngines();
+        }}
+      />
+    );
+  }
+
+  if (needsSetup === null) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
 
   if (failed) {
     return (
