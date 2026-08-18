@@ -23,11 +23,17 @@ import * as author from './loop_author';
 import * as personas from './personas';
 import * as opening from './opening';
 import * as nudges from './nudges';
+import * as billing from './billing';
+import * as tone from './tone';
 import { CAST } from './characters';
 import { ok, route, type Res } from './router';
 
-/** Matches backend/config.py: detection off by default, local avatar. */
-export const SETTINGS = { detection: false, avatar: '3d' };
+/**
+ * detection is false because voice-based emotion and accent classifiers are not
+ * shipped on iOS: they are ~1.1GB for a feature that is off by default on desktop.
+ * Reported honestly rather than offering a toggle that would do nothing.
+ */
+export const SETTINGS = { detection: false, detection_available: tone.DETECTION_AVAILABLE, avatar: '3d' };
 
 export function registerHandlers(): void {
   route('GET', '/health', () => ok({ status: 'ok' }));
@@ -153,6 +159,7 @@ export function registerHandlers(): void {
   route('POST', '/call/open', async (req): Promise<Res> => {
     const b = (req.body ?? {}) as { seed?: string; mode?: string; source?: string };
     const profile = await companion.profile();
+    await billing.recordCall();
     memory.setCharacter(profile.character);
 
     const loop = await loops.top();
@@ -195,6 +202,7 @@ export function registerHandlers(): void {
     };
     const turns = b.turns ?? [];
     const duration = Number(b.duration ?? 0);
+    const profile0 = await companion.profile();
     const spoke = turns.some((t) => t.role === 'user');
 
     // Meaningful means something real happened, not merely that time passed.
@@ -225,15 +233,42 @@ export function registerHandlers(): void {
     if (signals.ritual_time) await bloom.award('ritual_hit');
 
     const profile = await companion.profile();
-    await companion.update({ total_calls: (profile.total_calls ?? 0) + 1 });
+    await companion.update({
+      total_calls: (profile.total_calls ?? 0) + 1,
+      last_call_date: new Date().toISOString(),
+    });
 
     const ly = await streak.longYear();
     if (ly.reached) await garden.plantLongYear();
+
+    // The pact, read from the whole call rather than only the last turn: she may
+    // have asked mid-call and the answer arrived two turns later. Latest wins, so a
+    // correction beats the first guess.
+    let ritualSet: { kind: string; time: string; confirm: string } | null = null;
+    if (!profile0.ritual_kind) {
+      const pact = ritual.parseFromTurns(turns);
+      if (pact && 'declined' in pact) {
+        await ritual.decline();
+      } else if (pact) {
+        await ritual.set(pact.kind, pact.time);
+        ritualSet = {
+          kind: pact.kind,
+          time: pact.time,
+          confirm: ritual.confirmLine(pact.kind, pact.time),
+        };
+      }
+    }
 
     // Plant the hook this call ends on. Without this nothing ever creates a loop,
     // and the home strip, slot 1 of the daily three and the outro card all fall
     // back forever. author() always returns something: a call with no unresolved
     // beat is the one outcome the design does not allow.
+    // A call that landed on their own anchor also reinforces the cadence. It is the
+    // weakest loop type on purpose, so it sits underneath rather than taking the one
+    // visible slot from the conversation.
+    const cadence = await ritual.closingLoop();
+    if (cadence) await loops.add(cadence, 'ritual');
+
     const written = await author.author(turns);
     const planted = await loops.add(
       written.hook,
@@ -251,7 +286,7 @@ export function registerHandlers(): void {
       meaningful,
       open_loop: loops.surfaceText(next),
       loop_type: next?.type ?? null,
-      ritual: {
+      ritual: ritualSet ?? {
         kind: profile.ritual_kind ?? null,
         time: profile.ritual_time ?? null,
       },
@@ -329,10 +364,15 @@ export function registerHandlers(): void {
   route('GET', '/companion/personality', () => ok({ changed: false, note: null }));
   route('POST', '/companion/personality/accept', () => ok({ ok: true }));
 
-  // Everything is unlocked: there is no paywall in this build, and pretending
-  // otherwise would put a locked door in front of a feature that works.
-  route('GET', '/entitlement', () => ok({ entitled: true, plan: 'full', paywall: false }));
-  route('POST', '/entitlement', () => ok({ entitled: true, plan: 'full', paywall: false }));
+  // Real plan logic, with the paywall off by default. See core/billing.ts: there is
+  // no price and no StoreKit product yet, so a paywall would be a door with no
+  // handle. The guardrail that matters is ported regardless — money is never
+  // mentioned during a vulnerable moment.
+  route('GET', '/entitlement', async () => ok(await billing.entitlement()));
+  route('POST', '/entitlement', async (req): Promise<Res> => {
+    const b = (req.body ?? {}) as { plan?: string };
+    return ok(b.plan ? await billing.setPlan(b.plan) : await billing.entitlement());
+  });
 
   route('DELETE', '/history', () => ok({ cleared: true }));
 

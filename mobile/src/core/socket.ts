@@ -23,6 +23,8 @@ import * as companion from './companion';
 import * as safety from './safety';
 import * as personas from './personas';
 import * as disclosure from './disclosure';
+import * as ritual from './ritual';
+import * as tone from './tone';
 import * as suggest from './persona_suggest';
 import * as memory from './memory_store';
 import * as boundaries from './boundaries';
@@ -37,6 +39,8 @@ type Session = {
   reply: SocketReply;
   abort: AbortController;
   history: Array<{ role: 'user' | 'assistant'; content: string }>;
+  /** Turns in this call, so the pact is raised at the right moment. */
+  turns: number;
 };
 
 const sessions = new Map<number, Session>();
@@ -50,7 +54,7 @@ export function createSocketHandler(): SocketHandler {
       // Only the chat socket exists so far. Anything else is refused rather than
       // silently accepted, so a typo in a URL fails visibly.
       if (!url.includes('/ws/chat')) return false;
-      sessions.set(id, { reply, abort: new AbortController(), history: [] });
+      sessions.set(id, { reply, abort: new AbortController(), history: [], turns: 0 });
       return true;
     },
 
@@ -58,7 +62,7 @@ export function createSocketHandler(): SocketHandler {
       const session = sessions.get(id);
       if (!session) return;
 
-      let msg: { type?: string; text?: string; persona?: string };
+      let msg: { type?: string; text?: string; persona?: string; emotion?: string };
       try {
         msg = JSON.parse(data);
       } catch {
@@ -89,9 +93,20 @@ export function createSocketHandler(): SocketHandler {
       // reliably follows only one of those per turn: stacking a second is not
       // additive, it silently drops one. So disclosure yields whenever something
       // more urgent owns the shape of the reply, which for now is the safety tier.
+      session.turns += 1;
       const risk0 = safety.check(msg.text);
+
+      // Exactly one placement instruction per turn: the model follows one of these
+      // reliably and silently drops the rest, so they are ranked rather than stacked.
+      // Safety outranks everything; the pact is asked once and then yields to
+      // disclosure, which is the everyday behaviour.
+      const pactDue = risk0.level === null && session.turns >= ritual.ASK_FROM_TURN
+        && (await ritual.isDue());
+      const pactBlock = pactDue ? ritual.asPromptBlock() : '';
+      if (pactDue) await ritual.markAsked();
+
       const disclosureBlock =
-        risk0.level === null ? await disclosure.asPromptBlock() : '';
+        risk0.level === null && !pactBlock ? await disclosure.asPromptBlock() : '';
       // Her persona prompt carries the whole of who she is, so it replaces the
       // placeholder rather than being appended to it.
       let system =
@@ -99,7 +114,14 @@ export function createSocketHandler(): SocketHandler {
         rules +
         SAFETY_ADDENDUM +
         remembered +
+        pactBlock +
         disclosureBlock;
+
+      // Tone is momentary, so it is applied per turn and never remembered. With no
+      // emotion (the iOS default, since voice detection is not shipped) this adds
+      // nothing at all.
+      const toneLine = tone.toneFor(msg.emotion);
+      if (toneLine) system = `${system} ${toneLine}`;
 
       // Checked before a single token is generated, and the resource card is sent
       // straight away rather than after the reply: someone in the acute tier should
@@ -132,6 +154,21 @@ export function createSocketHandler(): SocketHandler {
 
         session.history.push({ role: 'user', content: msg.text });
         session.history.push({ role: 'assistant', content: said });
+
+        // Did they just agree a time out loud? Read it from what they said, not from
+        // a form. A decline is recorded separately so she stops asking.
+        const pact = ritual.parse(msg.text);
+        if (pact && 'declined' in pact) {
+          await ritual.decline();
+        } else if (pact) {
+          await ritual.set(pact.kind, pact.time);
+          reply.text(JSON.stringify({
+            type: 'ritual',
+            kind: pact.kind,
+            time: pact.time,
+            confirm: ritual.confirmLine(pact.kind, pact.time),
+          }));
+        }
 
         // A mood that fits how they are actually talking. Offered, never applied:
         // changing who she is without being asked is the drift users hate.
