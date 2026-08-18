@@ -43,12 +43,15 @@ _MAX_ASKS = 3
 # debrief, which is where the memories are richest and the retention lives.
 _DEFAULT_TIME = {"morning": "08:00", "night": "21:30"}
 
+# Plurals matter: "nights work for me" is how people actually answer, and \bnight\b
+# does not match "nights" because the s blocks the word boundary. Without the s? the
+# whole answer parsed as nothing and she asked again next call.
 _MORNING_CUES = re.compile(
-    r"\b(morning|wake up|waking up|before work|first thing|start of (?:the|my) day|"
+    r"\b(mornings?|wake up|waking up|before work|first thing|start of (?:the|my) day|"
     r"on (?:the|my) commute|breakfast)\b", re.I,
 )
 _NIGHT_CUES = re.compile(
-    r"\b(night|evening|before bed|bed ?time|before i sleep|before sleeping|"
+    r"\b(nights?|evenings?|before bed|bed ?time|before i sleep|before sleeping|"
     r"after work|end of (?:the|my) day|wind ?down|dinner|once i'?m home|"
     r"when i get (?:home|back))\b", re.I,
 )
