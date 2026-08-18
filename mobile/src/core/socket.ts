@@ -22,6 +22,8 @@ import type { SocketHandler, SocketReply } from '../bridge/host';
 import * as companion from './companion';
 import * as safety from './safety';
 import * as personas from './personas';
+import * as disclosure from './disclosure';
+import * as suggest from './persona_suggest';
 import * as memory from './memory_store';
 import * as boundaries from './boundaries';
 import { CRISIS_ADDENDUM, DISTRESS_ADDENDUM, SAFETY_ADDENDUM } from './prompts';
@@ -82,18 +84,27 @@ export function createSocketHandler(): SocketHandler {
       // time-to-first-token from drifting as the relationship gets longer.
       const rules = await boundaries.asPromptBlock();
       const remembered = await memory.asPromptBlock(msg.text);
+
+      // She goes first. This is a *placement* instruction, and the on-device model
+      // reliably follows only one of those per turn: stacking a second is not
+      // additive, it silently drops one. So disclosure yields whenever something
+      // more urgent owns the shape of the reply, which for now is the safety tier.
+      const risk0 = safety.check(msg.text);
+      const disclosureBlock =
+        risk0.level === null ? await disclosure.asPromptBlock() : '';
       // Her persona prompt carries the whole of who she is, so it replaces the
       // placeholder rather than being appended to it.
       let system =
         persona.system_prompt.replace(/\bPoppy\b/g, profile.companion_name) +
         rules +
         SAFETY_ADDENDUM +
-        remembered;
+        remembered +
+        disclosureBlock;
 
       // Checked before a single token is generated, and the resource card is sent
       // straight away rather than after the reply: someone in the acute tier should
       // not have to wait through a spoken answer to see a helpline.
-      const risk = safety.check(msg.text);
+      const risk = risk0;
       if (risk.level === 'crisis') {
         system += CRISIS_ADDENDUM;
         reply.text(JSON.stringify({ type: 'safety', resources: risk.resources }));
@@ -121,6 +132,12 @@ export function createSocketHandler(): SocketHandler {
 
         session.history.push({ role: 'user', content: msg.text });
         session.history.push({ role: 'assistant', content: said });
+
+        // A mood that fits how they are actually talking. Offered, never applied:
+        // changing who she is without being asked is the drift users hate.
+        const tip = suggest.observe(msg.text, persona.key);
+        if (tip) reply.text(JSON.stringify({ type: 'suggestion', ...tip }));
+
         reply.text(JSON.stringify({ type: 'done' }));
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

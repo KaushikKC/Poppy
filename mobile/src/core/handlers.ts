@@ -21,6 +21,8 @@ import * as ritual from './ritual';
 import * as extract from './memory_extract';
 import * as author from './loop_author';
 import * as personas from './personas';
+import * as opening from './opening';
+import * as nudges from './nudges';
 import { CAST } from './characters';
 import { ok, route, type Res } from './router';
 
@@ -148,23 +150,33 @@ export function registerHandlers(): void {
   });
 
   // ── the call ──────────────────────────────────────────────────────────────
-  route('POST', '/call/open', async () => {
+  route('POST', '/call/open', async (req): Promise<Res> => {
+    const b = (req.body ?? {}) as { seed?: string; mode?: string; source?: string };
     const profile = await companion.profile();
     memory.setCharacter(profile.character);
 
     const loop = await loops.top();
     if (loop) await loops.markSurfaced(loop.id);
 
-    // Her opening line is the open loop when there is one, so the call starts
-    // mid-conversation rather than from nothing.
-    const opening =
-      loops.surfaceText(loop) ??
-      `Hey. It's good to hear you. How are you doing?`;
+    // A streak worth remarking on gets a genuine beat rather than a badge. Only on
+    // round numbers, so it stays a moment instead of a running commentary.
+    const current = profile.current_streak ?? 0;
+    const milestone =
+      current >= 365 || current === 7 || current === 30 || current === 100 ? current : null;
+
+    // Composed rather than canned: time of day, their name, the mood they picked,
+    // and the hook she left last time.
+    const line = await opening.compose({
+      seed: b.seed ?? null,
+      mode: b.mode ?? null,
+      milestone,
+      loop,
+    });
 
     return ok({
-      opening,
+      opening: line,
       profile,
-      milestone: null,
+      milestone,
       callback_offered: false,
       surfaced_loop_id: loop?.id ?? null,
       level_up: await bloom.takeLevelUp(),
@@ -290,18 +302,25 @@ export function registerHandlers(): void {
     return ok(await ritual.set(b.kind ?? null, b.time));
   });
 
-  route('GET', '/ritual/due', async () => ok(await ritual.due()));
+  route('GET', '/ritual/due', async () => {
+    const d = await ritual.due();
+    if (!d.due) return ok({ due: false });
+    // Everything that pulls the user back passes the guilt guard, including this.
+    const text = await nudges.composeNudge(d.kind);
+    if (!text) return ok({ due: false }); // silence is a valid answer
+    return ok({ due: true, kind: d.kind, text });
+  });
 
   route('POST', '/ritual/dismiss', async () => {
     await ritual.dismiss();
     return ok({ ok: true });
   });
 
-  // The nudge surface. Silence is a valid answer here: past the ladder, saying
-  // nothing is the message.
+  // The nudge surface. Empty means say nothing: past the ladder, silence is the
+  // message, and the UI has to treat it as silence rather than as copy.
   route('GET', '/nudge', async () => {
-    const d = await ritual.due();
-    return ok(d.due ? { text: d.text } : { text: null });
+    const text = await nudges.composeNudge();
+    return ok({ text: text || null });
   });
 
   // ── personality, entitlement, history ─────────────────────────────────────
