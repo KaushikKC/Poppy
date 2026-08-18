@@ -56,8 +56,13 @@ export type Profile = {
   ritual_kind?: string | null;
   ritual_time?: string | null;
   ritual_dismissed_day?: string | null;
+  ritual_pact_asked_on?: string | null;
+  ritual_pact_asks?: number;
+  ritual_pact_declined?: boolean;
   pact?: Record<string, unknown> | null;
   closeness?: number;
+  plan?: string;
+  calls_day?: Record<string, unknown> | null;
 };
 
 export const DEFAULTS: Profile = {
@@ -95,8 +100,13 @@ export const DEFAULTS: Profile = {
   ritual_kind: null,
   ritual_time: null,
   ritual_dismissed_day: null,
+  ritual_pact_asked_on: null,
+  ritual_pact_asks: 0,
+  ritual_pact_declined: false,
   pact: null,
   closeness: 0,
+  plan: 'plus',
+  calls_day: null,
 };
 
 export async function profile(): Promise<Profile> {
