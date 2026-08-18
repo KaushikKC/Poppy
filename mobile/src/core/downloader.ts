@@ -8,10 +8,12 @@
  *
  * Deliberate choices, each with a reason:
  *
- *  - **Resumable.** A gigabyte over a phone connection will be interrupted. The
- *    background downloader keeps partial files and reconnects to tasks that survived
- *    the app being backgrounded, so a lost connection costs seconds rather than the
- *    whole download.
+ *  - **Continues in the background**, so locking the phone mid-download does not
+ *    cancel it.
+ *  - **Retryable per file, not per byte.** A failure keeps every file that already
+ *    finished and restarts only the one that broke. Byte-level resume would need HTTP
+ *    Range plus append, which this filesystem API cannot express, so the setup screen
+ *    promises what is actually true rather than the stronger thing.
  *  - **Wi-Fi only by default.** Someone on a metered plan should not discover this app
  *    cost them a gigabyte of data. It is a switch, not a rule, and the setup screen
  *    says which way it is set.
@@ -22,15 +24,11 @@
  *    reopening the screen after a partial run continues rather than restarting.
  */
 
-import {
-  createDownloadTask,
-  getExistingDownloadTasks,
-  setConfig,
-  completeHandler,
-} from '@kesha-antonov/react-native-background-downloader';
+import NetInfo from '@react-native-community/netinfo';
 import { extractTarBz2 } from 'react-native-sherpa-onnx/download';
 import {
   DocumentDirectoryPath,
+  downloadFile,
   exists,
   mkdir,
   stat,
@@ -58,6 +56,29 @@ export type ProgressFn = (p: Progress) => void;
 
 /** Anything under this fraction of the expected size is treated as truncated. */
 const MIN_SIZE_RATIO = 0.98;
+
+/**
+ * Is this connection one we are allowed to spend?
+ *
+ * downloadFile has no cellular switch of its own, so the promise is kept here: the
+ * connection type is checked before a byte moves. Refusing loudly is the point —
+ * silently spending 1.4 GB of someone's data plan is the failure this prevents, and an
+ * unexplained refusal is nearly as bad.
+ */
+async function connectionAllowed(allowCellular: boolean): Promise<string | null> {
+  try {
+    const state = await NetInfo.fetch();
+    if (!state.isConnected) return 'No connection. Join a network and try again.';
+    if (!allowCellular && state.type === 'cellular') {
+      return 'Waiting for Wi-Fi. Turn on "Download over mobile data" to use your data plan instead.';
+    }
+    return null;
+  } catch {
+    // If the connection cannot be read, let the download decide rather than blocking
+    // on a check that itself failed.
+    return null;
+  }
+}
 
 function abs(rel: string): string {
   return `${DocumentDirectoryPath}/${rel}`;
@@ -104,47 +125,48 @@ export async function missingModels(saved?: Tier | null): Promise<ModelSpec[]> {
   return out;
 }
 
-/** One file, resumable, resolving when it is on disk. */
+/**
+ * One file, resolving when it is on disk.
+ *
+ * Uses the filesystem module's own downloader rather than a dedicated background
+ * download package. The package that would have given byte-level resume pulls in MMKV,
+ * which does not compile against the iOS 26 SDK (`memset_s` undeclared in
+ * AESCrypt.cpp), and patching someone else's C++ to gain resume on a one-time download
+ * is the wrong trade. This is already linked and working.
+ */
 function fetchOne(
   spec: ModelSpec,
   destination: string,
+  allowCellular: boolean,
   onProgress: (fraction: number, bytesDone: number, bytesTotal: number) => void,
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const task = createDownloadTask({
-      // Stable per-file id: this is what lets a task started before the app was
-      // backgrounded be reattached instead of started again.
-      id: spec.path.replace(/[^a-zA-Z0-9]/g, '_'),
-      url: spec.url,
-      destination,
-      metadata: {},
-    });
+  const { promise } = downloadFile({
+    fromUrl: spec.url,
+    toFile: destination,
+    // Keeps going when the phone is locked or the app is backgrounded.
+    background: true,
+    // false asks iOS to treat it as user-initiated, so it is not deferred to a
+    // "convenient" time the user never sees.
+    discretionary: false,
+    cacheable: false,
+    progressInterval: 250,
+    begin: () => {},
+    progress: ({ bytesWritten, contentLength }) => {
+      const total = contentLength > 0 ? contentLength : spec.bytes;
+      onProgress(total > 0 ? bytesWritten / total : 0, bytesWritten, total);
+    },
+  });
 
-    task
-      .progress(({ bytesDownloaded, bytesTotal }) => {
-        const total = bytesTotal > 0 ? bytesTotal : spec.bytes;
-        onProgress(total > 0 ? bytesDownloaded / total : 0, bytesDownloaded, total);
-      })
-      .done(() => {
-        // iOS requires this or the OS keeps the background session open.
-        completeHandler(task.id);
-        resolve();
-      })
-      .error(({ error }) => {
-        completeHandler(task.id);
-        reject(new Error(String(error)));
-      });
+  return promise.then((res) => {
+    if (res.statusCode && (res.statusCode < 200 || res.statusCode >= 300)) {
+      throw new Error(`HTTP ${res.statusCode}`);
+    }
   });
 }
 
-/** Reattach to anything still running from a previous foreground session. */
+/** Nothing to reattach to with this downloader; kept so callers do not change. */
 export async function reattach(): Promise<number> {
-  try {
-    const tasks = await getExistingDownloadTasks();
-    return tasks.length;
-  } catch {
-    return 0;
-  }
+  return 0;
 }
 
 export type Options = {
@@ -160,13 +182,6 @@ export type Options = {
 export async function ensureModels(onProgress: ProgressFn, opts: Options = {}): Promise<void> {
   const allowCellular = opts.allowCellular === true;
 
-  setConfig({
-    // The switch that keeps this from quietly spending someone's data plan.
-    allowsCellularAccess: allowCellular,
-    progressInterval: 250,
-    isLogsEnabled: false,
-  });
-
   onProgress({
     phase: 'checking',
     index: 0,
@@ -176,6 +191,15 @@ export async function ensureModels(onProgress: ProgressFn, opts: Options = {}): 
     bytesDone: 0,
     bytesTotal: 0,
   });
+
+  const refusal = await connectionAllowed(allowCellular);
+  if (refusal) {
+    onProgress({
+      phase: 'error', index: 0, total: 0, label: 'Waiting',
+      fraction: 0, bytesDone: 0, bytesTotal: 0, message: refusal,
+    });
+    throw new Error(refusal);
+  }
 
   const missing = await missingModels(opts.savedTier);
   if (!missing.length) {
@@ -210,7 +234,7 @@ export async function ensureModels(onProgress: ProgressFn, opts: Options = {}): 
     });
 
     try {
-      await fetchOne(spec, dest, (fraction, bytesDone, bytesTotal) =>
+      await fetchOne(spec, dest, allowCellular, (fraction, bytesDone, bytesTotal) =>
         onProgress({
           phase: 'downloading', index, total, label: spec.label,
           fraction, bytesDone, bytesTotal,
@@ -224,9 +248,7 @@ export async function ensureModels(onProgress: ProgressFn, opts: Options = {}): 
       onProgress({
         phase: 'error', index, total, label: spec.label,
         fraction: 0, bytesDone: 0, bytesTotal: spec.bytes,
-        message: allowCellular
-          ? message
-          : `${message} (downloads are set to Wi-Fi only)`,
+        message,
       });
       throw err;
     }

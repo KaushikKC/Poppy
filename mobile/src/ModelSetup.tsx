@@ -45,8 +45,6 @@ export default function ModelSetup({ onReady }: { onReady: () => void }) {
       setPick(await describe());
       const missing = await missingModels();
       setNeedBytes(missing.reduce((n, m) => n + m.bytes, 0));
-      // A download that survived the app being backgrounded is picked up rather than
-      // started again.
       await reattach();
     })();
   }, []);
@@ -61,7 +59,7 @@ export default function ModelSetup({ onReady }: { onReady: () => void }) {
       onReady();
     } catch (err) {
       setFailed(err instanceof Error ? err.message : String(err));
-      started.current = false; // retry is allowed, and continues where it stopped
+      started.current = false; // retry is allowed; finished files are skipped
     } finally {
       setRunning(false);
     }
@@ -136,8 +134,8 @@ export default function ModelSetup({ onReady }: { onReady: () => void }) {
                 : `${pct}%`}
             </Text>
             <Text style={styles.reassure}>
-              You can leave this screen open. If the connection drops it picks up where
-              it stopped.
+              You can lock your phone, this keeps going. If something fails, anything
+              already finished is kept.
             </Text>
           </View>
         )}
