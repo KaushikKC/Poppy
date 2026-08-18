@@ -195,6 +195,15 @@ export async function ensureModels(onProgress: ProgressFn, opts: Options = {}): 
     const dest = spec.archive ? abs(`${spec.path}.tar.bz2`) : abs(spec.path);
     await mkdir(parentOf(dest)).catch(() => {});
 
+    // Anything already at the destination that failed the presence check has to go
+    // before the download starts. The downloader resumes by appending, so a file of
+    // the wrong size — a truncated attempt, or a different model left by a previous
+    // tier — would be treated as a partial download and resumed from its end,
+    // producing a corrupt GGUF that only fails later, at load, confusingly.
+    if (await exists(dest)) {
+      await unlink(dest).catch(() => {});
+    }
+
     onProgress({
       phase: 'downloading', index, total, label: spec.label,
       fraction: 0, bytesDone: 0, bytesTotal: spec.bytes,
