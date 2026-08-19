@@ -290,7 +290,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = social.poppys.spike;
+				PRODUCT_BUNDLE_IDENTIFIER = social.poppys.app;
 				PRODUCT_NAME = PoppysSpike;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -321,7 +321,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = social.poppys.spike;
+				PRODUCT_BUNDLE_IDENTIFIER = social.poppys.app;
 				PRODUCT_NAME = PoppysSpike;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;

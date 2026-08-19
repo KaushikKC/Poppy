@@ -122,10 +122,16 @@ adb shell run-as com.poppysspike cp /data/local/tmp/model.gguf files/models/llm/
 # repeat for the whisper bin and every file inside the kokoro dir
 ```
 
-**iOS** — file sharing is already enabled (`UIFileSharingEnabled` +
-`LSSupportsOpeningDocumentsInPlace` are in Info.plist), so with the device connected,
-open Finder → the device → Files → **PoppysSpike**, and drag the `models/` folder in.
-(Or Xcode → Devices & Simulators → the app container → replace files.)
+**iOS** — the app downloads its own models on first run, so this is only for putting
+a file there by hand. File sharing is **off** (`UIFileSharingEnabled` and
+`LSSupportsOpeningDocumentsInPlace` are both false in Info.plist): with it on, the
+Files app exposes the whole Documents folder, and what lives there now is every
+memory she has, readable by anyone who can unlock the phone.
+
+Use Xcode → Window → Devices & Simulators → the app → **Download Container** to
+inspect it, or replace files and put it back. Turn the two plist keys on temporarily
+if you really need the Finder drag, and turn them off again before any build that
+leaves your own device.
 
 The app's first screen tells you which of the three it can and can't find.
 
