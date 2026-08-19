@@ -103,6 +103,12 @@
         <strong id="home-name">Poppy</strong>
       </button>
       <div class="home-modes" id="home-modes"></div>
+      <!-- How she answers. Exclusive on purpose: a reply you can read while it is
+           being spoken gets read, and then the voice is only a wait. -->
+      <div class="reply-mode" id="reply-mode" role="group" aria-label="How she replies">
+        <button type="button" class="reply-mode-btn" data-mode="voice">Voice notes</button>
+        <button type="button" class="reply-mode-btn" data-mode="text">Text</button>
+      </div>
       <!-- §4.7: today's quests live behind a tap, not on the home surface, so the
            screen never carries more than two progress indicators at once -->
       <div class="home-nav">

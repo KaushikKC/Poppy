@@ -292,6 +292,7 @@
     try { _longYear = await (await fetch(`${BACKEND}/long-year`)).json(); } catch {}
     renderUpdateNotice();
     renderVersion();
+    loadReplyMode();
     renderFreezeNotice(h.freeze_notice);
     renderRepair(h.streak);
     loadToday();
@@ -512,6 +513,35 @@
     document.getElementById("today")?.classList.add("hidden");
     document.getElementById("home-today")?.classList.add("hidden");
     await loadHome();
+  });
+
+  // ── Voice notes or text ─────────────────────────────────────────────────────
+  // One or the other, never both. With both, the reply is read while it is still
+  // being spoken and the voice becomes something to sit through; and text mode
+  // synthesises nothing at all, which is the fastest and coolest the app can be.
+  async function loadReplyMode() {
+    const box = document.getElementById("reply-mode");
+    if (!box) return;
+    const mode = (profile && profile.reply_mode) || "voice";
+    box.querySelectorAll(".reply-mode-btn").forEach((b) => {
+      b.classList.toggle("on", b.dataset.mode === mode);
+      b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
+    });
+  }
+
+  document.getElementById("reply-mode")?.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".reply-mode-btn");
+    if (!btn) return;
+    const mode = btn.dataset.mode;
+    try {
+      await fetch(`${BACKEND}/companion/reply-mode`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
+    } catch {}
+    if (profile) profile.reply_mode = mode;
+    loadReplyMode();
   });
 
   // ── The garden (§3.1) ───────────────────────────────────────────────────────

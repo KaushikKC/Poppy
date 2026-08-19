@@ -187,6 +187,49 @@ window.interruptReply = function interruptReply() {
   return true;
 };
 
+/**
+ * Turn a bubble into a voice note: a play mark, a duration, and a bar that fills as
+ * she speaks.
+ *
+ * There is no text, deliberately. The length is known before the first sound because
+ * the whole reply is already rendered, so this is a real progress bar rather than an
+ * indeterminate spinner — the difference between "this will take four seconds" and
+ * "something may be happening".
+ */
+function renderVoiceNote(bubble, durationMs) {
+  const secs = Math.max(1, Math.round(durationMs / 1000));
+  bubble.classList.remove("recording", "streaming");
+  bubble.classList.add("voice-note");
+  bubble.textContent = "";
+
+  const mark = document.createElement("span");
+  mark.className = "vn-mark";
+  mark.setAttribute("aria-hidden", "true");
+
+  const bar = document.createElement("span");
+  bar.className = "vn-bar";
+  const fill = document.createElement("i");
+  bar.appendChild(fill);
+
+  const time = document.createElement("span");
+  time.className = "vn-time";
+  time.textContent = `0:${String(secs).padStart(2, "0")}`;
+
+  bubble.append(mark, bar, time);
+  bubble.setAttribute("aria-label", `Voice message, ${secs} seconds`);
+
+  // Playback is native, so the bar is driven from the duration we were given rather
+  // than from a player the page can query.
+  const startedAt = Date.now();
+  const tick = () => {
+    const done = Math.min(1, (Date.now() - startedAt) / durationMs);
+    fill.style.width = `${(done * 100).toFixed(1)}%`;
+    if (done < 1 && bubble.isConnected) requestAnimationFrame(tick);
+    else bubble.classList.add("played");
+  };
+  requestAnimationFrame(tick);
+}
+
 function addBubble(role, text = "") {
   const div = document.createElement("div");
   div.className = `bubble ${role}`;
@@ -393,6 +436,18 @@ window.sendMessage = async function sendMessage(text) {
       notice.textContent = msg.resources;
       transcript.appendChild(notice);
       transcript.scrollTop = transcript.scrollHeight;
+
+    } else if (msg.type === "recording") {
+      // Voice mode. She is rendering the whole reply before a sound is made, which
+      // takes seconds, so the bubble says so instead of sitting blank. Nothing
+      // readable arrives in this mode at all — that is what makes it a voice note
+      // rather than a subtitle you finish before she starts.
+      replyBubble.classList.add("recording");
+      replyBubble.textContent = "";
+      setStatus("thinking");
+
+    } else if (msg.type === "voice") {
+      renderVoiceNote(replyBubble, msg.durationMs);
 
     } else if (msg.type === "token") {
       if (statusDot.title === "thinking") setStatus("thinking");

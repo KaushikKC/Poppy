@@ -1428,3 +1428,63 @@ body[data-view="call"] #memory-panel:not(.hidden) {
 .outro-ghost { padding: 0.7rem 1.4rem; border: 1.5px solid var(--line); border-radius: 10px; background: transparent; color: var(--leaf); font-family: var(--font-sans); font-weight: 700; cursor: pointer; }
 .outro-ghost:hover { border-color: var(--field-deep); }
 .outro-note { font-size: 0.75rem; color: rgba(7,18,7,0.45); }
+
+/* ── Voice notes (reply_mode = voice) ──────────────────────────────────────────
+   Her reply arrives as one recording with no text at all. The two modes are
+   exclusive on purpose: a reply that can be read while it is being spoken is read,
+   and the voice becomes something to sit through. */
+.bubble.recording {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  min-height: 2.6rem;
+}
+.bubble.recording::before {
+  content: ""; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--poppy); flex: none;
+  animation: vn-rec 1.4s ease-in-out infinite;
+}
+.bubble.recording::after {
+  content: "recording…";
+  font-family: var(--font-mono); font-size: 0.68rem; font-weight: 800;
+  letter-spacing: 0.09em; text-transform: uppercase; opacity: 0.75;
+}
+@keyframes vn-rec { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+.bubble.voice-note {
+  display: inline-flex; align-items: center; gap: 0.6rem;
+  min-width: min(15rem, 70%);
+}
+.vn-mark {
+  flex: none; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--poppy); position: relative;
+}
+/* A play triangle, drawn rather than shipped as an asset. */
+.vn-mark::after {
+  content: ""; position: absolute; top: 50%; left: 54%;
+  transform: translate(-50%, -50%);
+  border-left: 8px solid var(--cream);
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+}
+.vn-bar {
+  flex: 1; height: 4px; border-radius: 2px;
+  background: rgba(20, 60, 22, 0.18); overflow: hidden;
+}
+.vn-bar i { display: block; height: 100%; width: 0; background: var(--poppy); }
+.vn-time {
+  flex: none; font-family: var(--font-mono); font-size: 0.7rem;
+  font-variant-numeric: tabular-nums; opacity: 0.7;
+}
+.bubble.voice-note.played .vn-mark { background: var(--leaf); }
+
+/* the voice-or-text choice on home */
+.reply-mode {
+  display: inline-flex; gap: 2px; padding: 3px; border-radius: 22px;
+  background: var(--panel); border: 1px solid var(--line);
+}
+.reply-mode-btn {
+  padding: 0.42rem 0.95rem; border: none; border-radius: 20px; cursor: pointer;
+  background: none; color: rgba(7, 18, 7, 0.6);
+  font-family: var(--font-sans); font-size: 0.82rem; font-weight: 600;
+  transition: background 0.2s, color 0.2s;
+}
+.reply-mode-btn.on { background: var(--poppy); color: var(--cream); }
