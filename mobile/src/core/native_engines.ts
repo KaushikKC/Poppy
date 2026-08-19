@@ -83,12 +83,23 @@ export type Loaded = {
 };
 
 let loaded: Loaded | null = null;
+// The load in flight, if there is one. `loaded` is only set at the very end, so a
+// second caller arriving mid-load would otherwise start a whole second load — a
+// gigabyte of weights read twice, on a device that cannot spare the memory.
+let loading: Promise<void> | null = null;
 
 export async function loadNativeEngines(
   onProgress: (msg: string) => void = () => {},
 ): Promise<void> {
   if (loaded) return;
+  if (loading) return loading;
+  loading = loadOnce(onProgress).finally(() => {
+    loading = null;
+  });
+  return loading;
+}
 
+async function loadOnce(onProgress: (msg: string) => void): Promise<void> {
   onProgress('Loading speech recognition…');
   const whisper = await initWhisper({ filePath: WHISPER_PATH });
 
