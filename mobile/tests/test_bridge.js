@@ -56,6 +56,10 @@ const win = {
     removeEventListener: () => {},
     hidden: false,
   },
+  // The shim throttles animation to 30fps for battery and heat, so it needs this.
+  // WKWebView has it; the stub did not, which is a gap in the stub rather than in the
+  // shim.
+  requestAnimationFrame: (cb) => setTimeout(() => cb(Date.now()), 16),
   fetch: () => Promise.reject(new Error('real fetch should not be called for core URLs')),
   atob: (b64) => Buffer.from(b64, 'base64').toString('binary'),
   Blob: class { constructor(parts) { this.parts = parts; } },

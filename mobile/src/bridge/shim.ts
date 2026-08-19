@@ -113,6 +113,42 @@ export const SHIM_JS = String.raw`
   ShimSocket.CLOSED = 3;
   window.WebSocket = ShimSocket;
 
+  // ── animation, at a phone's budget ────────────────────────────────────────
+  // The UI runs three unconditional requestAnimationFrame loops at 60fps: the orb
+  // redraws every frame even when idle and even when it is not on screen, ui.js ticks
+  // every frame, and the garden animates whenever its canvas exists. On a desktop that
+  // is free. On a phone it is a continuous GPU and compositing load underneath the
+  // model, and it is a large part of why the device gets hot.
+  //
+  // Throttling here rather than editing three UI files: they stay identical to desktop,
+  // and anything added later is covered automatically. 30fps is indistinguishable for a
+  // breathing orb and halves the work.
+  // Guarded: this shim also carries fetch and the socket, and a missing rAF must not
+  // take those down with it.
+  var realRaf = window.requestAnimationFrame
+    ? window.requestAnimationFrame.bind(window)
+    : null;
+  var FRAME_MS = 1000 / 30;
+  var lastFrame = 0;
+
+  if (realRaf) window.requestAnimationFrame = function (cb) {
+    return realRaf(function (ts) {
+      // Nothing is visible when the app is backgrounded, so nothing should be drawn.
+      // Callbacks still reschedule themselves, so the loops resume on return.
+      if (document.hidden) {
+        window.requestAnimationFrame(cb);
+        return;
+      }
+      var now = ts || Date.now();
+      if (now - lastFrame < FRAME_MS) {
+        window.requestAnimationFrame(cb);
+        return;
+      }
+      lastFrame = now;
+      cb(now);
+    });
+  };
+
   // ── unlocking audio ───────────────────────────────────────────────────────
   // iOS starts a WKWebView's AudioContext *suspended* and refuses to resume it
   // outside a user gesture, and the refusal is silent. The symptom is precise: the
