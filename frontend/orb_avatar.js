@@ -32,6 +32,13 @@
   }
   resize();
   window.addEventListener("resize", resize);
+  // The container changes size without the window doing so: entering a call gives
+  // the transcript its own share of the screen, and the orb's area shrinks to what
+  // is left. A window resize listener never hears about that, so the canvas kept
+  // its old size and the orb stayed centred on a box that no longer existed.
+  if (typeof ResizeObserver === "function") {
+    new ResizeObserver(resize).observe(container);
+  }
 
   // Per-character palette (overridden by setColors). Sensible default = Poppy purple.
   let palette = { core: "#ffffff", inner: "#7c6ef0", outer: "#2d2248", glow: "124,110,240" };
