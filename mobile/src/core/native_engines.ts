@@ -21,6 +21,35 @@ import { floatToPcm16 } from '../audio';
 /** Kokoro's output rate. The UI is told this before a reply starts. */
 const KOKORO_SAMPLE_RATE = 24000;
 
+/**
+ * Voice name to sherpa speaker id, for kokoro-multi-lang-v1_0's 53 voices.
+ *
+ * The profile carries a Kokoro voice *name* because desktop's pipeline takes names;
+ * sherpa takes an index into voices.bin. Passing sid 0 for everyone, which is what this
+ * did first, gives af_alloy — a blend, and the flattest voice in the set. That is the
+ * "robotic" voice reported from the phone: not a synthesis problem, the wrong speaker.
+ *
+ * Only the six the characters use are listed. An unknown name falls back to af_heart
+ * rather than to 0, so a new character with an unmapped voice still sounds like someone.
+ */
+const VOICE_SID: Record<string, number> = {
+  af_heart: 3, // Poppy
+  af_bella: 2, // Zoe
+  af_nicole: 6, // Luna
+  am_adam: 11, // Leo
+  am_fenrir: 14, // Kai
+  am_michael: 16, // Ravi
+};
+
+const DEFAULT_SID = VOICE_SID.af_heart;
+
+/**
+ * Slightly under 1.0 because 1.0 was reported as too fast to listen to. Desktop's
+ * pipeline and sherpa's do not pace identically at the same nominal speed, so this is
+ * tuned by ear against the phone rather than copied from the other platform.
+ */
+const SPEECH_SPEED = 0.9;
+
 /** Small context keeps prefill, and so first-token latency, small. */
 const N_CTX = 4096;
 const MAX_TOKENS = 120;
@@ -96,10 +125,8 @@ export async function loadNativeEngines(
   const speech: Speech = {
     sampleRate: KOKORO_SAMPLE_RATE,
     async synthesize(text, voice) {
-      // sid selects the Kokoro speaker. The profile carries a voice name from
-      // desktop (e.g. "af_heart"); mapping those onto sids is P3 work, so for now
-      // the default speaker is used rather than guessing at an index.
-      const out = await tts.generateSpeech(text, { sid: 0, speed: 1.0 });
+      const sid = VOICE_SID[voice] ?? DEFAULT_SID;
+      const out = await tts.generateSpeech(text, { sid, speed: SPEECH_SPEED });
       return { samples: out.samples, sampleRate: out.sampleRate ?? KOKORO_SAMPLE_RATE };
     },
   };

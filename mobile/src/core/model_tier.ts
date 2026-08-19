@@ -78,10 +78,21 @@ const WHISPER: ModelSpec = {
   label: 'Speech recognition',
 };
 
+/**
+ * Kokoro v1.0, not v0.19.
+ *
+ * v0.19 was the first pick and it was wrong: her voice sounded robotic on device, and
+ * the reason is that the characters' voices do not exist in it. Desktop uses af_heart
+ * for Poppy and am_fenrir for Kai, both of which arrived in Kokoro v1.0, so v0.19 fell
+ * back to speaker 0 — a blend, and the flattest voice in the set.
+ *
+ * v1.0 carries all 53 voices including every one the characters use, so the phone now
+ * sounds like the desktop app rather than approximating it. It costs 30 MB more.
+ */
 const KOKORO: ModelSpec = {
   path: 'models/kokoro',
-  url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2',
-  bytes: 319_625_534,
+  url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-multi-lang-v1_0.tar.bz2',
+  bytes: 349_418_188,
   label: 'Her voice',
   archive: true,
 };
