@@ -44,6 +44,11 @@ export function dispatchMic(send: Send, msg: unknown): void {
   send(`window.__poppysMic && window.__poppysMic(${JSON.stringify(msg)}); true;`);
 }
 
+/** The audio channel the replacement audio_player.js listens on, for the orb. */
+export function dispatchAudio(send: Send, msg: unknown): void {
+  send(`window.__poppysAudio && window.__poppysAudio(${JSON.stringify(msg)}); true;`);
+}
+
 /** Anything the page sends that is not fetch or socket traffic, e.g. the mic. */
 export type ExtraHandler = (msg: { t?: string }) => Promise<boolean> | boolean;
 

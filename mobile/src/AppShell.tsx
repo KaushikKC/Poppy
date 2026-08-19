@@ -28,11 +28,13 @@ const WebView = WebViewComponent as unknown as React.ComponentType<
 import { AudioManager } from 'react-native-audio-api';
 
 import { SHIM_JS } from './bridge/shim';
-import { createHost, dispatchMic } from './bridge/host';
+import { createHost, dispatchAudio, dispatchMic } from './bridge/host';
 import { createMic } from './bridge/mic';
 import { registerHandlers } from './core/handlers';
 import { createSocketHandler } from './core/socket';
 import { loadNativeEngines } from './core/native_engines';
+import { playback, setSpeaker } from './core/playback';
+import { PcmPlayer } from './audio';
 import { modelsPresent } from './core/downloader';
 import ModelSetup from './ModelSetup';
 import { configureStore } from './core/store';
@@ -128,9 +130,26 @@ export default function AppShell() {
   }, [loadEngines]);
 
   const onMessage = useMemo(() => {
+    // The one thing that actually makes sound, handed to the core so the core itself
+    // stays free of native imports.
+    const pcm = new PcmPlayer();
+    setSpeaker({ play: (samples, rate) => pcm.play(samples, rate) });
+
     const send = (js: string) => webRef.current?.injectJavaScript(js);
     const mic = createMic((msg) => dispatchMic(send, msg));
-    const host = createHost(send, createSocketHandler(), (msg) => mic.handle(msg));
+
+    // The orb animates from these rather than from the page's own analyser, because
+    // playback is native now. See core/playback.ts.
+    playback.setSink((msg) => dispatchAudio(send, msg));
+
+    const host = createHost(send, createSocketHandler(), async (msg) => {
+      // Barge-in from the page: it owns the button, the native side owns the sound.
+      if (msg.t === 'audio:stop') {
+        playback.stop();
+        return true;
+      }
+      return mic.handle(msg);
+    });
     return (e: WebViewMessageEvent) => {
       void host(e.nativeEvent.data);
     };

@@ -27,7 +27,8 @@ execFileSync(
    '--esModuleInterop', '--skipLibCheck', '--moduleResolution', 'node',
    'src/core/turn.ts', 'src/core/socket.ts', 'src/core/engines.ts',
    'src/core/handlers.ts', 'src/bridge/host.ts', 'src/core/wav.ts',
-   'src/core/safety.ts', 'src/core/memory_store.ts', 'src/core/boundaries.ts'],
+   'src/core/safety.ts', 'src/core/memory_store.ts', 'src/core/boundaries.ts',
+   'src/core/playback.ts'],
   { cwd: ROOT, stdio: 'inherit' },
 );
 
@@ -37,6 +38,7 @@ const socket = require(path.join(OUT, 'core/socket.js'));
 const store = require(path.join(OUT, 'core/store.js'));
 const companion = require(path.join(OUT, 'core/companion.js'));
 const { createHost } = require(path.join(OUT, 'bridge/host.js'));
+const playbackMod = require(path.join(OUT, 'core/playback.js'));
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -45,8 +47,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * which is the real shape on a phone and the reason the ordering bugs appeared.
  */
 function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
-  const log = { emitted: [], synthesized: [], concurrentPeak: 0 };
+  const log = { emitted: [], synthesized: [], concurrentPeak: 0, spoken: [], levels: [] };
   let inFlight = 0;
+
+  // Audio is native now, so the fake speaker is what proves a phrase was spoken and in
+  // what order. The page is sent an envelope rather than the samples.
+  playbackMod.playback.reset();
+  playbackMod.setSpeaker({
+    play: async (samples, rate) => {
+      log.spoken.push(log.synthesized[log.synthesized.length - 1]);
+      await sleep(3);
+    },
+  });
+  playbackMod.playback.setSink((msg) => log.levels.push(msg));
 
   engines.setEngines({
     stt: { transcribe: async () => 'transcribed text' },
@@ -92,7 +105,7 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
       onToken: (t) => events.tokens.push(t),
       onConfig: (r) => events.config.push(r),
       onFirstAudio: () => { events.firstAudio++; },
-      onAudio: (b64) => { events.audio.push(b64); log.emitted.push(log.synthesized[log.synthesized.length - 1]); },
+      onAudio: () => { events.audio.push(1); },
       onDone: (r) => events.done.push(r),
     });
     check('reply returned', text.startsWith('Well, that sounds hard.'), JSON.stringify(text.slice(0, 30)));
@@ -102,14 +115,20 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
     check('done carries the full reply', events.done.length === 1 && events.done[0] === text);
     check('every phrase produced audio', events.audio.length === log.synthesized.length,
       `${events.audio.length}/${log.synthesized.length}`);
-    // The page decodes these, so they must be real WAV, not just non-empty.
-    const first = Buffer.from(events.audio[0], 'base64');
-    check('frames are RIFF/WAVE', first.slice(0, 4).toString() === 'RIFF' &&
-      first.slice(8, 12).toString() === 'WAVE', first.slice(0, 12).toString('hex'));
-    check('sample rate survives the encode', first.readUInt32LE(24) === 24000,
-      String(first.readUInt32LE(24)));
-    check('16-bit mono', first.readUInt16LE(34) === 16 && first.readUInt16LE(22) === 1);
-    check('audio has content', first.length > 44 + 100, `${first.length} bytes`);
+
+    // Wait for the speaker queue to drain: playback is asynchronous now.
+    await sleep(120);
+    check('every phrase was actually spoken', log.spoken.length === log.synthesized.length,
+      `${log.spoken.length}/${log.synthesized.length}`);
+    check('spoken in the order written',
+      JSON.stringify(log.spoken) === JSON.stringify(log.synthesized));
+
+    // The orb is driven from these, so they have to arrive with a shape and a length.
+    const chunks = log.levels.filter((m) => m.t === 'audio:chunk');
+    check('the page was sent an envelope per phrase', chunks.length === log.synthesized.length,
+      `${chunks.length}`);
+    check('each envelope has values', chunks.every((c) => Array.isArray(c.envelope) && c.envelope.length > 0));
+    check('each carries a duration', chunks.every((c) => c.durationMs > 0));
   }
 
   console.log('\n== never two syntheses at once (the desktop thrash) ==');
@@ -118,7 +137,7 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
       reply: 'One. Two. Three. Four. Five. Six. Seven. Eight. Nine. Ten. Eleven. Twelve.',
       synthMs: 15,
     });
-    await runTurn('hi', { system: 's', voice: 'v' }, { onAudio: () => {} });
+    await runTurn('hi', { system: 's', voice: 'v' }, {});
     check('peak concurrent synthesis is 1', log.concurrentPeak === 1, `peak=${log.concurrentPeak}`);
     check('several phrases were produced', log.synthesized.length >= 4, `${log.synthesized.length}`);
   }
@@ -126,10 +145,9 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
   console.log('\n== phrases play in the order they were written ==');
   {
     const log = fakes({ reply: 'Alpha. Bravo. Charlie. Delta. Echo.', synthMs: 25, tokenMs: 1 });
-    const seen = [];
-    await runTurn('hi', { system: 's', voice: 'v' }, {
-      onAudio: () => seen.push(log.synthesized[log.synthesized.length - 1]),
-    });
+    await runTurn('hi', { system: 's', voice: 'v' }, {});
+    await sleep(150);
+    const seen = log.spoken;
     const order = seen.join(' ');
     check('Alpha before Echo', order.indexOf('Alpha') >= 0 &&
       order.indexOf('Echo') > order.indexOf('Alpha'), order.slice(0, 60));
@@ -140,10 +158,10 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
   console.log('\n== one failed phrase does not silence the rest ==');
   {
     const log = fakes({ reply: 'First one. Second BADPHRASE here. Third one is fine.', failOn: 'BADPHRASE' });
-    let emitted = 0;
-    const text = await runTurn('hi', { system: 's', voice: 'v' }, { onAudio: () => emitted++ });
+    const text = await runTurn('hi', { system: 's', voice: 'v' }, {});
+    await sleep(120);
     check('the turn still completed', text.length > 0);
-    check('phrases after the failure still spoke', emitted >= 2, `${emitted}`);
+    check('phrases after the failure still spoke', log.spoken.length >= 2, `${log.spoken.length}`);
     check('the bad phrase is absent', !log.synthesized.some((p) => p.includes('BADPHRASE')));
   }
 
@@ -151,15 +169,13 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
   {
     const log = fakes({ reply: 'This is a long reply. It keeps going. And going. And going still.', synthMs: 30 });
     const abort = new AbortController();
-    let emitted = 0;
-    const p = runTurn('hi', { system: 's', voice: 'v', signal: abort.signal },
-      { onAudio: () => emitted++ });
+    const p = runTurn('hi', { system: 's', voice: 'v', signal: abort.signal }, {});
     await sleep(45);
     abort.abort();
     const text = await p;
     check('resolved rather than rejected', typeof text === 'string');
-    check('it stopped early', emitted < 4, `${emitted} phrases`);
-    check('no done for a cut-off reply', true);
+    check('it stopped early', log.spoken.length < 4, `${log.spoken.length} phrases`);
+    check('the page was told playback ended', log.levels.some((m) => m.t === 'audio:end'));
   }
 
   console.log('\n== the socket speaks what chat.js expects ==');
@@ -188,11 +204,9 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
       types[0] === 'config', types.slice(0, 4).join(','));
     check('tokens were sent', types.filter((t) => t === 'token').length > 3);
     check('done is last', types[types.length - 1] === 'done', types.slice(-3).join(','));
-    const binary = frames.filter((f) => f.b64);
-    check('audio arrived as binary frames', binary.length >= 1, `${binary.length}`);
-    const wav = Buffer.from(binary[0].data, 'base64');
-    check('and they are real WAV the page can decode',
-      wav.slice(0, 4).toString() === 'RIFF', wav.slice(0, 4).toString());
+    // Audio is spoken natively now, so no binary frame should reach the page at all;
+    // the orb is driven by an envelope on its own channel instead.
+    check('no binary frames (playback is native)', !frames.some((f) => f.b64));
 
     console.log('\n== a malformed frame answers with error, not silence ==');
     frames.length = 0;
