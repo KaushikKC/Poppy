@@ -62,8 +62,32 @@
   }
 
   let t = 0;
-  function frame() {
-    t += 0.016;
+
+  // Redrawing her costs real work: a full-screen canvas, a radial gradient and a
+  // 36-116px shadow blur, every frame. That is worth paying while she is speaking,
+  // because the shape is following her voice and every frame is different. It is not
+  // worth paying while she is idle, listening or being transcribed to, where the only
+  // motion is a 1.4rad/s breath that nobody can tell apart at a third of the rate —
+  // and where the phone needs its cycles for the thing actually happening, which is
+  // Whisper or the model.
+  //
+  // `t` advances by real elapsed time rather than a fixed step, so drawing fewer
+  // frames slows the work, never the animation.
+  const SPEAKING_MS = 0;      // every frame the browser offers
+  const RESTING_MS = 1000 / 12;
+  let lastDraw = 0;
+
+  function frame(now) {
+    const ms = typeof now === 'number' ? now : Date.now();
+    const budget = state === "speaking" ? SPEAKING_MS : RESTING_MS;
+    if (lastDraw && ms - lastDraw < budget) {
+      requestAnimationFrame(frame);
+      return;
+    }
+    // First frame has no previous timestamp; a sixtieth is the right guess for it.
+    t += lastDraw ? Math.min((ms - lastDraw) / 1000, 0.1) : 0.016;
+    lastDraw = ms;
+
     ctx.clearRect(0, 0, W, H);
     const cx = W / 2, cy = H / 2;
     const base = Math.min(W, H) * 0.22;

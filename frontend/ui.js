@@ -65,10 +65,12 @@
   // ── Equalizer driven by the actual voice ─────────────────────────────────
   const bars = eq ? Array.from(eq.querySelectorAll("i")) : [];
   let freq = null;
+  let cleared = false;   // the bars are already at rest; nothing to write
 
   function tick() {
     const analyser = window._player?.getAnalyser?.();
     if (analyser && bars.length && pill.classList.contains("speaking")) {
+      cleared = false;
       if (!freq || freq.length !== analyser.frequencyBinCount) {
         freq = new Uint8Array(analyser.frequencyBinCount);
       }
@@ -88,7 +90,12 @@
       // overall amplitude → the avatar's voice-reactive aura
       const amp = Math.min(1, (total / bars.length) * 2.4);
       app.style.setProperty("--amp", amp.toFixed(3));
-    } else {
+    } else if (!cleared) {
+      // Clear once, not on every frame for as long as she is not speaking. Writing a
+      // custom property on #app invalidates style for everything under it, and doing
+      // that thirty times a second while nothing is happening is pure cost — paid, on
+      // a phone, exactly while it is transcribing or thinking.
+      cleared = true;
       if (eq?.classList.contains("live")) {
         eq.classList.remove("live");
         bars.forEach((bar) => (bar.style.transform = ""));
