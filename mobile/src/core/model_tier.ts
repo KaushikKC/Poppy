@@ -1,7 +1,11 @@
 /**
- * Which models this phone gets — the mobile counterpart of backend/model_tier.py.
+ * Which model this app runs — the mobile counterpart of backend/model_tier.py.
  *
- * ## Why Qwen2.5 1.5B is the default
+ * v1 ships exactly one, Llama 3.2 1B, on every phone. See SHIPPED below for why the
+ * tiering and the picker went away. The research that produced these four candidates
+ * is kept because it is what any future change to that decision has to argue with.
+ *
+ * ## Why Qwen2.5 1.5B was the default
  *
  * Researched August 2026. The 2026 write-ups favour Qwen3 1.7B on quality, and it is
  * genuinely better at structured output, which this app needs twice (memory
@@ -124,20 +128,43 @@ export async function totalRamGb(): Promise<number> {
   }
 }
 
+/**
+ * What each phone would get if the model were chosen by its memory. Kept, because it
+ * is the right answer and the reasoning above it is still true — it is simply not what
+ * v1 ships. See SHIPPED below.
+ */
 export function tierForRam(gb: number): Tier {
   if (gb < 5) return '1b'; // 4 GB: iPhone 12, 13
   if (gb < 7) return '1_5b'; // 6 GB: iPhone 14, 15, 16
   return '3b'; // 8 GB: 15 Pro, 16/17 Pro
 }
 
-let cached: Tier | null = null;
+/**
+ * v1 ships one model, on every phone.
+ *
+ * The tiering and the picker existed to answer a question — which of these actually
+ * runs, and how hot does it get — and that question has been answered. Shipping the
+ * choice as a product surface costs a decision on the first screen, a second download
+ * for anyone who changes their mind, and three more configurations to support for
+ * every bug report that arrives.
+ *
+ * Llama 3.2 1B is 808 MB and the coolest-running of the credible options, which on a
+ * phone that is also holding Whisper, Kokoro, a WebView and React Native is what
+ * matters most.
+ *
+ * Everything else here stays: the specs, ALL_TIERS and specsForTier are what let the
+ * app find and delete a model it no longer wants, which anyone who already downloaded
+ * a different one needs. Changing which model ships is this one constant.
+ */
+const SHIPPED: Tier = '1b';
 
-/** A saved choice wins, so a future setting survives restarts. */
-export async function chosenTier(saved?: Tier | null): Promise<Tier> {
-  if (saved && LLM[saved]) return saved;
-  if (cached) return cached;
-  cached = tierForRam(await totalRamGb());
-  return cached;
+/**
+ * The model this build uses. The argument is accepted and ignored: a tier saved by an
+ * older build must not resurrect a model this one no longer ships, or the app would
+ * ask for a download nothing is going to use.
+ */
+export async function chosenTier(_saved?: Tier | null): Promise<Tier> {
+  return SHIPPED;
 }
 
 export async function requiredModels(saved?: Tier | null): Promise<ModelSpec[]> {
@@ -145,10 +172,9 @@ export async function requiredModels(saved?: Tier | null): Promise<ModelSpec[]> 
   return [LLM[tier], WHISPER, KOKORO];
 }
 
+/** What the first-run screen names, so the download is never an unlabelled 800 MB. */
 export async function describe(saved?: Tier | null): Promise<string> {
-  const gb = await totalRamGb();
-  const tier = await chosenTier(saved);
-  return `${LLM[tier].label} (${gb.toFixed(0)} GB device)`;
+  return LLM[await chosenTier(saved)].label;
 }
 
 /** Every tier, for finding models on disk that are no longer wanted. */
@@ -162,15 +188,3 @@ export function specsForTier(tier: Tier): ModelSpec[] {
 export async function llmPath(saved?: Tier | null): Promise<string> {
   return LLM[await chosenTier(saved)].path;
 }
-
-/** For the picker: what can be chosen, and what each costs. */
-export const CHOICES: Array<{ tier: Tier; label: string; bytes: number; note: string }> = [
-  { tier: 'gemma1b', label: 'Gemma 3 1B', bytes: LLM.gemma1b.bytes,
-    note: 'Smallest and coolest. Weakest at remembering things accurately.' },
-  { tier: '1b', label: 'Llama 3.2 1B', bytes: LLM['1b'].bytes,
-    note: 'Small and cool. Simpler replies.' },
-  { tier: '1_5b', label: 'Qwen2.5 1.5B', bytes: LLM['1_5b'].bytes,
-    note: 'Recommended. Better replies, a little warmer to run.' },
-  { tier: '3b', label: 'Llama 3.2 3B', bytes: LLM['3b'].bytes,
-    note: 'Best replies. Likely too large for a 6 GB phone.' },
-];
