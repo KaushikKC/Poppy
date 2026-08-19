@@ -320,6 +320,9 @@ export const SHIM_JS = String.raw`
       // Desktop's padding is generous because it has a whole column to be generous
       // with; here every pixel of it is a pixel the exchange does not get.
       '.rail-scroll { padding: 0.75rem 0.8rem !important; }' +
+      // The bubbles carry the conversation now — in text mode they are the whole of
+      // it — so they get the width back that a narrow phone was spending on margin.
+      '.rail-scroll .bubble { max-width: 88% !important; }' +
       // She is drawn in the middle of her own container, and that container was the
       // whole window — so the taller the transcript grew, the further down behind it
       // and the dock she sat. Her area now ends where the transcript begins, which

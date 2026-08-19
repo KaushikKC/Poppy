@@ -425,10 +425,12 @@ header h1 {
 
 .bubble {
   max-width: 78%;
-  padding: 0.62rem 0.9rem;
-  border-radius: 12px;
-  line-height: 1.55;
-  font-size: 0.92rem;
+  /* Sized to be read, not glanced at. In text mode this is the entire product, and
+     0.92rem at 1.55 was a caption under an avatar rather than a conversation. */
+  padding: 0.8rem 1.05rem;
+  border-radius: 16px;
+  line-height: 1.62;
+  font-size: 1.02rem;
   white-space: pre-wrap;
   word-break: break-word;
   box-shadow: 0 10px 30px rgba(5, 7, 6, 0.14);
@@ -1442,16 +1444,29 @@ body[data-view="call"] #memory-panel:not(.hidden) {
   background: var(--poppy); flex: none;
   animation: vn-rec 1.4s ease-in-out infinite;
 }
+/* Her name, set by chat.js, so the wait reads as a person taking a moment. */
 .bubble.recording::after {
-  content: "recording…";
-  font-family: var(--font-mono); font-size: 0.68rem; font-weight: 800;
-  letter-spacing: 0.09em; text-transform: uppercase; opacity: 0.75;
+  content: attr(data-who);
+  font-family: var(--font-sans); font-size: 0.88rem; font-weight: 600;
+  opacity: 0.8;
 }
 @keyframes vn-rec { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
 
 .bubble.voice-note {
-  display: inline-flex; align-items: center; gap: 0.6rem;
-  min-width: min(15rem, 70%);
+  display: inline-flex; align-items: center; gap: 0.7rem;
+  min-width: min(17rem, 78%); padding: 0.7rem 0.9rem;
+}
+/* The waveform. Purely a signifier: it says "this is a voice message" faster than
+   any label could, and it fills as she speaks so progress is legible at a glance. */
+.vn-wave {
+  flex: 1; display: flex; align-items: center; gap: 2px; height: 26px;
+  --played: 0%;
+  -webkit-mask-image: linear-gradient(90deg, #000 var(--played), rgba(0,0,0,0.34) var(--played));
+  mask-image: linear-gradient(90deg, #000 var(--played), rgba(0,0,0,0.34) var(--played));
+}
+.vn-wave i {
+  flex: 1; min-width: 2px; border-radius: 2px;
+  background: var(--poppy);
 }
 .vn-mark {
   flex: none; width: 26px; height: 26px; border-radius: 50%;
@@ -1465,10 +1480,7 @@ body[data-view="call"] #memory-panel:not(.hidden) {
   border-top: 5px solid transparent;
   border-bottom: 5px solid transparent;
 }
-.vn-bar {
-  flex: 1; height: 4px; border-radius: 2px;
-  background: rgba(20, 60, 22, 0.18); overflow: hidden;
-}
+.vn-bar { display: none; }
 .vn-bar i { display: block; height: 100%; width: 0; background: var(--poppy); }
 .vn-time {
   flex: none; font-family: var(--font-mono); font-size: 0.7rem;

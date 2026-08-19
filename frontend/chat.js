@@ -215,7 +215,20 @@ function renderVoiceNote(bubble, durationMs) {
   time.className = "vn-time";
   time.textContent = `0:${String(secs).padStart(2, "0")}`;
 
-  bubble.append(mark, bar, time);
+  // Waveform bars behind the progress fill, so a voice note looks like one at a
+  // glance rather than like a loading bar that happens to be in a bubble. Seeded
+  // from the duration so a given note always looks the same, never reshuffling.
+  const wave = document.createElement("span");
+  wave.className = "vn-wave";
+  const bars = Math.min(34, Math.max(12, Math.round(durationMs / 220)));
+  for (let i = 0; i < bars; i += 1) {
+    const b = document.createElement("i");
+    const n = Math.abs(Math.sin((i + 1) * (durationMs % 97) * 0.37));
+    b.style.height = `${28 + n * 72}%`;
+    wave.appendChild(b);
+  }
+
+  bubble.append(mark, wave, bar, time);
   bubble.setAttribute("aria-label", `Voice message, ${secs} seconds`);
 
   // Playback is native, so the bar is driven from the duration we were given rather
@@ -224,6 +237,7 @@ function renderVoiceNote(bubble, durationMs) {
   const tick = () => {
     const done = Math.min(1, (Date.now() - startedAt) / durationMs);
     fill.style.width = `${(done * 100).toFixed(1)}%`;
+    wave.style.setProperty("--played", `${(done * 100).toFixed(1)}%`);
     if (done < 1 && bubble.isConnected) requestAnimationFrame(tick);
     else bubble.classList.add("played");
   };
@@ -444,6 +458,10 @@ window.sendMessage = async function sendMessage(text) {
       // rather than a subtitle you finish before she starts.
       replyBubble.classList.add("recording");
       replyBubble.textContent = "";
+      // Her name, not a bare "recording…". The whole point of the wait is that it
+      // reads as a person taking a moment, and a person has a name.
+      const who = document.getElementById("call-name")?.textContent?.trim() || "She";
+      replyBubble.dataset.who = `${who} is recording a voice message…`;
       setStatus("thinking");
 
     } else if (msg.type === "voice") {
