@@ -82,7 +82,7 @@ const SPEECH_LENGTH_SCALE = 1.0;
  * the Neural Engine; both changed in one build, which was a mistake. Threads stay at
  * two, the provider goes back to the CPU, and that is one variable moving.
  */
-const TTS_THREADS = 2;
+const TTS_THREADS = 4;
 const TTS_PROVIDER = 'cpu';
 
 // Filled in at load; declared in core/tts_info.ts so readers do not import this file.
@@ -157,18 +157,38 @@ function spokenWords(raw: string): string {
  */
 function serialized<A extends unknown[], R>(
   fn: (...args: A) => Promise<R>,
+  shared?: { tail: Promise<unknown> },
 ): (...args: A) => Promise<R> {
-  let tail: Promise<unknown> = Promise.resolve();
+  const lock = shared ?? { tail: Promise.resolve() };
   return (...args: A) => {
     // Both settle paths continue the chain: one failed call must not wedge the queue.
-    const run = tail.then(() => fn(...args), () => fn(...args));
-    tail = run.then(
+    const run = lock.tail.then(() => fn(...args), () => fn(...args));
+    lock.tail = run.then(
       () => undefined,
       () => undefined,
     );
     return run;
   };
 }
+
+/**
+ * The model and the voice share one lock, so they never run at the same time.
+ *
+ * They were allowed to overlap because pipelining is obviously right: render the next
+ * phrase while the current one is speaking. On this phone it is obviously wrong. The
+ * measurements are not close — a 38-character phrase renders in 2.62s alone and a
+ * 47-character one took 6.37s while the model generated, and in that same window the
+ * model fell from 27 tokens a second to 2.87. Each roughly triples the other's cost,
+ * so overlapping them buys a little concurrency and pays for it several times over.
+ *
+ * Run one at a time and each gets the whole machine. Generation is short — a couple of
+ * seconds — and synthesis then starts at full speed rather than a third of it, which
+ * is what closes the gaps between her sentences rather than merely shortening them.
+ *
+ * Transcription keeps its own lock. It happens before the turn, never during, so it
+ * has nothing to contend with.
+ */
+const cpuLock = { tail: Promise.resolve() as Promise<unknown> };
 
 export async function loadNativeEngines(
   onProgress: (msg: string) => void = () => {},
@@ -291,7 +311,7 @@ async function loadOnce(onProgress: (msg: string) => void): Promise<void> {
       );
       if (signal?.aborted) throw new Error('aborted');
       return acc;
-    }),
+    }, cpuLock),
   };
 
   const speech: Speech = {
@@ -324,7 +344,7 @@ async function loadOnce(onProgress: (msg: string) => void): Promise<void> {
       );
 
       return { samples: out.samples, sampleRate: rate };
-    }),
+    }, cpuLock),
   };
 
   const engines: Engines = { stt, llm, speech };
