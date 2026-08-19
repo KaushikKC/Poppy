@@ -72,13 +72,18 @@ const SPEECH_LENGTH_SCALE = 1.0;
  * The model is on the critical path to her *first* word, so losing there costs more
  * than synthesis gains. Threads go back to the library default.
  *
- * The way out is not to divide the CPU differently, it is to stop sharing it. CoreML
- * runs Kokoro on the Neural Engine, which is a separate unit that is sitting idle
- * while llama has the GPU and Whisper has the CPU. It falls back to CPU on its own if
- * the model will not convert, so the worst case is where we already are.
+ * CoreML was then tried, to move Kokoro onto the Neural Engine and off the CPU
+ * entirely. It was measured and it is worse. The same 14-character phrase took 0.89s
+ * on the CPU and 2.84s through CoreML, and a regression over twelve phrases puts the
+ * cost of a call at 2.30s *before the first character* — a nine-character "Honestly?"
+ * cost 3.48s. Whatever CoreML is doing per inference, it dwarfs the synthesis.
+ *
+ * llama recovering at the same time was the thread drop giving its cores back, not
+ * the Neural Engine; both changed in one build, which was a mistake. Threads stay at
+ * two, the provider goes back to the CPU, and that is one variable moving.
  */
 const TTS_THREADS = 2;
-const TTS_PROVIDER = 'coreml';
+const TTS_PROVIDER = 'cpu';
 
 // Filled in at load; declared in core/tts_info.ts so readers do not import this file.
 export { ttsDiagnostic } from './tts_info';
