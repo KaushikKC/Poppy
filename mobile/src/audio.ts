@@ -216,7 +216,27 @@ export class PcmPlayer {
     source.buffer = buf;
     source.connect(this.ctx.destination);
     return new Promise<void>((resolve) => {
-      source.onEnded = () => resolve();
+      source.onEnded = () => {
+        // A source that has finished is still attached to the graph, and the audio
+        // render thread walks every attached node on every render quantum whether it
+        // has anything left to play or not. One node per spoken phrase, several
+        // phrases per reply, never released: by the fourth or fifth turn of an
+        // ordinary conversation the graph is dragging dozens of dead nodes and their
+        // buffers behind it.
+        //
+        // That is the whole reported shape. The render thread runs at real-time
+        // priority, so as it saturates it takes the cycles Whisper and the model need
+        // — which is why *transcription* got slower too, even though transcribing
+        // three seconds of audio costs exactly the same on turn five as on turn one.
+        // Then the output itself starts dropping, and what arrives is text with no
+        // voice behind it. And all of it is being paid for in heat.
+        try {
+          source.disconnect();
+        } catch {
+          // Already detached with a closed context; nothing left to release.
+        }
+        resolve();
+      };
       source.start();
     });
   }
