@@ -58,6 +58,9 @@ const DEFAULT_SID = VOICE_SID.af_heart;
 const SPEECH_SPEED = 1.0;
 const SPEECH_LENGTH_SCALE = 1.0;
 
+/** Cores Kokoro may use. See the note where it is passed to createTTS. */
+const TTS_THREADS = 4;
+
 // Filled in at load; declared in core/tts_info.ts so readers do not import this file.
 export { ttsDiagnostic } from './tts_info';
 
@@ -175,6 +178,15 @@ async function loadOnce(onProgress: (msg: string) => void): Promise<void> {
   const tts = await createTTS({
     modelPath: { type: 'file', path: KOKORO_DIR },
     modelType: 'kokoro',
+    // Never set, so Kokoro has been rendering on the library's default of two CPU
+    // threads on a six-core phone. That is what puts the gaps between her sentences:
+    // synthesis is pipelined against playback, so it only keeps up if a phrase renders
+    // in less time than the previous one takes to speak. Below that line every phrase
+    // arrives a little later than the last and the silences grow.
+    //
+    // Four rather than every core: two are efficiency cores that would add heat
+    // without much speed, and the model and Whisper need somewhere to run too.
+    numThreads: TTS_THREADS,
     // lengthScale slows speech at the model level. `speed` is a per-call option and it
     // was reported as still too fast, so this is set as well: whichever the engine
     // actually honours, the result is a listenable pace.
@@ -267,8 +279,24 @@ async function loadOnce(onProgress: (msg: string) => void): Promise<void> {
         );
         sid = 0;
       }
+      const startedAt = Date.now();
       const out = await tts.generateSpeech(text, { sid, speed: SPEECH_SPEED });
-      return { samples: out.samples, sampleRate: out.sampleRate ?? KOKORO_SAMPLE_RATE };
+      const rate = out.sampleRate ?? KOKORO_SAMPLE_RATE;
+
+      // The one number that says whether she can keep up with herself. Audio seconds
+      // produced per second spent producing them: above 1 the pipeline stays ahead of
+      // playback and her sentences run together, below 1 it falls behind a little more
+      // with every phrase and the gaps grow. Logged per phrase, because it is the
+      // difference between knowing and guessing.
+      const tookMs = Date.now() - startedAt;
+      const audioMs = (out.samples.length / rate) * 1000;
+      console.log(
+        `[tts] ${text.length} chars -> ${(audioMs / 1000).toFixed(2)}s audio in ` +
+        `${(tookMs / 1000).toFixed(2)}s = ${(audioMs / Math.max(tookMs, 1)).toFixed(2)}x realtime ` +
+        `(${TTS_THREADS} threads)`,
+      );
+
+      return { samples: out.samples, sampleRate: rate };
     }),
   };
 
