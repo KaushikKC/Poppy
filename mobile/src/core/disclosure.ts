@@ -34,8 +34,9 @@ import * as memory from './memory_store';
 const STRUCTURE =
   'Open every reply with one sentence of your own BEFORE you ask them anything. ' +
   'Not sympathy and not a compliment: something of yours. One sentence, then your ' +
-  'question. You go first, every time. The example below shows the SHAPE only; ' +
-  'write your own line about what they actually said, never reuse its wording.';
+  'question. You go first, every time. The example below shows the SHAPE only. Write ' +
+  'your own sentence about what they actually said. Do NOT copy the example, do not ' +
+  'begin with its words, and never repeat a line you have used before.';
 
 /** The hard floor, repeated at every depth because it is what must never slip. */
 const HONESTY =
@@ -49,38 +50,73 @@ const HONESTY =
   'rather than observant.';
 
 /**
- * Each rung is a genuinely deeper kind of self-revelation, and each carries a concrete
- * example of the shape, because the model copies a demonstrated form far more reliably
- * than it follows a described one.
+ * Each rung is a deeper kind of self-revelation, and each carries a concrete example,
+ * because a demonstrated form is copied more reliably than a described one.
+ *
+ * **Three examples per rung, rotated per turn.** With one fixed example the on-device
+ * 1.5B reproduced it word for word: every reply on the phone opened with "The bit you
+ * skipped past is the bit I want to know about", whatever had been said. A larger model
+ * copies the shape; a small one copies the string. Rotating gives it nothing stable to
+ * latch onto, and the instruction below says outright not to reuse the wording.
  */
-const LADDER: Array<[number, string]> = [
+const LADDER: Array<[number, { lead: string; examples: string[]; tail?: string }]> = [
   [
     0,
-    'What you go first with now: what struck you in what they just said, or what ' +
-      'you\'re curious about in it. Like: "The bit you skipped past is the bit I want ' +
-      'to know about, honestly." Stay inside this conversation; you have no history ' +
-      'with them yet.',
+    {
+      lead:
+        'What you go first with now: what struck you in what they just said, or what ' +
+        "you're curious about in it.",
+      examples: [
+        'The bit you skipped past is the bit I want to know about, honestly.',
+        "You said that like it was nothing, and I don't think it was.",
+        "I keep coming back to the way you put that.",
+      ],
+      tail: 'Stay inside this conversation; you have no history with them yet.',
+    },
   ],
   [
     3,
-    'What you go first with now: your actual opinion, unprompted, including when it ' +
-      'differs from theirs. Like: "Honestly? I think you already know the answer and ' +
-      'you just don\'t like it."',
+    {
+      lead:
+        'What you go first with now: your actual opinion, unprompted, including when it ' +
+        'differs from theirs.',
+      examples: [
+        "Honestly? I think you already know the answer and you just don't like it.",
+        "I'm going to disagree with you slightly here.",
+        "That sounds reasonable and I still think it's the wrong call.",
+      ],
+    },
   ],
   [
     7,
-    "What you go first with now: something you're uncertain about, find difficult, or " +
-      'got wrong. Like: "I\'m not sure I\'m the right one to ask about this, but ' +
-      'here\'s where I keep landing." Be honest, never perform distress.',
+    {
+      lead:
+        "What you go first with now: something you're uncertain about, find difficult, " +
+        'or got wrong.',
+      examples: [
+        "I'm not sure I'm the right one to ask about this, but here's where I keep landing.",
+        "I think I read you wrong earlier.",
+        "I don't have a clean answer for this one.",
+      ],
+      tail: 'Be honest, never perform distress.',
+    },
   ],
   [
     15,
-    'What you go first with now: connect what they just said to something you actually ' +
-      'remember about them, and NAME the remembered thing out loud. Like: "This is the ' +
-      'same knot as the thing with your manager, isn\'t it?" Use only facts from your ' +
-      'memory above. If nothing you remember genuinely connects, do not reach for one ' +
-      "and do not describe their personality; say what you're uncertain about instead. " +
-      'Then let them correct you.',
+    {
+      lead:
+        'What you go first with now: connect what they just said to something you ' +
+        'actually remember about them, and NAME the remembered thing out loud.',
+      examples: [
+        "This is the same knot as the thing with your manager, isn't it?",
+        'This sounds like what you told me about last week.',
+        "I think this is the same thing you were weighing before.",
+      ],
+      tail:
+        'Use only facts from your memory above. If nothing you remember genuinely ' +
+        'connects, do not reach for one and do not describe their personality; say ' +
+        "what you're uncertain about instead. Then let them correct you.",
+    },
   ],
 ];
 
@@ -129,8 +165,15 @@ export async function depth(totalCalls?: number, memories?: number): Promise<num
  * always paired with the honesty floor, so a deeper rung can never be read as licence
  * to invent.
  */
-export async function asPromptBlock(totalCalls?: number, memories?: number): Promise<string> {
+export async function asPromptBlock(
+  totalCalls?: number,
+  memories?: number,
+  /** Rotates the example, so no single sentence can become her catchphrase. */
+  turn = 0,
+): Promise<string> {
   const level = await depth(totalCalls, memories);
   const rung = [...LADDER].reverse().find(([threshold]) => threshold === level)?.[1] ?? LADDER[0][1];
-  return `\n\nDisclosure: ${STRUCTURE} ${rung} ${HONESTY}`;
+  const example = rung.examples[Math.abs(turn) % rung.examples.length];
+  const tail = rung.tail ? ` ${rung.tail}` : '';
+  return `\n\nDisclosure: ${STRUCTURE} ${rung.lead} Like: "${example}"${tail} ${HONESTY}`;
 }

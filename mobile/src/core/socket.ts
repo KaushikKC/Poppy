@@ -10,17 +10,16 @@
  *        {type:"done",   sessionId?}   end of turn
  *        {type:"error",  message}
  *
- * Audio is sent as binary frames, the same as the Python server, because the page
- * plays it: chat.js sets binaryType to "arraybuffer" and hands each frame to
- * audio_player.js, whose AnalyserNode is what animates the orb. The only part of
- * the pipeline that is native is capture, which the WebView cannot do reliably
- * from a file:// origin.
+ * Audio is spoken natively and the page is sent a loudness envelope for the orb, rather
+ * than WAV frames to play itself. Sending frames matched the desktop server exactly and
+ * was silent on device; see core/playback.ts. Capture is native too, because a file://
+ * origin cannot reliably reach a microphone.
  */
 
 import { runTurn } from './turn';
 import { PhraseChunker } from './chunker';
 import { getEngines } from './engines';
-import { wavBase64 } from './wav';
+import { playback } from './playback';
 import type { SocketHandler, SocketReply } from '../bridge/host';
 import * as companion from './companion';
 import * as safety from './safety';
@@ -79,10 +78,11 @@ async function say(text: string, reply: SocketReply): Promise<void> {
 
   // One at a time and in order, the same rule as a reply: concurrent synthesis
   // thrashes and plays back scrambled.
+  playback.reset();
   for (const phrase of phrases) {
     try {
       const out = await engine.synthesize(phrase, profile.voice);
-      reply.binary(wavBase64(out.samples, out.sampleRate));
+      playback.push(out.samples, out.sampleRate);
     } catch (err) {
       console.log(`[tts] dropped phrase in say(): ${err}`);
     }
@@ -126,6 +126,7 @@ export function createSocketHandler(): SocketHandler {
         return;
       }
 
+      playback.reset();
       const profile = await companion.profile();
       memory.setCharacter(profile.character);
 
@@ -157,7 +158,9 @@ export function createSocketHandler(): SocketHandler {
       if (pactDue) await ritual.markAsked();
 
       const disclosureBlock =
-        risk0.level === null && !pactBlock ? await disclosure.asPromptBlock() : '';
+        risk0.level === null && !pactBlock
+          ? await disclosure.asPromptBlock(undefined, undefined, session.turns)
+          : '';
       // Her persona prompt carries the whole of who she is, so it replaces the
       // placeholder rather than being appended to it.
       let system =
@@ -197,7 +200,7 @@ export function createSocketHandler(): SocketHandler {
           {
             onConfig: (sampleRate) =>
               reply.text(JSON.stringify({ type: 'config', sampleRate })),
-            onAudio: (b64) => reply.binary(b64),
+            onAudio: () => {},
             onToken: (text) => reply.text(JSON.stringify({ type: 'token', text })),
             onError: (message) => reply.text(JSON.stringify({ type: 'error', message })),
           },
