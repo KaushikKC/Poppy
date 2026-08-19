@@ -17,6 +17,7 @@ import { createTTS, type TtsEngine } from 'react-native-sherpa-onnx/tts';
 import { KOKORO_DIR, LLM_PATH, WHISPER_PATH } from '../models';
 import { setEngines, type Engines, type Llm, type Speech, type Stt } from './engines';
 import { floatToPcm16 } from '../audio';
+import { ttsDiagnostic } from './tts_info';
 
 /** Kokoro's output rate. The UI is told this before a reply starts. */
 const KOKORO_SAMPLE_RATE = 24000;
@@ -53,20 +54,23 @@ const SPEECH_SPEED = 0.9;
 /** Above 1.0 lengthens each phoneme, which is the model-level way to slow speech. */
 const SPEECH_LENGTH_SCALE = 1.15;
 
-/**
- * What the voice engine reported at load. Surfaced through /settings so it can be read
- * off the phone without attaching Xcode, because "all the characters sound the same" is
- * impossible to diagnose from the outside.
- */
-export const ttsDiagnostic: {
-  speakers: number;
-  sampleRate: number;
-  modelType: string;
-} = { speakers: -1, sampleRate: -1, modelType: 'not loaded' };
+// Filled in at load; declared in core/tts_info.ts so readers do not import this file.
+export { ttsDiagnostic } from './tts_info';
 
-/** Small context keeps prefill, and so first-token latency, small. */
-const N_CTX = 4096;
-const MAX_TOKENS = 120;
+/**
+ * Context and reply length, both cut for heat rather than for memory.
+ *
+ * 2048 rather than 4096: the KV cache is half the size and every prefill does half the
+ * work. Replies here are two to four spoken sentences with at most six turns of
+ * history, so the larger window was never being filled — it was just costing compute on
+ * every single turn.
+ *
+ * 90 tokens rather than 120 for the same reason: a spoken reply that runs past ~90
+ * tokens is too long to listen to anyway, so this caps the worst case rather than the
+ * normal one.
+ */
+const N_CTX = 2048;
+const MAX_TOKENS = 90;
 
 export type Loaded = {
   whisper: WhisperContext;

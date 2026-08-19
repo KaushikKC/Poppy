@@ -26,7 +26,7 @@ import { resetCallTurns } from './socket';
 import * as nudges from './nudges';
 import * as billing from './billing';
 import * as tone from './tone';
-import { ttsDiagnostic } from './native_engines';
+import { ttsDiagnostic } from './tts_info';
 import { CAST } from './characters';
 import { ok, route, type Res } from './router';
 
