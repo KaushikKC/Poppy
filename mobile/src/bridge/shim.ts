@@ -265,7 +265,7 @@ export const SHIM_JS = String.raw`
     if (!document.hidden) { audioUnlocked = false; unlockAudio(); }
   });
 
-  // ── a call screen sized for a phone ───────────────────────────────────────
+  // ── a screen sized for a phone ────────────────────────────────────────────
   // Reported: the transcript panel covers the character and grows to take up to
   // 46% of the screen height (desktop's own narrow-window rule, meant for a
   // resized browser, not a 6-inch phone); the layout looked "enlarged" and did
@@ -281,8 +281,31 @@ export const SHIM_JS = String.raw`
     if (document.getElementById('poppys-mobile-call-css')) return;
     var style = document.createElement('style');
     style.id = 'poppys-mobile-call-css';
+    // The WebView fills the window, notch and home indicator included (there is no
+    // SafeAreaView around it, deliberately: the avatar should reach the edges). So
+    // every edge-anchored control has to keep itself off the system bars.
+    var TOP = 'env(safe-area-inset-top, 0px)';
+    var BOTTOM = 'env(safe-area-inset-bottom, 0px)';
     style.textContent =
       '@media (max-width: 820px) {' +
+
+      // ── clear of the status bar ─────────────────────────────────────────
+      // Reported: the strip at the top of home (the streak / how-well-she-knows-you
+      // pill, the reminder, the personality heads-up) and the call header (Live ·
+      // her name · Private) sit underneath the phone's own status bar and cannot be
+      // read. All three home chips are absolutely positioned against #home's
+      // padding box, so padding on #home does not move them — their own top
+      // offset has to carry the inset.
+      '.home-streak, #home-update, #home-reminder {' +
+      '  top: calc(1.4rem + ' + TOP + ') !important; }' +
+      // The call header is the first row of .call-stage's grid, so its padding does
+      // the same job there.
+      '.call-stage { padding-top: calc(1rem + ' + TOP + ') !important; }' +
+
+      // ── clear of the home indicator ─────────────────────────────────────
+      '#home { padding-bottom: calc(1.5rem + ' + BOTTOM + ') !important; }' +
+      '.garden-bar { padding-bottom: calc(1rem + ' + BOTTOM + ') !important; }' +
+
       // A strict ceiling so a single long reply cannot regrow the panel over the
       // character; in practice showing only the current exchange stays far
       // smaller than this.
