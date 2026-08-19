@@ -41,6 +41,40 @@ export function floatToPcm16(input: Float32Array): Int16Array {
   return out;
 }
 
+/** The rates a phone's microphone actually runs at. */
+const STANDARD_RATES = [8000, 16000, 22050, 24000, 44100, 48000];
+
+/**
+ * The true capture rate, worked out from how much audio arrived in how long.
+ *
+ * The recorder is *asked* for 16 kHz, and some builds echo that request back as
+ * `e.buffer.sampleRate` while iOS actually hands over hardware-rate audio. When that
+ * happens nothing resamples, Whisper is fed audio running three times too fast, and it
+ * answers with a confident non-speech annotation — "(engine revving)" — that barely
+ * changes with what was said.
+ *
+ * Samples divided by how long the mic was open gives the truth regardless of what the
+ * API claims. Wall clock is crude, but this only has to tell 16000 from 48000, so it
+ * snaps to the nearest real rate rather than resampling by a noisy ratio, and only
+ * overrides when the two genuinely disagree, so a correct report always wins.
+ */
+export function measuredRate(
+  samples: number,
+  elapsedMs: number,
+  reported: number,
+): { rate: number; disagrees: boolean; measured: number; snapped: number } {
+  const elapsedS = elapsedMs / 1000;
+  if (elapsedS <= 0.3) {
+    return { rate: reported, disagrees: false, measured: reported, snapped: reported };
+  }
+  const measured = samples / elapsedS;
+  const snapped = STANDARD_RATES.reduce((best, r) =>
+    Math.abs(r - measured) < Math.abs(best - measured) ? r : best,
+  );
+  const disagrees = Math.abs(snapped - reported) / reported > 0.15;
+  return { rate: disagrees ? snapped : reported, disagrees, measured, snapped };
+}
+
 /**
  * Mic capture that yields **16 kHz mono float PCM** — exactly what whisper.cpp
  * needs — by streaming raw buffers via `onAudioReady` and resampling on stop.
@@ -93,33 +127,17 @@ export class MicRecorder {
     }
     this.chunks = [];
 
-    // Do not trust the reported rate. The recorder is *asked* for 16 kHz, and
-    // some builds echo the request back as e.buffer.sampleRate while iOS
-    // actually hands over hardware-rate audio. When that happens the resample
-    // below is skipped, Whisper is fed audio running three times too fast, and
-    // it returns confident nonsense that barely changes with what was said.
-    //
-    // Samples divided by how long the mic was actually open gives the true rate
-    // regardless of what the API claims. Wall clock is crude, but the answer
-    // only has to be good enough to tell 16000 from 48000, and it snaps to the
-    // nearest standard rate rather than resampling by a noisy ratio.
-    const elapsedS = (Date.now() - this.startedAt) / 1000;
-    const measured = elapsedS > 0.3 ? total / elapsedS : this.inRate;
-    const standard = [8000, 16000, 22050, 24000, 44100, 48000];
-    const snapped = standard.reduce((best, r) =>
-      Math.abs(r - measured) < Math.abs(best - measured) ? r : best,
-    );
-    // Only override when the two genuinely disagree, so a correct report wins.
-    const disagrees = Math.abs(snapped - this.inRate) / this.inRate > 0.15;
-    const useRate = disagrees ? snapped : this.inRate;
+    const elapsedMs = Date.now() - this.startedAt;
+    const r = measuredRate(total, elapsedMs, this.inRate);
 
     MicRecorder.lastDiagnostic =
-      `reported ${this.inRate}Hz, measured ${Math.round(measured)}Hz ` +
-      `(~${snapped}), used ${useRate}Hz, ${total} samples over ${elapsedS.toFixed(1)}s` +
-      (disagrees ? '  <-- REPORTED RATE IS WRONG' : '');
+      `reported ${this.inRate}Hz, measured ${Math.round(r.measured)}Hz ` +
+      `(~${r.snapped}), used ${r.rate}Hz, ${total} samples over ` +
+      `${(elapsedMs / 1000).toFixed(1)}s` +
+      (r.disagrees ? '  <-- REPORTED RATE IS WRONG' : '');
     console.log('[mic]', MicRecorder.lastDiagnostic);
 
-    return resampleTo16k(merged, useRate);
+    return resampleTo16k(merged, r.rate);
   }
 }
 
@@ -205,6 +223,14 @@ export class ContinuousMic {
   private recorder: AudioRecorder | null = null;
   private vad: Vad | null = null;
   private inRate = 48000;
+  // Auto-listen took e.buffer.sampleRate at its word, while push-to-talk had stopped
+  // trusting it a while ago. So the same wrong-rate bug that produced "(engine
+  // revving)" was still live on this path, and worse here: the VAD's own frame maths
+  // is built from this rate too, so a wrong one mis-cuts every utterance before
+  // Whisper even sees it.
+  private samples = 0;
+  private startedAt = 0;
+  private rateChecked = false;
 
   constructor(
     private onUtterance: (pcm16k: Float32Array) => void,
@@ -225,19 +251,54 @@ export class ContinuousMic {
     });
     await AudioManager.setAudioSessionActivity(true);
 
+    this.samples = 0;
+    this.startedAt = Date.now();
+    this.rateChecked = false;
+
+    const buildVad = (): void => {
+      this.vad = new Vad(this.inRate, {
+        onStart: () => this.onStart?.(),
+        // Read at call time, not captured: a rate corrected mid-stream has to reach
+        // the resampler, or every utterance after the correction is still wrong.
+        onUtterance: (pcm) => this.onUtterance(resampleTo16k(pcm, this.inRate)),
+      }, cfg);
+    };
+
     const r = new AudioRecorder();
     r.onAudioReady({ sampleRate: TARGET_RATE, bufferLength: 1600, channelCount: 1 }, (e) => {
+      const frame = Float32Array.from(e.buffer.getChannelData(0));
       this.inRate = e.buffer.sampleRate;
+      this.samples += frame.length;
+
       if (!this.vad) {
         // Built on the first buffer, because the real rate is only known then and the
         // pre-roll length depends on it.
-        this.vad = new Vad(this.inRate, {
-          onStart: () => this.onStart?.(),
-          onUtterance: (pcm) => this.onUtterance(resampleTo16k(pcm, this.inRate)),
-        }, cfg);
+        buildVad();
       }
+
+      // A second of audio is enough to tell 16 kHz from 48 kHz. Checked once: if the
+      // reported rate was a lie, correct it and rebuild the VAD around the truth.
+      // Deliberately not done before the first buffer — waiting a second to start
+      // listening would lose the beginning of whatever was being said.
+      if (!this.rateChecked) {
+        const elapsedMs = Date.now() - this.startedAt;
+        if (elapsedMs > 1000) {
+          this.rateChecked = true;
+          const check = measuredRate(this.samples, elapsedMs, this.inRate);
+          MicRecorder.lastDiagnostic =
+            `auto-listen: reported ${this.inRate}Hz, measured ` +
+            `${Math.round(check.measured)}Hz (~${check.snapped})` +
+            (check.disagrees ? '  <-- REPORTED RATE IS WRONG' : '');
+          console.log('[mic]', MicRecorder.lastDiagnostic);
+          if (check.disagrees) {
+            this.inRate = check.rate;
+            buildVad();
+          }
+        }
+      }
+
       if (this.shouldListen && !this.shouldListen()) return;
-      this.vad.push(Float32Array.from(e.buffer.getChannelData(0)));
+      this.vad?.push(frame);
     });
     await r.start();
     this.recorder = r;
