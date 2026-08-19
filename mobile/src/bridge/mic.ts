@@ -13,6 +13,7 @@
 
 import { ContinuousMic, MicRecorder } from '../audio';
 import { transcribe } from '../core/turn';
+import { playback } from '../core/playback';
 
 export type MicSend = (msg: unknown) => void;
 
@@ -37,6 +38,8 @@ export function createMic(send: MicSend) {
       if (auto.running) send({ t: 'mic:state', state: 'recording' });
     },
     () => send({ t: 'mic:state', state: 'recording' }),
+    // Stand down while she is speaking.
+    () => !playback.isPlaying,
   );
 
   async function start(): Promise<void> {

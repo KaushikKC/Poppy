@@ -164,6 +164,13 @@ export class ContinuousMic {
   constructor(
     private onUtterance: (pcm16k: Float32Array) => void,
     private onStart?: () => void,
+    /**
+     * Whether to process this buffer at all. Used to stand down while she is
+     * speaking: running voice detection on her own voice coming out of the
+     * loudspeaker is both wasted work on every buffer and a way to interrupt
+     * herself.
+     */
+    private shouldListen?: () => boolean,
   ) {}
 
   async start(cfg?: VadConfig): Promise<void> {
@@ -184,6 +191,7 @@ export class ContinuousMic {
           onUtterance: (pcm) => this.onUtterance(resampleTo16k(pcm, this.inRate)),
         }, cfg);
       }
+      if (this.shouldListen && !this.shouldListen()) return;
       this.vad.push(Float32Array.from(e.buffer.getChannelData(0)));
     });
     await r.start();

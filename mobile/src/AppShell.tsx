@@ -9,7 +9,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
 import WebViewComponent from 'react-native-webview';
 import type {
   WebViewMessageEvent,
@@ -79,6 +79,7 @@ function setupCore() {
 
 export default function AppShell() {
   const webRef = useRef<WebViewComponent>(null);
+  const micRef = useRef<{ release: () => Promise<void> } | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [engineStatus, setEngineStatus] = useState('');
@@ -129,6 +130,25 @@ export default function AppShell() {
     })();
   }, [loadEngines]);
 
+  // Everything expensive stops when the app is not in front.
+  //
+  // Reported as the phone getting hot. Backgrounded, there is nothing to look at and
+  // usually nothing to listen to, yet the microphone would keep capturing, the VAD would
+  // keep running on every buffer, and any queued speech would keep playing. The WebView's
+  // animation loops are handled in the shim.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        // The session can be taken away while backgrounded; claim it again.
+        AudioManager.setAudioSessionActivity(true).catch(() => {});
+        return;
+      }
+      playback.stop();
+      void micRef.current?.release();
+    });
+    return () => sub.remove();
+  }, []);
+
   const onMessage = useMemo(() => {
     // The one thing that actually makes sound, handed to the core so the core itself
     // stays free of native imports.
@@ -137,6 +157,7 @@ export default function AppShell() {
 
     const send = (js: string) => webRef.current?.injectJavaScript(js);
     const mic = createMic((msg) => dispatchMic(send, msg));
+    micRef.current = mic;
 
     // The orb animates from these rather than from the page's own analyser, because
     // playback is native now. See core/playback.ts.
