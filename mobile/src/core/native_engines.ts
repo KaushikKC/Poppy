@@ -109,6 +109,40 @@ function spokenWords(raw: string): string {
   return /[\p{L}\p{N}]/u.test(left) ? left : '';
 }
 
+/**
+ * One call at a time into each native context.
+ *
+ * llama.cpp, whisper.cpp and sherpa each hold a single context with its own KV cache
+ * and scratch buffers, and none of them is re-entrant. Nothing above here enforced
+ * that. The socket starts a full turn on every frame it receives, with no check for
+ * one already running, and auto-listen only stands down while she is *speaking* — so
+ * anything said while she is still thinking fires a second utterance straight into a
+ * second turn.
+ *
+ * Two completions decoding into one KV cache is not a queue, it is corruption: output
+ * that drifts into nonsense, decode that never terminates, and both of them burning
+ * the GPU at once. That is the whole reported cluster — replies getting slower every
+ * turn, then hanging, then hallucinating, with the phone getting hot.
+ *
+ * Serialising at this boundary rather than higher up is deliberate. It is the last
+ * place before the native call, so it holds no matter which path above it is at
+ * fault, and it changes no behaviour at all when calls do not overlap.
+ */
+function serialized<A extends unknown[], R>(
+  fn: (...args: A) => Promise<R>,
+): (...args: A) => Promise<R> {
+  let tail: Promise<unknown> = Promise.resolve();
+  return (...args: A) => {
+    // Both settle paths continue the chain: one failed call must not wedge the queue.
+    const run = tail.then(() => fn(...args), () => fn(...args));
+    tail = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  };
+}
+
 export async function loadNativeEngines(
   onProgress: (msg: string) => void = () => {},
 ): Promise<void> {
@@ -180,7 +214,7 @@ async function loadOnce(onProgress: (msg: string) => void): Promise<void> {
   }
 
   const stt: Stt = {
-    async transcribe(pcm16k) {
+    transcribe: serialized(async (pcm16k: Float32Array) => {
       // int16, not float32. whisper.rn's ArrayBuffer path hands the buffer to
       // decodePcm16 on the native side, which reads it as int16 and divides by
       // 32767, despite a doc comment that reads as though floats are accepted.
@@ -192,11 +226,16 @@ async function loadOnce(onProgress: (msg: string) => void): Promise<void> {
       });
       const res = await promise;
       return spokenWords(res.result ?? '');
-    },
+    }),
   };
 
   const llm: Llm = {
-    async complete(system, messages, onToken, signal) {
+    complete: serialized(async (
+      system: string,
+      messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+      onToken: (token: string) => void,
+      signal?: AbortSignal,
+    ) => {
       let acc = '';
       await llama.completion(
         {
@@ -213,12 +252,12 @@ async function loadOnce(onProgress: (msg: string) => void): Promise<void> {
       );
       if (signal?.aborted) throw new Error('aborted');
       return acc;
-    },
+    }),
   };
 
   const speech: Speech = {
     sampleRate: KOKORO_SAMPLE_RATE,
-    async synthesize(text, voice) {
+    synthesize: serialized(async (text: string, voice: string) => {
       let sid = VOICE_SID[voice] ?? DEFAULT_SID;
       // A sid past the end of the model is not an error, it is silently the wrong
       // voice — v0.19 has 11 speakers, so am_michael's 16 would land nowhere.
@@ -230,7 +269,7 @@ async function loadOnce(onProgress: (msg: string) => void): Promise<void> {
       }
       const out = await tts.generateSpeech(text, { sid, speed: SPEECH_SPEED });
       return { samples: out.samples, sampleRate: out.sampleRate ?? KOKORO_SAMPLE_RATE };
-    },
+    }),
   };
 
   const engines: Engines = { stt, llm, speech };
