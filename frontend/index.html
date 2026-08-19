@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- maximum-scale/user-scalable stop WKWebView from "zooming to fit" or pinching
+       (reported on the phone as the layout "enlarged" and "moving around"); this is a
+       no-op on desktop's pywebview, which has no touch gestures to lock. viewport-fit
+       is what makes env(safe-area-inset-*) report real values on notch/home-indicator
+       devices — the mobile app's shim relies on that for its own CSS. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Poppys</title>
   <link rel="icon" type="image/png" href="poppys-logo.png" />
   <link rel="stylesheet" href="style.css" />
