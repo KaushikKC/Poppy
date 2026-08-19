@@ -24,7 +24,7 @@
  */
 
 import { PhraseChunker } from './chunker';
-import { getEngines } from './engines';
+import { awaitEngines } from './engines';
 import { playback } from './playback';
 
 export type TurnEvents = {
@@ -79,7 +79,7 @@ class SpeechStream {
       });
     }
 
-    const { speech } = getEngines();
+    const { speech } = await awaitEngines();
     while (this.queue.length) {
       // On barge-in the queue is emptied, not merely abandoned. Leaving phrases
       // behind meant close() saw work outstanding with no worker running, started
@@ -134,7 +134,7 @@ class SpeechStream {
 
 /** Transcribe captured audio. Separate from runTurn so the UI can show it first. */
 export async function transcribe(pcm16k: Float32Array): Promise<string> {
-  return getEngines().stt.transcribe(pcm16k);
+  return (await awaitEngines()).stt.transcribe(pcm16k);
 }
 
 export async function runTurn(
@@ -142,7 +142,7 @@ export async function runTurn(
   opts: TurnOptions,
   events: TurnEvents = {},
 ): Promise<string> {
-  const { llm, speech: engine } = getEngines();
+  const { llm, speech: engine } = await awaitEngines();
   const chunker = new PhraseChunker();
   const speech = new SpeechStream(opts.voice, events, opts.signal);
 

@@ -14,7 +14,7 @@
  * bigger mistake; a slightly awkwardly-worded memory is editable.
  */
 
-import { getEngines } from './engines';
+import { awaitEngines } from './engines';
 import * as memory from './memory_store';
 
 const MAX_CANDIDATES = 6;
@@ -121,7 +121,7 @@ export async function extractAndSave(text: string): Promise<Array<{ text: string
   let candidates: Candidate[] = [];
 
   try {
-    const { llm } = getEngines();
+    const { llm } = await awaitEngines();
     let raw = '';
     await llm.complete(SYSTEM, [{ role: 'user', content: `Message: "${clean}" ->` }], (tok) => {
       raw += tok;

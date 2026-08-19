@@ -16,7 +16,7 @@
  * design does not allow, so every failure path lands on the reveal fallback.
  */
 
-import { getEngines } from './engines';
+import { awaitEngines } from './engines';
 import * as boundaries from './boundaries';
 import { isHealthy } from './nudges';
 
@@ -228,7 +228,7 @@ export async function author(
 
   let raw = '';
   try {
-    const { llm } = getEngines();
+    const { llm } = await awaitEngines();
     await llm.complete(
       SYSTEM,
       [{ role: 'user', content: `Conversation:\n${transcript}\n\nName the follow-up topic.` }],

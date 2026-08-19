@@ -55,14 +55,52 @@ export type Engines = {
 };
 
 let engines: Engines | null = null;
+let waiting: Array<(e: Engines) => void> = [];
 
 export function setEngines(e: Engines): void {
   engines = e;
+  const pending = waiting;
+  waiting = [];
+  for (const resolve of pending) resolve(e);
 }
 
 export function getEngines(): Engines {
   if (!engines) throw new Error('engines not set: call setEngines() before a turn');
   return engines;
+}
+
+/**
+ * The engines, waited for if the load has not finished yet.
+ *
+ * Loading them takes seconds — a gigabyte of weights off flash, plus Whisper, plus
+ * Kokoro and its warm-up phrase — and it runs in the background while the UI is
+ * already on screen. So there is a real window in which someone can press Call
+ * before there is anything to answer with, and every caller here used to meet that
+ * window by throwing "engines not set" at them.
+ *
+ * It went unnoticed because the first-run setup screen sat in front of that window
+ * and absorbed it. Fixing the launch check so that screen stops appearing for people
+ * who already have their models is what exposed it: the app now reaches home in a
+ * fraction of the time, and reaches it while the models are still loading.
+ *
+ * Waiting is the honest behaviour — the call is a moment or two late rather than
+ * broken, and the loading line is already on screen while it happens. The timeout is
+ * long because loading really can take a while on a cold, busy phone; it exists only
+ * so a load that has genuinely failed surfaces as an error rather than a hang.
+ */
+export function awaitEngines(timeoutMs = 120_000): Promise<Engines> {
+  if (engines) return Promise.resolve(engines);
+  return new Promise((resolve, reject) => {
+    const onReady = (e: Engines): void => {
+      clearTimeout(timer);
+      resolve(e);
+    };
+    const timer = setTimeout(() => {
+      waiting = waiting.filter((w) => w !== onReady);
+      reject(new Error('The models are still loading. Give it a moment and try again.'));
+    }, timeoutMs);
+    waiting.push(onReady);
+  });
 }
 
 export function enginesReady(): boolean {

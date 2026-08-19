@@ -18,7 +18,7 @@
 
 import { runTurn } from './turn';
 import { PhraseChunker } from './chunker';
-import { getEngines } from './engines';
+import { awaitEngines } from './engines';
 import { playback } from './playback';
 import type { SocketHandler, SocketReply } from '../bridge/host';
 import * as companion from './companion';
@@ -77,7 +77,7 @@ async function say(text: string, reply: SocketReply): Promise<void> {
     return;
   }
   const profile = await companion.profile();
-  const { speech: engine } = getEngines();
+  const { speech: engine } = await awaitEngines();
 
   reply.text(JSON.stringify({ type: 'config', sampleRate: engine.sampleRate }));
   reply.text(JSON.stringify({ type: 'token', text: line }));
