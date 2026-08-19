@@ -348,6 +348,29 @@ export const SHIM_JS = String.raw`
       // Only the notice goes. Every memory is still saved, and every one of them
       // stays listed, editable and deletable behind the Memory button.
       '#memory-consent { display: none !important; }' +
+
+      // ── naming a flower ─────────────────────────────────────────────────
+      // The garden's bar sits at the bottom edge, which is where the keyboard comes
+      // up: opening it to type a name covered the field being typed into. iOS does
+      // not shrink the layout viewport for the keyboard, so a bottom-anchored
+      // element has nowhere to go — it has to not be at the bottom.
+      //
+      // While a name is being typed the form lifts to the top of the screen, clear
+      // of the keyboard and of the flower it belongs to. The note and Close stay
+      // where they are.
+      '#garden .garden-name:not(.hidden) {' +
+      '  position: fixed !important; z-index: 75;' +
+      '  left: 0.65rem; right: 0.65rem;' +
+      '  top: calc(1rem + ' + TOP + ');' +
+      '  padding: 0.6rem; border-radius: 12px;' +
+      '  background: rgba(7,18,7,0.72);' +
+      '  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);' +
+      '  box-shadow: 0 18px 44px -14px rgba(7,18,7,0.6); }' +
+      // Desktop sizes the field to 42vw because it shares a bar with the note and
+      // the Close button; floated on its own it should take the width it has.
+      '#garden .garden-name-input {' +
+      '  flex: 1 1 auto; width: auto !important; font-size: 1rem !important;' +
+      '  padding: 0.7rem 0.8rem !important; }' +
       '}';
     document.head.appendChild(style);
   }
