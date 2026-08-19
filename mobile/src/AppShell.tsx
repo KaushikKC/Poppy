@@ -201,12 +201,23 @@ export default function AppShell() {
   // app was concerned it was playing and recording perfectly well.
   useEffect(() => {
     const sub = AudioManager.addSystemEventListener('routeChange', ({ reason }) => {
-      console.log(`[audio] route changed (${reason}); reclaiming the session`);
-      playback.stop();
+      // Only a device genuinely arriving or leaving.
+      //
+      // This reacted to every reason, and two of them — CategoryChange and Override —
+      // are what *our own* activateSession() raises. So reclaiming the session raised
+      // another route change, which reclaimed the session, round and round. And every
+      // pass called playback.stop(), which does not pause the queue, it latches it
+      // off until something calls reset(). Her voice was being cut continuously and
+      // what arrived was the text with nothing behind it.
+      if (reason !== 'NewDeviceAvailable' && reason !== 'OldDeviceUnavailable') return;
+      console.log(`[audio] device changed (${reason}); rebuilding playback`);
       void (async () => {
         try {
           await activateSession();
           pcmRef.current?.reset();
+          // Whatever was mid-phrase was going to a route that no longer exists, so
+          // the queue is dropped — but re-armed, never left latched off.
+          playback.reset();
         } catch (err) {
           fail(`Audio could not follow the route change: ${err instanceof Error ? err.message : String(err)}`);
         }

@@ -192,6 +192,10 @@ export class MicRecorder {
 export class PcmPlayer {
   private ctx: AudioContext;
   private logged = false;
+  // Phrases still waiting to be told they finished. A context that is replaced will
+  // never fire onEnded for anything scheduled on it, and the playback queue waits on
+  // exactly that — so without this, one rebuild leaves the queue stuck for good.
+  private pending = new Set<() => void>();
 
   constructor(private preferredRate = 24000) {
     // iOS may refuse and give the hardware rate anyway; the resample below covers that.
@@ -216,6 +220,11 @@ export class PcmPlayer {
     source.buffer = buf;
     source.connect(this.ctx.destination);
     return new Promise<void>((resolve) => {
+      const done = (): void => {
+        this.pending.delete(done);
+        resolve();
+      };
+      this.pending.add(done);
       source.onEnded = () => {
         // A source that has finished is still attached to the graph, and the audio
         // render thread walks every attached node on every render quantum whether it
@@ -235,7 +244,7 @@ export class PcmPlayer {
         } catch {
           // Already detached with a closed context; nothing left to release.
         }
-        resolve();
+        done();
       };
       source.start();
     });
@@ -249,6 +258,10 @@ export class PcmPlayer {
    * rate and its old destination — which is silence, and silence with nothing logged.
    */
   reset(): void {
+    // Release anything waiting on the old context first: it is about to be closed,
+    // and nothing scheduled on it will ever report that it ended.
+    for (const done of [...this.pending]) done();
+    this.pending.clear();
     const old = this.ctx;
     this.ctx = new AudioContext({ sampleRate: this.preferredRate });
     this.logged = false;
