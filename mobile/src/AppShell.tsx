@@ -85,6 +85,20 @@ export default function AppShell() {
   const [failed, setFailed] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [engineStatus, setEngineStatus] = useState('');
+  // A loading line and a reason the app cannot make a sound are not the same message
+  // and must not look the same. The first should be ignorable; the second was 11pt
+  // grey at the very bottom edge, which is how a tester ends up reporting "no voice"
+  // with the explanation already on their screen.
+  const [engineFailed, setEngineFailed] = useState(false);
+
+  const note = useCallback((msg: string) => {
+    setEngineFailed(false);
+    setEngineStatus(msg);
+  }, []);
+  const fail = useCallback((msg: string) => {
+    setEngineFailed(true);
+    setEngineStatus(msg);
+  }, []);
   // null while we are still finding out, so the WebView is not flashed up before we
   // know whether this is a first run.
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
@@ -97,12 +111,12 @@ export default function AppShell() {
   // the models the app can render but cannot talk.
   const loadEngines = useCallback(async () => {
     try {
-      await loadNativeEngines(setEngineStatus);
+      await loadNativeEngines(note);
       setEngineStatus('');
     } catch (err) {
-      setEngineStatus(`Could not load the models: ${err instanceof Error ? err.message : err}`);
+      fail(`Could not load the models: ${err instanceof Error ? err.message : err}`);
     }
-  }, []);
+  }, [note, fail]);
 
   // The audio session, set once at startup rather than only when recording begins.
   //
@@ -113,16 +127,40 @@ export default function AppShell() {
   useEffect(() => {
     (async () => {
       try {
+        // Ask for the microphone before touching the session, because on iOS a
+        // playAndRecord session *cannot activate* without it — and an inactive
+        // session takes her voice down with it. That is why a denied microphone
+        // does not present as "the mic is broken": it presents as nothing working
+        // at all, replies arriving as text with no sound in either direction.
+        //
+        // Nothing asked before this. iOS prompts by itself on the first recording
+        // attempt, which is late, and if the answer is no there is no second prompt
+        // and nothing anywhere that says so.
+        let permission = await AudioManager.checkRecordingPermissions();
+        if (permission === 'Undetermined') {
+          permission = await AudioManager.requestRecordingPermissions();
+        }
+        if (permission !== 'Granted') {
+          fail(
+            'Poppys needs the microphone to hear you, and iOS mutes her voice ' +
+            'without it. Turn it on in Settings › Poppys › Microphone.',
+          );
+          return;
+        }
+
         AudioManager.setAudioSessionOptions({
           iosCategory: 'playAndRecord',
           iosOptions: ['defaultToSpeaker', 'allowBluetoothHFP'],
         });
         await AudioManager.setAudioSessionActivity(true);
       } catch (err) {
-        console.log(`[audio] could not set the audio session: ${err}`);
+        // Swallowed into a console line before. On a phone that log belongs to
+        // nobody, so the one message explaining why the app is silent was written
+        // somewhere no user or tester could ever read it.
+        fail(`Audio could not start: ${err instanceof Error ? err.message : String(err)}`);
       }
     })();
-  }, []);
+  }, [fail]);
 
   useEffect(() => {
     (async () => {
@@ -263,8 +301,12 @@ export default function AppShell() {
         </View>
       )}
       {!!engineStatus && (
-        <View style={styles.engineStatus} pointerEvents="none">
-          <Text style={styles.engineStatusText}>{engineStatus}</Text>
+        <View
+          style={[styles.engineStatus, engineFailed && styles.engineStatusBad]}
+          pointerEvents="none">
+          <Text style={[styles.engineStatusText, engineFailed && styles.engineStatusTextBad]}>
+            {engineStatus}
+          </Text>
         </View>
       )}
     </View>
@@ -286,4 +328,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(7,18,7,0.06)',
   },
   engineStatusText: { fontSize: 11, color: 'rgba(7,18,7,0.55)' },
+  // A failure sits at the top, over the app, in the poppy red, and is legible.
+  engineStatusBad: {
+    top: 0, bottom: undefined,
+    paddingTop: 64, paddingBottom: 16, paddingHorizontal: 20,
+    backgroundColor: '#e92832',
+  },
+  engineStatusTextBad: {
+    fontSize: 15, lineHeight: 21, color: '#fff8ea',
+    fontWeight: '600', textAlign: 'center',
+  },
 });
