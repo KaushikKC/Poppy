@@ -22,7 +22,8 @@ import {
 } from 'react-native';
 
 import { ensureModels, missingModels, reattach, type Progress } from './core/downloader';
-import { describe } from './core/model_tier';
+import { CHOICES, describe, type Tier } from './core/model_tier';
+import * as companion from './core/companion';
 
 const POPPY = '#e8552b';
 
@@ -38,16 +39,31 @@ export default function ModelSetup({ onReady }: { onReady: () => void }) {
   const [allowCellular, setAllowCellular] = useState(false);
   const [pick, setPick] = useState('');
   const [needBytes, setNeedBytes] = useState(0);
+  const [tier, setTier] = useState<Tier | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
   const started = useRef(false);
+
+  const refresh = useCallback(async (chosen: Tier | null) => {
+    setPick(await describe(chosen));
+    const missing = await missingModels(chosen);
+    setNeedBytes(missing.reduce((n, m) => n + m.bytes, 0));
+  }, []);
 
   useEffect(() => {
     (async () => {
-      setPick(await describe());
-      const missing = await missingModels();
-      setNeedBytes(missing.reduce((n, m) => n + m.bytes, 0));
+      const saved = ((await companion.profile()).model_tier ?? null) as Tier | null;
+      setTier(saved);
+      await refresh(saved);
       await reattach();
     })();
-  }, []);
+  }, [refresh]);
+
+  const choose = useCallback(async (t: Tier) => {
+    setTier(t);
+    setShowPicker(false);
+    await companion.update({ model_tier: t });
+    await refresh(t);
+  }, [refresh]);
 
   const start = useCallback(async () => {
     if (started.current) return;
@@ -55,7 +71,7 @@ export default function ModelSetup({ onReady }: { onReady: () => void }) {
     setRunning(true);
     setFailed(null);
     try {
-      await ensureModels(setProgress, { allowCellular });
+      await ensureModels(setProgress, { allowCellular, savedTier: tier });
       onReady();
     } catch (err) {
       setFailed(err instanceof Error ? err.message : String(err));
@@ -63,7 +79,7 @@ export default function ModelSetup({ onReady }: { onReady: () => void }) {
     } finally {
       setRunning(false);
     }
-  }, [allowCellular, onReady]);
+  }, [allowCellular, onReady, tier]);
 
   const pct = progress ? Math.round(progress.fraction * 100) : 0;
   const phaseLabel =
@@ -111,6 +127,29 @@ export default function ModelSetup({ onReady }: { onReady: () => void }) {
             <Pressable style={styles.button} onPress={start}>
               <Text style={styles.buttonText}>Download and continue</Text>
             </Pressable>
+
+            <Pressable onPress={() => setShowPicker((v) => !v)}>
+              <Text style={styles.link}>
+                {showPicker ? 'Never mind' : 'Choose a different model'}
+              </Text>
+            </Pressable>
+
+            {showPicker && (
+              <View style={styles.picker}>
+                <Text style={styles.rowHint}>
+                  A smaller model runs cooler and replies more simply. Anything already
+                  downloaded is kept, so you can switch back instantly.
+                </Text>
+                {CHOICES.map((c) => (
+                  <Pressable key={c.tier} style={styles.choice} onPress={() => choose(c.tier)}>
+                    <Text style={[styles.choiceLabel, tier === c.tier && styles.choiceOn]}>
+                      {c.label}  ·  {mb(c.bytes)}
+                    </Text>
+                    <Text style={styles.rowHint}>{c.note}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
           </>
         )}
 
@@ -184,4 +223,9 @@ const styles = StyleSheet.create({
   errorBlock: { gap: 10, marginTop: 4 },
   error: { fontSize: 14, color: '#b3261e', lineHeight: 20 },
   spinner: { marginTop: 8 },
+  link: { fontSize: 13, color: POPPY, textAlign: 'center', paddingVertical: 8 },
+  picker: { gap: 10, marginTop: 2 },
+  choice: { paddingVertical: 8 },
+  choiceLabel: { fontSize: 15, color: '#1f2d3d' },
+  choiceOn: { color: POPPY, fontWeight: '600' },
 });

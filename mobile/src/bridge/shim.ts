@@ -149,6 +149,17 @@ export const SHIM_JS = String.raw`
     });
   };
 
+  // ── a way back to the model picker ────────────────────────────────────────
+  // Tapping the version line on the home screen reopens setup, which is where the
+  // model is chosen. Done here rather than in flow.js so the desktop build is
+  // untouched, and put on an existing element so no new UI has to be invented.
+  document.addEventListener('click', function (e) {
+    var el = e && e.target;
+    if (el && el.id === 'home-version') {
+      post({ t: 'setup:open' });
+    }
+  }, true);
+
   // ── unlocking audio ───────────────────────────────────────────────────────
   // iOS starts a WKWebView's AudioContext *suspended* and refuses to resume it
   // outside a user gesture, and the refusal is silent. The symptom is precise: the

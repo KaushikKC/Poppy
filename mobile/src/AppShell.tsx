@@ -169,6 +169,11 @@ export default function AppShell() {
         playback.stop();
         return true;
       }
+      // Reopen setup, which is where the model is chosen.
+      if (msg.t === 'setup:open') {
+        setNeedsSetup(true);
+        return true;
+      }
       return mic.handle(msg);
     });
     return (e: WebViewMessageEvent) => {

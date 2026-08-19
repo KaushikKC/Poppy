@@ -14,7 +14,10 @@ import { initLlama, type LlamaContext } from 'llama.rn';
 import { initWhisper, type WhisperContext } from 'whisper.rn';
 import { createTTS, type TtsEngine } from 'react-native-sherpa-onnx/tts';
 
-import { KOKORO_DIR, LLM_PATH, WHISPER_PATH } from '../models';
+import { KOKORO_DIR, WHISPER_PATH } from '../models';
+import { DocumentDirectoryPath } from '@dr.pogodin/react-native-fs';
+import { llmPath } from './model_tier';
+import * as companion from './companion';
 import { setEngines, type Engines, type Llm, type Speech, type Stt } from './engines';
 import { floatToPcm16 } from '../audio';
 import { ttsDiagnostic } from './tts_info';
@@ -89,8 +92,14 @@ export async function loadNativeEngines(
   const whisper = await initWhisper({ filePath: WHISPER_PATH });
 
   onProgress('Loading the language model…');
+  // Whichever model the user settled on, which may not be the one their RAM suggests:
+  // a smaller one runs cooler, and that is a trade they are allowed to make.
+  const tier = ((await companion.profile()).model_tier ?? null) as
+    | Parameters<typeof llmPath>[0]
+    | null;
+  const modelFile = `${DocumentDirectoryPath}/${await llmPath(tier)}`;
   const llama = await initLlama({
-    model: LLM_PATH,
+    model: modelFile,
     n_ctx: N_CTX,
     n_gpu_layers: 99, // Metal where available; llama.cpp falls back to CPU
   });

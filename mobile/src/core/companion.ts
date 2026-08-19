@@ -62,6 +62,7 @@ export type Profile = {
   pact?: Record<string, unknown> | null;
   closeness?: number;
   plan?: string;
+  model_tier?: string | null;
   calls_day?: Record<string, unknown> | null;
 };
 
@@ -106,6 +107,7 @@ export const DEFAULTS: Profile = {
   pact: null,
   closeness: 0,
   plan: 'plus',
+  model_tier: null,
   calls_day: null,
 };
 

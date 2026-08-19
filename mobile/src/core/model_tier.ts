@@ -32,7 +32,7 @@
 
 import DeviceInfo from 'react-native-device-info';
 
-export type Tier = '1b' | '1_5b' | '3b';
+export type Tier = 'gemma1b' | '1b' | '1_5b' | '3b';
 
 /**
  * Sizes are the real Content-Length of each URL, checked rather than estimated: the
@@ -49,21 +49,35 @@ export type ModelSpec = {
   archive?: boolean;
 };
 
+/**
+ * Each model lives at its own path, so switching between them does not re-download
+ * anything already fetched. Trying three models to find the one that runs coolest is
+ * only reasonable if going back is instant.
+ */
 const LLM: Record<Tier, ModelSpec> = {
+  // The smallest and coolest option. Weakest at structured output, which this app needs
+  // for memory extraction and naming a loop topic, so it is offered for the heat
+  // comparison rather than recommended.
+  gemma1b: {
+    path: 'models/llm/gemma-3-1b-q4.gguf',
+    url: 'https://huggingface.co/unsloth/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf',
+    bytes: 806_000_000,
+    label: 'Gemma 3 1B',
+  },
   '1b': {
-    path: 'models/llm/model.gguf',
+    path: 'models/llm/llama-3.2-1b-q4.gguf',
     url: 'https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf',
     bytes: 807_690_000,
     label: 'Llama 3.2 1B',
   },
   '1_5b': {
-    path: 'models/llm/model.gguf',
+    path: 'models/llm/qwen2.5-1.5b-q4.gguf',
     url: 'https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf',
     bytes: 986_000_000,
     label: 'Qwen2.5 1.5B',
   },
   '3b': {
-    path: 'models/llm/model.gguf',
+    path: 'models/llm/llama-3.2-3b-q4.gguf',
     url: 'https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf',
     bytes: 2_019_000_000,
     label: 'Llama 3.2 3B',
@@ -140,3 +154,20 @@ export async function describe(saved?: Tier | null): Promise<string> {
 export function specsForTier(tier: Tier): ModelSpec[] {
   return [LLM[tier], WHISPER, KOKORO];
 }
+
+/** Where the chosen model's weights are, for the engine to load. */
+export async function llmPath(saved?: Tier | null): Promise<string> {
+  return LLM[await chosenTier(saved)].path;
+}
+
+/** For the picker: what can be chosen, and what each costs. */
+export const CHOICES: Array<{ tier: Tier; label: string; bytes: number; note: string }> = [
+  { tier: 'gemma1b', label: 'Gemma 3 1B', bytes: LLM.gemma1b.bytes,
+    note: 'Smallest and coolest. Weakest at remembering things accurately.' },
+  { tier: '1b', label: 'Llama 3.2 1B', bytes: LLM['1b'].bytes,
+    note: 'Small and cool. Simpler replies.' },
+  { tier: '1_5b', label: 'Qwen2.5 1.5B', bytes: LLM['1_5b'].bytes,
+    note: 'Recommended. Better replies, a little warmer to run.' },
+  { tier: '3b', label: 'Llama 3.2 3B', bytes: LLM['3b'].bytes,
+    note: 'Best replies. Likely too large for a 6 GB phone.' },
+];

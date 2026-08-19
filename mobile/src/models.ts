@@ -21,7 +21,11 @@ import { DocumentDirectoryPath, exists } from '@dr.pogodin/react-native-fs';
  */
 export const MODELS_ROOT = `${DocumentDirectoryPath}/models`;
 
-export const LLM_PATH = `${MODELS_ROOT}/llm/model.gguf`;
+/**
+ * The language model's path is no longer fixed: each model has its own file, so
+ * switching between them does not re-download. Ask model_tier for the current one.
+ */
+export const LLM_PATH = `${MODELS_ROOT}/llm/model.gguf`; // legacy, first install only
 export const WHISPER_PATH = `${MODELS_ROOT}/whisper/ggml-base.en.bin`;
 export const KOKORO_DIR = `${MODELS_ROOT}/kokoro`;
 
