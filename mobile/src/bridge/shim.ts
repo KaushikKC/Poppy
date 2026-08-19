@@ -306,18 +306,37 @@ export const SHIM_JS = String.raw`
       '#home { padding-bottom: calc(1.5rem + ' + BOTTOM + ') !important; }' +
       '.garden-bar { padding-bottom: calc(1rem + ' + BOTTOM + ') !important; }' +
 
-      // A strict ceiling so a single long reply cannot regrow the panel over the
-      // character; in practice showing only the current exchange stays far
-      // smaller than this.
-      '.call-rail { max-height: 22vh !important; }' +
+      // ── the call's bottom third ─────────────────────────────────────────
+      // A strict ceiling so a long reply cannot regrow the panel over the
+      // character. It has to be tall enough to hold the whole current exchange at
+      // once, though: at 28vh only one bubble fitted, so what was just said filled
+      // the panel and her answer to it had to be scrolled to — in a strip two lines
+      // deep, mid-conversation, which is the one moment nobody wants to be
+      // scrolling. Both bubbles fit here.
+      '.call-rail { max-height: 38vh !important; }' +
       // Only the current exchange (her last line and, if present, what was just
       // said to her) stays visible — "the new chat only", not the scrollback.
       '.rail-scroll .bubble:not(:nth-last-child(-n+2)) { display: none !important; }' +
-      // The dock and the input row now sit closer to the very bottom edge than
-      // desktop's layout assumed; keep them clear of the home-indicator gesture
-      // area rather than sitting under it.
-      '.dock { margin-bottom: env(safe-area-inset-bottom, 0px); }' +
-      '.call-rail #chat-form { padding-bottom: calc(0.7rem + env(safe-area-inset-bottom, 0px)); }' +
+      // Desktop's padding is generous because it has a whole column to be generous
+      // with; here every pixel of it is a pixel the exchange does not get.
+      '.rail-scroll { padding: 0.75rem 0.8rem !important; }' +
+      // She is drawn in the middle of her own container, and that container was the
+      // whole window — so the taller the transcript grew, the further down behind it
+      // and the dock she sat. Her area now ends where the transcript begins, which
+      // puts her back in the middle of the part of the screen she actually has. Only
+      // the orb moves: the sky stays full-bleed behind everything.
+      'body[data-view="call"] #avatar3d { bottom: 38vh; }' +
+      // Lift the dock (Talk · Auto · End · Memory) off the rail, which is what
+      // makes room for a taller input row without the two crowding each other.
+      '.dock { margin-bottom: 0.6rem !important; }' +
+      // A typing target sized for a thumb. 1rem is also the smallest size iOS will
+      // not try to zoom into on focus, which matters even with the viewport locked.
+      '.call-rail #chat-form {' +
+      '  padding: 0.8rem 0.8rem calc(0.8rem + ' + BOTTOM + ') !important; }' +
+      '.call-rail #user-input {' +
+      '  padding: 0.95rem 1rem !important; font-size: 1rem !important; }' +
+      '.call-rail #send-btn, .call-rail #clear-btn {' +
+      '  width: 48px !important; height: 48px !important; }' +
       '}';
     document.head.appendChild(style);
   }
