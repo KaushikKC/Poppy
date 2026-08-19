@@ -33,6 +33,10 @@ _DEFAULTS = {
     "voice": "af_heart",         # the character's Kokoro voice
     "vibe": "friend",            # legacy vibe key (mood modes still layer on top)
     "avatar": "brunette",        # avatar preset id (frontend/avatar/*.glb)
+    # How her replies arrive: "voice" (one recording, no text) or "text" (tokens,
+    # no audio). Exclusive on purpose — a reply that can be read while it is being
+    # spoken gets read, and the voice becomes something to wait through.
+    "reply_mode": "voice",
     "created_at": None,
     "last_call_date": None,      # ISO date (YYYY-MM-DD) of the most recent call
     "current_streak": 0,

@@ -1,10 +1,11 @@
 import asyncio
+import io
 import uuid
+import wave
 from fastapi import WebSocket, WebSocketDisconnect
 from llm import stream_reply
 import tts
 from tts import synthesize_to_wav_bytes
-from phrase_chunker import PhraseChunker
 from config import (
     MAX_HISTORY_TURNS,
     KOKORO_SAMPLE_RATE,
@@ -50,81 +51,14 @@ def current_call_turn_no() -> int:
     return (len(conversation_history) - _call_turn_base) // 2 + 1
 
 # A single phrase's synthesis must never be able to hang the whole turn. If it
-# stalls past this (GPU contention, a pathological phrase), we skip that phrase's
-# audio and let the reply finish rather than leaving the voice frozen mid-reply.
+# stalls past this (GPU contention, a pathological line) the turn finishes without a
+# recording rather than leaving the socket hanging. A floor, not the whole budget:
+# _reply_voice_note scales it with the length of what it is rendering.
 TTS_TIMEOUT_S = 15.0
 
 
 async def _synthesize(text: str, accent: str, voice: str) -> bytes:
     return await asyncio.to_thread(synthesize_to_wav_bytes, text, accent, None, voice)
-
-
-async def _synthesize_safe(text: str, accent: str, voice: str) -> bytes:
-    """Synthesize one phrase in the character's voice, but never raise or hang the
-    turn: on timeout or error return empty bytes (that phrase just gets no audio)."""
-    try:
-        return await asyncio.wait_for(_synthesize(text, accent, voice), TTS_TIMEOUT_S)
-    except Exception as e:
-        print(f"[tts] synth skipped for phrase ({e!r}): {text[:40]!r}")
-        return b""
-
-
-class SpeechStream:
-    """Synthesise a reply's phrases one at a time, in order.
-
-    Every phrase used to get its own `asyncio.create_task`, so a long reply fired
-    eight or ten synthesis calls at the speech model simultaneously. They thrash:
-    each one then takes longer than the timeout and gets dropped, which is heard
-    as her going silent while the text still appears. Worse as the conversation
-    goes on, because replies get longer.
-
-    One worker fixes both that and an ordering bug that was there all along: the
-    concurrent tasks sent their audio in completion order, not phrase order, so a
-    reply could play back scrambled.
-
-    Streaming is preserved. The first phrase starts synthesising while the model
-    is still generating the rest; it just never runs two at once.
-    """
-
-    def __init__(self, ws: WebSocket, accent: str, voice: str):
-        self._ws = ws
-        self._accent = accent
-        self._voice = voice
-        self._queue: asyncio.Queue = asyncio.Queue()
-        self._worker = asyncio.create_task(self._run())
-
-    async def _run(self) -> None:
-        while True:
-            phrase = await self._queue.get()
-            try:
-                if phrase is None:
-                    return
-                audio = await _synthesize_safe(phrase, self._accent, self._voice)
-                if audio:
-                    await self._ws.send_bytes(audio)
-            except (asyncio.CancelledError, Exception):
-                if isinstance(phrase, str):
-                    print(f"[tts] dropped phrase after send failure: {phrase[:40]!r}")
-                raise
-            finally:
-                self._queue.task_done()
-
-    def push(self, phrase: str) -> None:
-        if phrase:
-            self._queue.put_nowait(phrase)
-
-    async def close(self) -> None:
-        """Wait for every queued phrase to be spoken."""
-        self._queue.put_nowait(None)
-        await self._worker
-
-    async def cancel(self) -> None:
-        if not self._worker.done():
-            self._worker.cancel()
-        try:
-            await self._worker
-        except (asyncio.CancelledError, Exception):
-            pass
 
 
 async def _db_save(session_id: str, role: str, content: str) -> None:
@@ -137,6 +71,58 @@ def _trim_history():
         del conversation_history[: len(conversation_history) - cap]
 
 
+async def _reply_voice_note(ws: WebSocket, text: str, accent: str, voice: str) -> None:
+    """Deliver one turn as a single recording, the way a voice message arrives.
+
+    Not phrase by phrase. That design exists to start speaking before the model has
+    finished, which is right when synthesis outruns speech — and measured on a phone
+    it does not: roughly six seconds of audio take ten to render, and every phrase
+    boundary costs a further second of fixed per-call overhead. Speaking early
+    therefore only meant running out early, heard as a sentence, five seconds of
+    silence, then another sentence.
+
+    Rendered whole there is one call and no next phrase to wait for, so the wait is
+    paid once, up front, where a voice note's wait belongs. The duration is known
+    before a sound is made, so the page can draw a real progress bar rather than a
+    spinner of unknown length.
+    """
+    line = (text or "").strip()
+    if not line:
+        return
+
+    # The phrase timeout is far too short for a whole reply — it is the same work
+    # several times over — so it scales with the text, with the old value as a floor.
+    timeout = max(TTS_TIMEOUT_S, len(line) * 0.25)
+    try:
+        audio = await asyncio.wait_for(_synthesize(line, accent, voice), timeout)
+    except Exception as e:
+        print(f"[tts] the recording failed ({e!r}): {line[:60]!r}")
+        await ws.send_json({"type": "error", "message": "Her voice could not be rendered."})
+        return
+
+    if not audio:
+        return
+
+    await ws.send_json({"type": "config", "sampleRate": tts.SAMPLE_RATE})
+    await ws.send_json({"type": "voice", "durationMs": _wav_duration_ms(audio)})
+    await ws.send_bytes(audio)
+
+
+def _wav_duration_ms(audio: bytes) -> int:
+    """How long the recording runs, read from the WAV itself.
+
+    From the header rather than from len(bytes), because the arithmetic depends on
+    the channel count and sample width, and guessing those wrong gives a progress bar
+    that finishes at half time or runs twice as long as the audio.
+    """
+    try:
+        with wave.open(io.BytesIO(audio), "rb") as w:
+            frames, rate = w.getnframes(), w.getframerate()
+            return int(frames / rate * 1000) if rate else 0
+    except Exception:
+        return 0
+
+
 async def _reply_video(ws: WebSocket, text: str, voice: str):
     """Deliver one turn as a talking-head clip instead of streamed audio
     (AVATAR_BACKEND=video). The reply text still streams to the bubble; the clip
@@ -147,36 +133,29 @@ async def _reply_video(ws: WebSocket, text: str, voice: str):
         await ws.send_json({"type": "avatar_clip", "url": f"/avatar/clip/{clip_id}"})
 
 
-async def _say(ws: WebSocket, text: str, accent: str, voice: str):
-    """Speak a line the companion initiates herself (the opening line, an end-of-call
-    sign-off) — TTS + on-screen text, no LLM turn. Mirrors the chat path's
-    phrase-chunked streaming so the first audio still starts almost immediately."""
+async def _say(ws: WebSocket, text: str, accent: str, voice: str, deliver: str = "voice"):
+    """Speak a line the companion initiates herself — the opening line, an end-of-call
+    sign-off. No LLM turn: the words are already known.
+
+    Delivered the same way a reply is, because it is the first thing anyone hears and
+    a stuttering hello is a worse first impression than a slightly later one.
+    """
     # Video-avatar mode: reveal the line, render one clip (which carries its own
-    # audio), and skip the phrase-audio streaming entirely.
+    # audio), and skip the audio path entirely.
     if AVATAR_BACKEND == "video":
         await ws.send_json({"type": "token", "text": text})
         await _reply_video(ws, text, voice)
         await ws.send_json({"type": "done"})
         return
 
-    await ws.send_json({"type": "config", "sampleRate": tts.SAMPLE_RATE})
-    chunker = PhraseChunker()
-    speech = SpeechStream(ws, accent, voice)
-
-    try:
-        # Reveal the whole line up front (the text is already known), then stream
-        # its audio phrase by phrase.
+    if deliver == "text":
         await ws.send_json({"type": "token", "text": text})
-        for ch in text:
-            phrase = chunker.push(ch)
-            if phrase:
-                speech.push(phrase)
-        speech.push(chunker.flush())
-        await speech.close()
         await ws.send_json({"type": "done"})
-    except Exception:
-        await speech.cancel()
-        raise
+        return
+
+    await ws.send_json({"type": "recording"})
+    await _reply_voice_note(ws, text, accent, voice)
+    await ws.send_json({"type": "done"})
 
 
 async def handle_chat(ws: WebSocket):
@@ -194,7 +173,11 @@ async def handle_chat(ws: WebSocket):
                 say_text = msg.get("text", "").strip()
                 if say_text:
                     char = characters.get((await asyncio.to_thread(companion.profile)).get("character", "poppy"))
-                    await _say(ws, say_text, char["accent"], char["voice"])
+                    say_profile = await asyncio.to_thread(companion.profile)
+                    await _say(
+                        ws, say_text, char["accent"], char["voice"],
+                        "text" if say_profile.get("reply_mode") == "text" else "voice",
+                    )
                 continue
 
             if msg.get("type") != "chat":
@@ -305,24 +288,32 @@ async def handle_chat(ws: WebSocket):
                 await ws.send_json({"type": "done", "sessionId": session_id})
                 continue
 
-            await ws.send_json({"type": "config", "sampleRate": tts.SAMPLE_RATE})
+            # Voice notes or text, never both. The page is not told which mode it
+            # is in: in voice mode it receives a recording and no tokens, in text
+            # mode tokens and no recording, and it renders whatever arrives.
+            deliver = "text" if profile.get("reply_mode") == "text" else "voice"
 
-            chunker = PhraseChunker()
+            if deliver == "voice":
+                # She is recording. Sent before the model starts, because the whole
+                # point of the voice-note shape is that the wait is visible and
+                # explained rather than being dead air.
+                await ws.send_json({"type": "recording"})
+
             full_reply: list[str] = []
-            # One worker, in order. Phrases are queued as the model produces them,
-            # so the voice still starts while she is still "typing", but only one
-            # synthesis ever runs at a time.
-            speech = SpeechStream(ws, reply_accent, reply_voice)
             try:
                 async for token in stream_reply(conversation_history, user_text, system_prompt):
                     full_reply.append(token)
-                    await ws.send_json({"type": "token", "text": token})
-                    speech.push(chunker.push(token))
-
-                speech.push(chunker.flush())
-                await speech.close()
+                    # Nothing readable is sent while she records. A reply that can be
+                    # read while it is being spoken gets read, and then the recording
+                    # is only something to sit through.
+                    if deliver == "text":
+                        await ws.send_json({"type": "token", "text": token})
 
                 assistant_text = "".join(full_reply)
+
+                if deliver == "voice":
+                    await _reply_voice_note(ws, assistant_text, reply_accent, reply_voice)
+
                 conversation_history.append({"role": "user", "content": user_text})
                 conversation_history.append({"role": "assistant", "content": assistant_text})
                 _trim_history()
@@ -337,9 +328,9 @@ async def handle_chat(ws: WebSocket):
                 # /memory/extract to get candidates and asks the user to Save them.
                 await ws.send_json({"type": "done", "sessionId": session_id})
             except Exception:
-                # On barge-in the socket closes mid-stream; drop anything still
-                # queued rather than synthesising into a dead connection.
-                await speech.cancel()
+                # On barge-in the socket closes mid-stream. Nothing is queued now
+                # that synthesis happens once, after generation, so there is nothing
+                # to drain — the raise is enough.
                 raise
 
     except WebSocketDisconnect:

@@ -274,6 +274,15 @@ async def onboard_companion(payload: dict = Body(...)):
     )
 
 
+@app.post("/companion/reply-mode")
+async def set_reply_mode(payload: dict = Body(default={})):
+    """Voice notes or text, one or the other. See companion._DEFAULTS: they are
+    exclusive because a reply that can be read is never waited for."""
+    mode = "text" if (payload or {}).get("mode") == "text" else "voice"
+    await asyncio.to_thread(companion.update, reply_mode=mode)
+    return {"reply_mode": mode}
+
+
 @app.post("/companion/character")
 async def switch_character(payload: dict = Body(...)):
     """Switch to a different character. Memory is per-character, so switching swaps
