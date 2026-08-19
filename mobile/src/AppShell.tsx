@@ -189,6 +189,15 @@ export default function AppShell() {
     };
   }, []);
 
+  const reloadAfterCrash = useCallback(() => {
+    console.log('[webview] content process was killed; reloading the UI');
+    // Whatever was mid-flight died with the process.
+    playback.stop();
+    void micRef.current?.release();
+    setReady(false);
+    webRef.current?.reload();
+  }, []);
+
   // First run: download before anything else. The web UI cannot help here, because
   // she has no voice and no mind until this finishes.
   if (needsSetup === true) {
@@ -235,6 +244,15 @@ export default function AppShell() {
         injectedJavaScriptBeforeContentLoaded={SHIM_JS}
         onMessage={onMessage}
         onLoadEnd={() => setReady(true)}
+        // A WebView runs its content in its own process, with a far smaller memory
+        // allowance than this app — which is holding a multi-gigabyte model. When
+        // the system is under pressure that process is the first thing it kills,
+        // and the only symptom is the whole UI turning blank white and staying
+        // that way: nothing reloads it on its own. Reload it here, because a blank
+        // app is worse than a re-render. Named differently on each platform for
+        // the same event.
+        onContentProcessDidTerminate={reloadAfterCrash}
+        onRenderProcessGone={reloadAfterCrash}
         onError={(e: Parameters<NonNullable<WebViewProps['onError']>>[0]) => setFailed(`WebView failed: ${e.nativeEvent.description}`)}
         mediaPlaybackRequiresUserAction={false}
         style={styles.web}
