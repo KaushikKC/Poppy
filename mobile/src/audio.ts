@@ -124,15 +124,45 @@ export class MicRecorder {
 }
 
 /**
- * Plays raw float PCM samples (what sherpa-onnx Kokoro returns) through the
- * device speaker, resolving when playback finishes so chunks play in order.
+ * Plays raw float PCM through the speaker, at the right pitch.
+ *
+ * ## The bird voice
+ *
+ * Kokoro outputs 24 kHz. iOS runs its audio graph at the hardware rate, normally 48 kHz.
+ * Handing a 24 kHz buffer to a 48 kHz context and trusting it to resample is what made
+ * her sound robotic, far too fast and, in the report that finally identified it, "like a
+ * bird": every sample played twice as quickly and an octave high. It also flattened the
+ * differences between characters, because a large enough pitch shift makes any two
+ * voices sound like the same synthesiser.
+ *
+ * Two defences, because either alone can be defeated by the platform. The context is
+ * *asked* for Kokoro's rate, and whatever rate it actually reports, the samples are
+ * resampled to match before they are handed over. The rates are logged once so a future
+ * mismatch is visible rather than merely audible.
  */
 export class PcmPlayer {
-  private ctx = new AudioContext();
+  private ctx: AudioContext;
+  private logged = false;
+
+  constructor(preferredRate = 24000) {
+    // iOS may refuse and give the hardware rate anyway; the resample below covers that.
+    this.ctx = new AudioContext({ sampleRate: preferredRate });
+  }
 
   play(samples: number[], sampleRate: number): Promise<void> {
-    const buf = this.ctx.createBuffer(1, samples.length, sampleRate);
-    buf.getChannelData(0).set(Float32Array.from(samples));
+    const target = this.ctx.sampleRate || sampleRate;
+
+    if (!this.logged) {
+      this.logged = true;
+      console.log(
+        `[audio] context ${target}Hz, source ${sampleRate}Hz` +
+        (target === sampleRate ? '' : ' -> resampling to keep the pitch right'),
+      );
+    }
+
+    const data = target === sampleRate ? samples : resampleTo(samples, sampleRate, target);
+    const buf = this.ctx.createBuffer(1, data.length, target);
+    buf.getChannelData(0).set(Float32Array.from(data));
     const source = this.ctx.createBufferSource();
     source.buffer = buf;
     source.connect(this.ctx.destination);
@@ -147,6 +177,21 @@ export class PcmPlayer {
   }
 }
 
+/** Linear resample between arbitrary rates. Good enough for speech playback. */
+function resampleTo(input: number[], from: number, to: number): number[] {
+  if (from === to || input.length === 0) return input;
+  const ratio = from / to;
+  const outLen = Math.floor(input.length / ratio);
+  const out = new Array<number>(outLen);
+  for (let i = 0; i < outLen; i++) {
+    const pos = i * ratio;
+    const i0 = Math.floor(pos);
+    const i1 = Math.min(i0 + 1, input.length - 1);
+    const frac = pos - i0;
+    out[i] = input[i0] * (1 - frac) + input[i1] * frac;
+  }
+  return out;
+}
 
 /**
  * Continuous listening: the mic stays open and each finished utterance is handed

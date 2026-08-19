@@ -48,14 +48,15 @@ const VOICE_SID: Record<string, number> = {
 const DEFAULT_SID = VOICE_SID.af_heart;
 
 /**
- * Slightly under 1.0 because 1.0 was reported as too fast to listen to. Desktop's
- * pipeline and sherpa's do not pace identically at the same nominal speed, so this is
- * tuned by ear against the phone rather than copied from the other platform.
+ * Back to natural pace, the same as desktop.
+ *
+ * These were 0.9 and 1.15, slowing her down because she was reported as far too fast.
+ * That was treating a symptom: the real cause was 24 kHz audio being played through a
+ * 48 kHz context, so every phrase ran at double speed and double pitch. With the pitch
+ * fixed in PcmPlayer, a slowdown here would just make her sluggish.
  */
-const SPEECH_SPEED = 0.9;
-
-/** Above 1.0 lengthens each phoneme, which is the model-level way to slow speech. */
-const SPEECH_LENGTH_SCALE = 1.15;
+const SPEECH_SPEED = 1.0;
+const SPEECH_LENGTH_SCALE = 1.0;
 
 // Filled in at load; declared in core/tts_info.ts so readers do not import this file.
 export { ttsDiagnostic } from './tts_info';
