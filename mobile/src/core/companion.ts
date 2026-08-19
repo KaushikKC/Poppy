@@ -49,6 +49,8 @@ export type Profile = {
   loops?: Record<string, unknown>[];
   quests_day?: string | null;
   quests?: Record<string, unknown>[];
+  daily_goal?: string | null;
+  daily_layer_off?: boolean;
   bloom_points?: number;
   bloom_day?: Record<string, unknown> | null;
   bloom_today?: number;
@@ -94,6 +96,8 @@ export const DEFAULTS: Profile = {
   loops: [],
   quests_day: null,
   quests: [],
+  daily_goal: null,
+  daily_layer_off: false,
   bloom_points: 0,
   bloom_day: null,
   bloom_today: 0,

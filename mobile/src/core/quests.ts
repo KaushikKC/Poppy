@@ -17,6 +17,29 @@ import * as streak from './streak';
 export const SLOTS = 3;
 export const FRAGMENTS_PER_QUEST = 1;
 
+/** How much of the set counts as a day done. The ring is measured against this. */
+const GOALS: Record<string, { label: string; blurb: string; quests_required: number }> = {
+  gentle: { label: 'Gentle', blurb: 'one call', quests_required: 1 },
+  regular: { label: 'Regular', blurb: 'one call', quests_required: 2 },
+  deep: {
+    label: 'Deep',
+    blurb: 'one call and one thing worth remembering',
+    quests_required: 3,
+  },
+};
+const DEFAULT_GOAL = 'regular';
+
+async function goal(): Promise<Record<string, unknown>> {
+  const p = await companion.profile();
+  const key = p.daily_goal && GOALS[p.daily_goal] ? p.daily_goal : DEFAULT_GOAL;
+  return { key, ...GOALS[key] };
+}
+
+/** §4.9: "Just let me talk to her" hides the counting layer entirely. */
+export async function layerOff(): Promise<boolean> {
+  return Boolean((await companion.profile()).daily_layer_off);
+}
+
 type Quest = {
   id: string;
   signal: string;
@@ -129,13 +152,29 @@ export async function complete(signals: Record<string, unknown>): Promise<string
   return newly;
 }
 
+/**
+ * Everything a surface needs: the quests, the goal, and the ring.
+ *
+ * The key names are desktop's, deliberately. This returned `done` and `all_done`
+ * where backend/quests.py returns `completed` and `goal_met`, and the Today panel
+ * is desktop's own markup reading desktop's own names — so its ring rendered the
+ * literal string "undefined/undefined" and the home screen's "something is
+ * waiting" dot could never turn itself off.
+ */
 export async function status(): Promise<Record<string, unknown>> {
   const quests = await todayQuests();
+  const g = await goal();
+  const completed = quests.filter((q) => q.done).length;
+  const required = Math.min(Number(g.quests_required) || SLOTS, SLOTS);
   return {
     day: today(),
     quests,
-    done: quests.filter((q) => q.done).length,
-    total: quests.length,
+    goal: g,
+    completed,
+    total: SLOTS,
+    goal_met: completed >= required,
+    // A partly filled ring is the cheapest open loop in the product (§4.2).
+    ring: required ? Math.round(Math.min(completed / required, 1) * 100) / 100 : 0,
     // All three done is worth marking, but it is not a level and carries no score.
     all_done: quests.length > 0 && quests.every((q) => q.done),
   };

@@ -326,18 +326,24 @@ export function registerHandlers(): void {
 
   route('POST', '/streak/repair', async () => ok(await streak.repair()));
 
-  route('GET', '/quests', async () => ok(await quests.status()));
+  // Today's three quests, the goal and the ring. Empty when the daily layer is
+  // switched off, which is what tells the UI to keep the whole surface hidden.
+  route('GET', '/quests', async () =>
+    ok((await quests.layerOff()) ? { off: true } : await quests.status()));
 
   route('GET', '/bloom', async () => ok(await bloom.status()));
 
   route('GET', '/long-year', async () => ok(await streak.longYear()));
 
-  // The daily layer the home screen posts to on open: quests plus points, in one.
-  route('POST', '/daily-layer', async () => ok({
-    quests: await quests.status(),
-    bloom: await bloom.status(),
-    streak: await streak.status(),
-  }));
+  // §4.9: "Just let me talk to her" turns the counting layer off for good. It was
+  // answering with a bundle of the very counters it is meant to switch off, and
+  // never wrote the choice down — so the layer came back on the next launch.
+  route('POST', '/daily-layer', async (req): Promise<Res> => {
+    const b = (req.body ?? {}) as { off?: boolean };
+    const off = Boolean(b.off);
+    await companion.update({ daily_layer_off: off });
+    return ok({ off });
+  });
 
   // ── the ritual ────────────────────────────────────────────────────────────
   route('POST', '/ritual', async (req): Promise<Res> => {
