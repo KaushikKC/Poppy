@@ -22,6 +22,7 @@ import * as extract from './memory_extract';
 import * as author from './loop_author';
 import * as personas from './personas';
 import * as opening from './opening';
+import { resetCallTurns } from './socket';
 import * as nudges from './nudges';
 import * as billing from './billing';
 import * as tone from './tone';
@@ -160,6 +161,8 @@ export function registerHandlers(): void {
     const b = (req.body ?? {}) as { seed?: string; mode?: string; source?: string };
     const profile = await companion.profile();
     await billing.recordCall();
+    // The disclosure rotation and the pact's turn gate both count from here.
+    resetCallTurns();
     memory.setCharacter(profile.character);
 
     const loop = await loops.top();

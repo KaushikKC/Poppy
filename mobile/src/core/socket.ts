@@ -47,6 +47,21 @@ type Session = {
 
 const sessions = new Map<number, Session>();
 
+/**
+ * Turns in the current call, counted here rather than per socket.
+ *
+ * chat.js opens a **new WebSocket for every message**, so a per-socket counter was
+ * always 1. Two things broke silently on that: the disclosure example never rotated, so
+ * every reply opened with the same sentence, and the ritual pact — which may only be
+ * raised from turn two — could never be raised at all.
+ */
+let callTurns = 0;
+
+/** Called when a call opens, so the count belongs to the call and not to the app. */
+export function resetCallTurns(): void {
+  callTurns = 0;
+}
+
 /** Conversation history for the current session, oldest first. */
 const MAX_HISTORY_TURNS = 6;
 
@@ -146,20 +161,21 @@ export function createSocketHandler(): SocketHandler {
       // additive, it silently drops one. So disclosure yields whenever something
       // more urgent owns the shape of the reply, which for now is the safety tier.
       session.turns += 1;
+      callTurns += 1;
       const risk0 = safety.check(msg.text);
 
       // Exactly one placement instruction per turn: the model follows one of these
       // reliably and silently drops the rest, so they are ranked rather than stacked.
       // Safety outranks everything; the pact is asked once and then yields to
       // disclosure, which is the everyday behaviour.
-      const pactDue = risk0.level === null && session.turns >= ritual.ASK_FROM_TURN
+      const pactDue = risk0.level === null && callTurns >= ritual.ASK_FROM_TURN
         && (await ritual.isDue());
       const pactBlock = pactDue ? ritual.asPromptBlock() : '';
       if (pactDue) await ritual.markAsked();
 
       const disclosureBlock =
         risk0.level === null && !pactBlock
-          ? await disclosure.asPromptBlock(undefined, undefined, session.turns)
+          ? await disclosure.asPromptBlock(undefined, undefined, callTurns)
           : '';
       // Her persona prompt carries the whole of who she is, so it replaces the
       // placeholder rather than being appended to it.
