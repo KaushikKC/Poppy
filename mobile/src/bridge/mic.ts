@@ -17,6 +17,14 @@ import { playback } from '../core/playback';
 
 export type MicSend = (msg: unknown) => void;
 
+/** What to say when the audio held no speech, plus the reason when we know it. */
+function heardNothing(): string {
+  const d = MicRecorder.lastDiagnostic;
+  return d.includes('REPORTED RATE IS WRONG')
+    ? `I did not catch that. The microphone is reporting the wrong rate — ${d}`
+    : 'I did not catch that. Try again a little closer to the microphone.';
+}
+
 export function createMic(send: MicSend) {
   const recorder = new MicRecorder();
   let recording = false;
@@ -29,7 +37,11 @@ export function createMic(send: MicSend) {
       try {
         const text = await transcribe(pcm);
         console.log('[mic]', MicRecorder.lastDiagnostic);
-        send({ t: 'mic:transcript', text });
+        if (!text) {
+          send({ t: 'mic:error', message: heardNothing() });
+        } else {
+          send({ t: 'mic:transcript', text });
+        }
       } catch (err) {
         send({ t: 'mic:error', message: err instanceof Error ? err.message : String(err) });
       }
@@ -67,9 +79,16 @@ export function createMic(send: MicSend) {
         return;
       }
       const text = await transcribe(pcm);
-      // The diagnostic goes to the log, not the page: it explains a wrong
-      // transcript without putting anyone's words on screen.
       console.log('[mic]', MicRecorder.lastDiagnostic);
+      if (!text) {
+        // Audio arrived but nothing in it was speech — quiet, noise, or the wrong
+        // sample rate. Silence here reads as a broken button: the tester speaks,
+        // taps stop, and the app does nothing at all with no idea why. The rate
+        // line rides along only when it is the thing that went wrong, because that
+        // is the one cause they cannot guess at.
+        send({ t: 'mic:error', message: heardNothing() });
+        return;
+      }
       send({ t: 'mic:transcript', text });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

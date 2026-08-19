@@ -93,6 +93,14 @@
     if (msg.t === 'mic:error') {
       setMicState('idle');
       console.error('[mic]', msg.message);
+      // On a phone the console is nobody's, so a mic failure that only logs is a
+      // button that silently does nothing. The hint line under the transcript is
+      // already there to be read, and already talks about the mic.
+      var hint = document.getElementById('hint');
+      if (hint) {
+        hint.textContent = msg.message;
+        hint.classList.remove('hidden');
+      }
     }
   };
 

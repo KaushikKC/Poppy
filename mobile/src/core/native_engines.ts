@@ -88,6 +88,27 @@ let loaded: Loaded | null = null;
 // gigabyte of weights read twice, on a device that cannot spare the memory.
 let loading: Promise<void> | null = null;
 
+/**
+ * Whisper's own annotations for sound that is not speech: "(engine revving)",
+ * "[BLANK_AUDIO]", "(music playing)", a bare musical note. It emits these when it is
+ * handed audio with nothing intelligible in it — silence, noise, or, in the bug this
+ * app has hit twice now, speech at the wrong sample rate.
+ *
+ * They have to be thrown away rather than passed on. The model does not know it is
+ * reading a stage direction: it answers "(engine revving)" perfectly earnestly, which
+ * is what a user sees instead of being told their microphone produced nothing usable.
+ *
+ * Only the annotation goes. Real words either side of one are kept, because Whisper
+ * does interleave them with genuine speech.
+ */
+const ANNOTATION = /\([^)]*\)|\[[^\]]*\]|\u266a/g;
+
+function spokenWords(raw: string): string {
+  const left = raw.replace(ANNOTATION, ' ').replace(/\s+/g, ' ').trim();
+  // Punctuation left behind by a stripped annotation is not something anyone said.
+  return /[\p{L}\p{N}]/u.test(left) ? left : '';
+}
+
 export async function loadNativeEngines(
   onProgress: (msg: string) => void = () => {},
 ): Promise<void> {
@@ -170,7 +191,7 @@ async function loadOnce(onProgress: (msg: string) => void): Promise<void> {
         language: 'en',
       });
       const res = await promise;
-      return (res.result ?? '').trim();
+      return spokenWords(res.result ?? '');
     },
   };
 
