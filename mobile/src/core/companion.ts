@@ -65,6 +65,12 @@ export type Profile = {
   closeness?: number;
   plan?: string;
   model_tier?: string | null;
+  /**
+   * How her replies arrive: as a voice note with no text, or as text with no voice.
+   * Deliberately exclusive. Showing both means the reply is read before it is heard,
+   * and then the voice is only something to wait through.
+   */
+  reply_mode?: 'voice' | 'text';
   calls_day?: Record<string, unknown> | null;
 };
 
@@ -112,6 +118,7 @@ export const DEFAULTS: Profile = {
   closeness: 0,
   plan: 'plus',
   model_tier: null,
+  reply_mode: 'voice',
   calls_day: null,
 };
 

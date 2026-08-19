@@ -53,6 +53,17 @@ export function registerHandlers(): void {
     return ok(await companion.create(body.character ?? 'poppy'));
   });
 
+  /**
+   * Voice notes or text, one or the other. See Profile.reply_mode: they are exclusive
+   * on purpose, because a reply that can be read is never waited for.
+   */
+  route('POST', '/companion/reply-mode', async (req): Promise<Res> => {
+    const body = (req.body ?? {}) as { mode?: string };
+    const mode = body.mode === 'text' ? 'text' : 'voice';
+    await companion.update({ reply_mode: mode });
+    return ok({ reply_mode: mode });
+  });
+
   route('POST', '/companion/character', async (req): Promise<Res> => {
     const body = (req.body ?? {}) as { character?: string };
     return ok(await companion.setCharacter(body.character ?? 'poppy'));
