@@ -265,18 +265,16 @@ export const SHIM_JS = String.raw`
     if (!document.hidden) { audioUnlocked = false; unlockAudio(); }
   });
 
-  // ── a screen sized for a phone ────────────────────────────────────────────
-  // Reported: the transcript panel covers the character and grows to take up to
-  // 46% of the screen height (desktop's own narrow-window rule, meant for a
-  // resized browser, not a 6-inch phone); the layout looked "enlarged" and did
-  // not "fit". Injected as CSS rather than edited into style.css, so the desktop
-  // stylesheet stays exactly as it is and this only ever runs inside the app.
+  // ── the handful of things only the phone needs ────────────────────────────
+  // Injected rather than written into style.css, so the desktop stylesheet stays
+  // exactly as it is and these only ever apply inside the app.
   //
-  // The transcript itself is untouched — chat.js still appends every bubble and
-  // scrolls it the way it always has. Older bubbles are hidden with display:none,
-  // which removes them from layout (so the panel does not grow to 46vh in the
-  // first place) without detaching them from the DOM, so nothing that reads the
-  // transcript's history breaks.
+  // This was much larger. Most of it existed to keep a full-page orb visible above
+  // a transcript squeezed into the bottom third — capping the rail at 38vh, hiding
+  // every bubble but the last two, lifting the dock and the avatar clear of each
+  // other. The thread replaced that layout wholesale, so those rules went with it:
+  // the scrollback is wanted now, and the header and composer carry their own safe
+  // areas in style.css, next to the layout that needs them.
   function addMobileCallStyle() {
     if (document.getElementById('poppys-mobile-call-css')) return;
     var style = document.createElement('style');
@@ -290,63 +288,27 @@ export const SHIM_JS = String.raw`
       '@media (max-width: 820px) {' +
 
       // ── clear of the status bar ─────────────────────────────────────────
-      // Reported: the strip at the top of home (the streak / how-well-she-knows-you
-      // pill, the reminder, the personality heads-up) and the call header (Live ·
-      // her name · Private) sit underneath the phone's own status bar and cannot be
-      // read. All three home chips are absolutely positioned against #home's
-      // padding box, so padding on #home does not move them — their own top
-      // offset has to carry the inset.
+      // Home's top strip is absolutely positioned against #home's padding box, so
+      // padding on #home does not move it — its own top offset has to carry the
+      // inset. The thread's own header handles this in style.css, where the layout
+      // that needs it lives.
       '.home-streak, #home-update, #home-reminder {' +
       '  top: calc(1.4rem + ' + TOP + ') !important; }' +
-      // The call header is the first row of .call-stage's grid, so its padding does
-      // the same job there.
-      '.call-stage { padding-top: calc(1rem + ' + TOP + ') !important; }' +
 
       // ── clear of the home indicator ─────────────────────────────────────
       '#home { padding-bottom: calc(1.5rem + ' + BOTTOM + ') !important; }' +
       '.garden-bar { padding-bottom: calc(1rem + ' + BOTTOM + ') !important; }' +
 
-      // ── the call's bottom third ─────────────────────────────────────────
-      // A strict ceiling so a long reply cannot regrow the panel over the
-      // character. It has to be tall enough to hold the whole current exchange at
-      // once, though: at 28vh only one bubble fitted, so what was just said filled
-      // the panel and her answer to it had to be scrolled to — in a strip two lines
-      // deep, mid-conversation, which is the one moment nobody wants to be
-      // scrolling. Both bubbles fit here.
-      '.call-rail { max-height: 38vh !important; }' +
-      // Only the current exchange (her last line and, if present, what was just
-      // said to her) stays visible — "the new chat only", not the scrollback.
-      '.rail-scroll .bubble:not(:nth-last-child(-n+2)) { display: none !important; }' +
-      // Desktop's padding is generous because it has a whole column to be generous
-      // with; here every pixel of it is a pixel the exchange does not get.
-      '.rail-scroll { padding: 0.75rem 0.8rem !important; }' +
-      // The bubbles carry the conversation now — in text mode they are the whole of
-      // it — so they get the width back that a narrow phone was spending on margin.
+      // ── the thread ──────────────────────────────────────────────────────
+      // The bubbles carry the conversation, so on a narrow screen they take the
+      // width that was being spent on margin.
       '.rail-scroll .bubble { max-width: 88% !important; }' +
-      // She is drawn in the middle of her own container, and that container was the
-      // whole window — so the taller the transcript grew, the further down behind it
-      // and the dock she sat. Her area now ends where the transcript begins, which
-      // puts her back in the middle of the part of the screen she actually has. Only
-      // the orb moves: the sky stays full-bleed behind everything.
-      'body[data-view="call"] #avatar3d { bottom: 38vh; }' +
-      // Lift the dock (Talk · Auto · End · Memory) off the rail, which is what
-      // makes room for a taller input row without the two crowding each other.
-      '.dock { margin-bottom: 0.6rem !important; }' +
-      // A typing target sized for a thumb. 1rem is also the smallest size iOS will
-      // not try to zoom into on focus, which matters even with the viewport locked.
-      '.call-rail #chat-form {' +
-      '  padding: 0.8rem 0.8rem calc(0.8rem + ' + BOTTOM + ') !important; }' +
-      '.call-rail #user-input {' +
-      '  padding: 0.95rem 1rem !important; font-size: 1rem !important; }' +
-      '.call-rail #send-btn, .call-rail #clear-btn {' +
-      '  width: 48px !important; height: 48px !important; }' +
 
       // ── what she wrote down ─────────────────────────────────────────────
       // Nothing is announced on a phone. Saving is already automatic — the extract
       // call keeps what it finds and this panel was only ever a receipt for it —
-      // and on a screen this size a receipt is an interruption: it lands in the
-      // middle of the exchange, in the same strip the conversation is in, during
-      // the one activity the app exists for.
+      // and on a screen this size a receipt is an interruption, landing in the
+      // middle of the exchange during the one activity the app exists for.
       //
       // Only the notice goes. Every memory is still saved, and every one of them
       // stays listed, editable and deletable behind the Memory button.
@@ -357,10 +319,6 @@ export const SHIM_JS = String.raw`
       // up: opening it to type a name covered the field being typed into. iOS does
       // not shrink the layout viewport for the keyboard, so a bottom-anchored
       // element has nowhere to go — it has to not be at the bottom.
-      //
-      // While a name is being typed the form lifts to the top of the screen, clear
-      // of the keyboard and of the flower it belongs to. The note and Close stay
-      // where they are.
       '#garden .garden-name:not(.hidden) {' +
       '  position: fixed !important; z-index: 75;' +
       '  left: 0.65rem; right: 0.65rem;' +
@@ -369,8 +327,6 @@ export const SHIM_JS = String.raw`
       '  background: rgba(7,18,7,0.72);' +
       '  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);' +
       '  box-shadow: 0 18px 44px -14px rgba(7,18,7,0.6); }' +
-      // Desktop sizes the field to 42vw because it shares a bar with the note and
-      // the Close button; floated on its own it should take the width it has.
       '#garden .garden-name-input {' +
       '  flex: 1 1 auto; width: auto !important; font-size: 1rem !important;' +
       '  padding: 0.7rem 0.8rem !important; }' +

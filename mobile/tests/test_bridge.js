@@ -223,12 +223,19 @@ async function get(url, init) {
     check('focus works right after a real touch', input._focused === true);
   }
 
-  console.log('\n== the call screen gets a mobile stylesheet ==');
+  console.log('\n== the phone gets the handful of rules only it needs ==');
   const mobileStyle = createdStyles.find((s) => s.id === 'poppys-mobile-call-css');
+  const css = (mobileStyle && mobileStyle.textContent) || '';
   check('the style tag was injected', !!mobileStyle);
-  check('it caps the transcript panel height', mobileStyle && mobileStyle.textContent.includes('.call-rail'));
-  check('it shows only the current exchange',
-    mobileStyle && mobileStyle.textContent.includes('nth-last-child(-n+2)'));
+  check('home clears the status bar', css.includes('.home-streak') && css.includes('safe-area-inset-top'));
+  check('home clears the home indicator', css.includes('safe-area-inset-bottom'));
+  check('bubbles take the width on a narrow screen', css.includes('.rail-scroll .bubble'));
+  check('the memory receipt stays out of the way', css.includes('#memory-consent'));
+  check('naming a flower lifts clear of the keyboard', css.includes('.garden-name'));
+  // The thread replaced the squeezed-rail layout, so the rules that propped it up
+  // must be gone rather than merely unused: the scrollback is wanted now.
+  check('the transcript is no longer capped', !css.includes('.call-rail'));
+  check('older bubbles are no longer hidden', !css.includes('nth-last-child'));
   check('injected once, not duplicated', createdStyles.filter((s) => s.id === 'poppys-mobile-call-css').length === 1);
 
   console.log('\n== coverage against backend/main.py ==');
