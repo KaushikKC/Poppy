@@ -44,21 +44,12 @@ const SYSTEM =
 const QUESTION =
   /^\s*(who|what|when|where|why|how|do|does|did|is|are|can|could|would|will|should|have|has|any)\b|\?\s*$/i;
 
-const FILLER =
-  /^(yeah|yes|no|ok|okay|sure|thanks|thank you|hi|hey|hello|bye|goodbye|nothing much|not much|i see|got it|right|fine|cool|nice|good|alright)\b[\s.!,]*$/i;
-
 /** Worth asking the model about at all. Questions are skipped. */
 function worthLlm(text: string): boolean {
   const t = (text || '').trim();
   if (t.split(/\s+/).length < 3) return false;
   if (QUESTION.test(t)) return false;
   return true;
-}
-
-/** Substantial enough that losing it would be the bigger mistake. */
-function worthKeeping(text: string): boolean {
-  const t = (text || '').trim();
-  return t.split(/\s+/).length >= 4 && !FILLER.test(t) && !QUESTION.test(t);
 }
 
 /** The user's own sentence, tidied into something she can read back later. */
@@ -133,11 +124,24 @@ export async function extractAndSave(text: string): Promise<Array<{ text: string
     candidates = [];
   }
 
-  // Nothing proposed, but the sentence was clearly substantial: keep the user's own
-  // words rather than losing them.
-  if (!candidates.length && worthKeeping(clean)) {
-    candidates = [{ text: asFact(clean), category: 'ongoing' }];
-  }
+  // Nothing is kept when the model extracted nothing.
+  //
+  // There used to be a fallback here: if no JSON came back but the sentence looked
+  // substantial, the user's own words were saved verbatim rather than "lost". That is
+  // a reasonable trade with a model that usually succeeds. With the 1B it fails
+  // often, and what it saved instead was raw speech-to-text — read back from a real
+  // phone: "I think you are not sending", "So, you are a character which you will not
+  // speak right", "I don't know really what kind of activities I can think".
+  //
+  // Those are not facts, and the damage is not merely untidy. They are handed to the
+  // model every single turn under "Things you remember about the user", so it reads
+  // half-transcribed meta-chatter as established truth about the person, mirrors that
+  // register back, and answers questions about the conversation instead of the
+  // question. They also cost ~150 tokens of prompt on every turn, for ever.
+  //
+  // A memory not taken is one conversation slightly poorer. A wrong memory is every
+  // conversation after it slightly wrong, and there is nothing that removes it but a
+  // person noticing.
 
   const saved: Array<{ text: string; category: string }> = [];
   for (const c of dedupe(candidates)) {
