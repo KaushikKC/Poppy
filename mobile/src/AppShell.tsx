@@ -36,6 +36,8 @@ import { loadNativeEngines } from './core/native_engines';
 import { playback, setSpeaker } from './core/playback';
 import { PcmPlayer } from './audio';
 import { modelsPresent } from './core/downloader';
+import type { Tier } from './core/model_tier';
+import * as companion from './core/companion';
 import ModelSetup from './ModelSetup';
 import { configureStore } from './core/store';
 import {
@@ -124,7 +126,13 @@ export default function AppShell() {
 
   useEffect(() => {
     (async () => {
-      const have = await modelsPresent();
+      // Against the model that was actually chosen, not the one this phone's RAM
+      // would have picked. Without the saved tier, modelsPresent() falls back to
+      // the RAM default — so anyone who picked a different model downloaded it,
+      // and then met the setup screen again on every single launch, because the
+      // app was looking on disk for a model they had deliberately not installed.
+      const saved = ((await companion.profile()).model_tier ?? null) as Tier | null;
+      const have = await modelsPresent(saved);
       setNeedsSetup(!have);
       if (have) void loadEngines();
     })();
