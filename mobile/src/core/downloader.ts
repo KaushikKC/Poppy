@@ -31,8 +31,10 @@ import {
   downloadFile,
   exists,
   mkdir,
+  readFile,
   stat,
   unlink,
+  writeFile,
 } from '@dr.pogodin/react-native-fs';
 
 import { requiredModels, type ModelSpec, type Tier } from './model_tier';
@@ -56,6 +58,14 @@ export type ProgressFn = (p: Progress) => void;
 
 /** Anything under this fraction of the expected size is treated as truncated. */
 const MIN_SIZE_RATIO = 0.98;
+
+/** Written inside an extracted archive so a changed model is noticed. */
+const VERSION_FILE = '.model-version';
+
+/** The archive's own name, which is what actually identifies the model. */
+function versionOf(spec: ModelSpec): string {
+  return spec.url.split('/').pop() ?? spec.url;
+}
 
 /**
  * Is this connection one we are allowed to spend?
@@ -99,6 +109,16 @@ async function present(spec: ModelSpec): Promise<boolean> {
     const need = ['model.onnx', 'tokens.txt', 'voices.bin', 'espeak-ng-data'];
     for (const f of need) {
       if (!(await exists(`${target}/${f}`))) return false;
+    }
+    // And it has to be the *right* archive. Kokoro v0.19 and v1.0 contain exactly the
+    // same filenames, so a check on files alone passed for the old model and the new
+    // one was never fetched: the voice fix shipped and changed nothing. The version
+    // marker is written after extraction and compared here.
+    try {
+      const stamped = await readFile(`${target}/${VERSION_FILE}`, 'utf8');
+      if (stamped.trim() !== versionOf(spec)) return false;
+    } catch {
+      return false; // no marker: an older install, so re-fetch
     }
     return true;
   }
@@ -276,6 +296,7 @@ export async function ensureModels(onProgress: ProgressFn, opts: Options = {}): 
       // sherpa archives unpack into a single folder; flatten it so the paths match
       // what models.ts expects rather than depending on the archive's own name.
       await flattenIfNested(abs(spec.path));
+      await writeFile(`${abs(spec.path)}/${VERSION_FILE}`, versionOf(spec), 'utf8');
     }
 
     onProgress({
