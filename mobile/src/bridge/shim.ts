@@ -128,8 +128,30 @@ export const SHIM_JS = String.raw`
   var realRaf = window.requestAnimationFrame
     ? window.requestAnimationFrame.bind(window)
     : null;
-  var FRAME_MS = 1000 / 30;
-  var lastFrame = 0;
+  // A 60Hz display advances in 16.67ms steps, so a gate of exactly 33.33ms lands on
+  // the two-frame boundary and the smallest rounding error in the timestamp pushes
+  // it out to three frames — 20fps, not the 30 intended. A millisecond of slack
+  // keeps it on two, and is still well under a frame on a 120Hz panel.
+  var FRAME_MS = 1000 / 30 - 1;
+  // The budget is per loop, not one gate shared by all of them.
+  //
+  // It was a single timestamp, and that starved every loop but one. A browser frame
+  // runs all its pending callbacks at the same instant, so the first loop called
+  // claimed the slot and set the timestamp, and every other callback in that frame
+  // then saw zero elapsed and deferred itself to the next one. Deferring re-queues
+  // it *behind* the winner, which had already re-queued itself from inside its own
+  // callback — so the same loop won every frame, for good. One animation ran; the
+  // rest sat at zero frames per second.
+  //
+  // That is the blank garden: opening it asks for a single frame to draw the field
+  // once its view is on screen, and that request was deferred for ever behind a loop
+  // that never gave up the slot. Nothing was ever drawn, so the garden was the empty
+  // colour of its own background.
+  //
+  // Keyed on the callback, so each repeating loop gets its own 30fps and a callback
+  // never seen before runs on the very next frame. The map holds its keys weakly, so
+  // the one-shot arrows the UI creates every frame are still collectable.
+  var lastRun = typeof WeakMap === 'function' ? new WeakMap() : null;
 
   if (realRaf) window.requestAnimationFrame = function (cb) {
     return realRaf(function (ts) {
@@ -140,11 +162,14 @@ export const SHIM_JS = String.raw`
         return;
       }
       var now = ts || Date.now();
-      if (now - lastFrame < FRAME_MS) {
-        window.requestAnimationFrame(cb);
-        return;
+      if (lastRun && typeof cb === 'function') {
+        var prev = lastRun.get(cb);
+        if (prev !== undefined && now - prev < FRAME_MS) {
+          window.requestAnimationFrame(cb);
+          return;
+        }
+        lastRun.set(cb, now);
       }
-      lastFrame = now;
       cb(now);
     });
   };
