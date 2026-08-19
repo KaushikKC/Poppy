@@ -85,6 +85,16 @@ export async function loadNativeEngines(
 
   loaded = { whisper, llama, tts };
 
+  // Speak one short phrase into nothing, so the first real one does not pay Kokoro's
+  // lazy setup. Reported from the phone as the text arriving well before the voice: the
+  // first synthesis of a session is markedly slower than the rest.
+  onProgress('Warming her voice…');
+  try {
+    await tts.generateSpeech('mm', { sid: DEFAULT_SID, speed: SPEECH_SPEED });
+  } catch {
+    // A failed warmup costs latency on the first phrase, nothing more.
+  }
+
   const stt: Stt = {
     async transcribe(pcm16k) {
       // int16, not float32. whisper.rn's ArrayBuffer path hands the buffer to
