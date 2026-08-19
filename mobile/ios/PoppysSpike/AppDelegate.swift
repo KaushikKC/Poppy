@@ -24,7 +24,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     window = UIWindow(frame: UIScreen.main.bounds)
 
     factory.startReactNative(
-      withModuleName: "PoppysSpike",
+      // Must match app.json's "name", which is what index.js registers the root
+      // component under. A mismatch is a red screen on launch, not a warning.
+      withModuleName: "Poppys",
       in: window,
       launchOptions: launchOptions
     )

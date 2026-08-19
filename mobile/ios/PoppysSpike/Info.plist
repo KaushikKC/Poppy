@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>PoppysSpike</string>
+	<string>Poppys</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -40,10 +40,10 @@
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIFileSharingEnabled</key>
-		<true/>
-		<key>LSSupportsOpeningDocumentsInPlace</key>
-		<true/>
-		<key>UILaunchStoryboardName</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
