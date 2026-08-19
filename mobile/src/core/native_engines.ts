@@ -13,6 +13,7 @@
 import { initLlama, type LlamaContext } from 'llama.rn';
 import { initWhisper, type WhisperContext } from 'whisper.rn';
 import { createTTS, type TtsEngine } from 'react-native-sherpa-onnx/tts';
+import { getCoreMlSupport } from 'react-native-sherpa-onnx';
 
 import { KOKORO_DIR, WHISPER_PATH } from '../models';
 import { DocumentDirectoryPath } from '@dr.pogodin/react-native-fs';
@@ -58,8 +59,26 @@ const DEFAULT_SID = VOICE_SID.af_heart;
 const SPEECH_SPEED = 1.0;
 const SPEECH_LENGTH_SCALE = 1.0;
 
-/** Cores Kokoro may use. See the note where it is passed to createTTS. */
-const TTS_THREADS = 4;
+/**
+ * Kokoro's compute, and why it is not simply "more".
+ *
+ * Four threads was tried and it was worse, not better. Kokoro got faster in isolation
+ * and llama.cpp collapsed alongside it: prompt eval fell from 364 to 100 tokens a
+ * second and generation from 23 to 3.3, because the two were taking the same cores
+ * from each other. Measured on the phone — a 99-character phrase took 14.76s to
+ * render while the model's whole turn took 14.50s, the two sitting exactly on top of
+ * one another, each starving the other.
+ *
+ * The model is on the critical path to her *first* word, so losing there costs more
+ * than synthesis gains. Threads go back to the library default.
+ *
+ * The way out is not to divide the CPU differently, it is to stop sharing it. CoreML
+ * runs Kokoro on the Neural Engine, which is a separate unit that is sitting idle
+ * while llama has the GPU and Whisper has the CPU. It falls back to CPU on its own if
+ * the model will not convert, so the worst case is where we already are.
+ */
+const TTS_THREADS = 2;
+const TTS_PROVIDER = 'coreml';
 
 // Filled in at load; declared in core/tts_info.ts so readers do not import this file.
 export { ttsDiagnostic } from './tts_info';
@@ -175,18 +194,21 @@ async function loadOnce(onProgress: (msg: string) => void): Promise<void> {
   });
 
   onProgress('Loading the voice…');
+  // CoreML falls back to the CPU without saying so, and a silent fallback reads
+  // exactly like a provider that changed nothing. Ask first, so the log distinguishes
+  // "the Neural Engine did not help" from "the Neural Engine was never used".
+  try {
+    const coreml = await getCoreMlSupport();
+    console.log(`[tts] CoreML support: ${JSON.stringify(coreml)}`);
+  } catch (err) {
+    console.log(`[tts] could not read CoreML support: ${err}`);
+  }
   const tts = await createTTS({
     modelPath: { type: 'file', path: KOKORO_DIR },
     modelType: 'kokoro',
-    // Never set, so Kokoro has been rendering on the library's default of two CPU
-    // threads on a six-core phone. That is what puts the gaps between her sentences:
-    // synthesis is pipelined against playback, so it only keeps up if a phrase renders
-    // in less time than the previous one takes to speak. Below that line every phrase
-    // arrives a little later than the last and the silences grow.
-    //
-    // Four rather than every core: two are efficiency cores that would add heat
-    // without much speed, and the model and Whisper need somewhere to run too.
+    // See TTS_THREADS: the gaps are a compute-sharing problem, not a thread-count one.
     numThreads: TTS_THREADS,
+    provider: TTS_PROVIDER,
     // lengthScale slows speech at the model level. `speed` is a per-call option and it
     // was reported as still too fast, so this is set as well: whichever the engine
     // actually honours, the result is a listenable pace.
@@ -293,7 +315,7 @@ async function loadOnce(onProgress: (msg: string) => void): Promise<void> {
       console.log(
         `[tts] ${text.length} chars -> ${(audioMs / 1000).toFixed(2)}s audio in ` +
         `${(tookMs / 1000).toFixed(2)}s = ${(audioMs / Math.max(tookMs, 1)).toFixed(2)}x realtime ` +
-        `(${TTS_THREADS} threads)`,
+        `(${TTS_PROVIDER}, ${TTS_THREADS} threads)`,
       );
 
       return { samples: out.samples, sampleRate: rate };
