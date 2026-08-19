@@ -26,6 +26,7 @@ import { resetCallTurns } from './socket';
 import * as nudges from './nudges';
 import * as billing from './billing';
 import * as tone from './tone';
+import { ttsDiagnostic } from './native_engines';
 import { CAST } from './characters';
 import { ok, route, type Res } from './router';
 
@@ -122,6 +123,10 @@ export function registerHandlers(): void {
 
   // The safety resources, so the UI can show the card without a turn.
   route('GET', '/safety/resources', () => ok({ resources: safety.CRISIS_RESOURCES }));
+
+  // What the voice engine loaded. Readable from the phone, because "every character
+  // sounds the same" cannot be diagnosed without knowing the speaker count.
+  route('GET', '/debug/tts', () => ok(ttsDiagnostic));
 
   // ── the home screen ───────────────────────────────────────────────────────
   // Everything it needs in one call: who she is, the single open loop in her own

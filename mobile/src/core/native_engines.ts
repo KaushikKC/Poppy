@@ -50,6 +50,20 @@ const DEFAULT_SID = VOICE_SID.af_heart;
  */
 const SPEECH_SPEED = 0.9;
 
+/** Above 1.0 lengthens each phoneme, which is the model-level way to slow speech. */
+const SPEECH_LENGTH_SCALE = 1.15;
+
+/**
+ * What the voice engine reported at load. Surfaced through /settings so it can be read
+ * off the phone without attaching Xcode, because "all the characters sound the same" is
+ * impossible to diagnose from the outside.
+ */
+export const ttsDiagnostic: {
+  speakers: number;
+  sampleRate: number;
+  modelType: string;
+} = { speakers: -1, sampleRate: -1, modelType: 'not loaded' };
+
 /** Small context keeps prefill, and so first-token latency, small. */
 const N_CTX = 4096;
 const MAX_TOKENS = 120;
@@ -81,7 +95,31 @@ export async function loadNativeEngines(
   const tts = await createTTS({
     modelPath: { type: 'file', path: KOKORO_DIR },
     modelType: 'kokoro',
+    // lengthScale slows speech at the model level. `speed` is a per-call option and it
+    // was reported as still too fast, so this is set as well: whichever the engine
+    // actually honours, the result is a listenable pace.
+    modelOptions: { kokoro: { lengthScale: SPEECH_LENGTH_SCALE } },
   });
+
+  // What the engine actually loaded, recorded because the voice was reported as
+  // identical for every character and there was no way to tell why from here. If this
+  // says one speaker, voices.bin was not picked up and `sid` cannot do anything — which
+  // is a model or config problem, not a lookup problem.
+  try {
+    ttsDiagnostic.speakers = await tts.getNumSpeakers();
+    ttsDiagnostic.sampleRate = await tts.getSampleRate();
+    const info = await tts.getModelInfo();
+    ttsDiagnostic.modelType = String((info as { modelType?: unknown })?.modelType ?? '?');
+    console.log(
+      `[tts] loaded ${ttsDiagnostic.modelType}: ${ttsDiagnostic.speakers} speakers, ` +
+      `${ttsDiagnostic.sampleRate}Hz, lengthScale=${SPEECH_LENGTH_SCALE}, speed=${SPEECH_SPEED}`,
+    );
+    if (ttsDiagnostic.speakers <= 1) {
+      console.log('[tts] only one speaker: every character will sound identical');
+    }
+  } catch (err) {
+    console.log(`[tts] could not read the voice model's details: ${err}`);
+  }
 
   loaded = { whisper, llama, tts };
 
@@ -135,7 +173,15 @@ export async function loadNativeEngines(
   const speech: Speech = {
     sampleRate: KOKORO_SAMPLE_RATE,
     async synthesize(text, voice) {
-      const sid = VOICE_SID[voice] ?? DEFAULT_SID;
+      let sid = VOICE_SID[voice] ?? DEFAULT_SID;
+      // A sid past the end of the model is not an error, it is silently the wrong
+      // voice — v0.19 has 11 speakers, so am_michael's 16 would land nowhere.
+      if (ttsDiagnostic.speakers > 0 && sid >= ttsDiagnostic.speakers) {
+        console.log(
+          `[tts] ${voice} wants sid ${sid} but the model has ${ttsDiagnostic.speakers}; using 0`,
+        );
+        sid = 0;
+      }
       const out = await tts.generateSpeech(text, { sid, speed: SPEECH_SPEED });
       return { samples: out.samples, sampleRate: out.sampleRate ?? KOKORO_SAMPLE_RATE };
     },

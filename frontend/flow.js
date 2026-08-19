@@ -335,6 +335,14 @@
     try { u = await (await fetch(`${BACKEND}/update`)).json(); } catch {}
     if (!u.version) { el.textContent = ""; return; }
     el.textContent = `Version ${u.version}`;
+    // On iOS this also shows what the voice engine loaded: a speaker count of 1 means
+    // every character sounds identical, which is otherwise invisible.
+    try {
+      const d = await (await fetch(`${BACKEND}/debug/tts`)).json();
+      if (d && typeof d.speakers === "number" && d.speakers >= 0) {
+        el.textContent += `  ·  voice ${d.speakers} spk`;
+      }
+    } catch {}
   }
 
   async function renderUpdateNotice() {
