@@ -337,6 +337,17 @@ export const SHIM_JS = String.raw`
       '  padding: 0.95rem 1rem !important; font-size: 1rem !important; }' +
       '.call-rail #send-btn, .call-rail #clear-btn {' +
       '  width: 48px !important; height: 48px !important; }' +
+
+      // ── what she wrote down ─────────────────────────────────────────────
+      // Nothing is announced on a phone. Saving is already automatic — the extract
+      // call keeps what it finds and this panel was only ever a receipt for it —
+      // and on a screen this size a receipt is an interruption: it lands in the
+      // middle of the exchange, in the same strip the conversation is in, during
+      // the one activity the app exists for.
+      //
+      // Only the notice goes. Every memory is still saved, and every one of them
+      // stays listed, editable and deletable behind the Memory button.
+      '#memory-consent { display: none !important; }' +
       '}';
     document.head.appendChild(style);
   }

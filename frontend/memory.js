@@ -35,6 +35,11 @@ window.proposeMemory = async function proposeMemory(text) {
     return;
   }
   if (!saved.length) return;
+  // The call's close reports this so the garden can bloom and the quest can
+  // complete (RETENTION_ENGINE §3.1, §4.3). It used to be set only by the Save
+  // button on the consent prompt, and that prompt is no longer how anything gets
+  // kept — so saving a memory had become invisible to every other surface.
+  window._callSavedMemory = true;
   // It is already kept. This is a receipt, not a request: a prompt in the middle
   // of a conversation interrupted the thing the app exists for, and anything not
   // tapped in time was lost.
