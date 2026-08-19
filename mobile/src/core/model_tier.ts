@@ -151,6 +151,9 @@ export async function describe(saved?: Tier | null): Promise<string> {
   return `${LLM[tier].label} (${gb.toFixed(0)} GB device)`;
 }
 
+/** Every tier, for finding models on disk that are no longer wanted. */
+export const ALL_TIERS: Tier[] = ['gemma1b', '1b', '1_5b', '3b'];
+
 export function specsForTier(tier: Tier): ModelSpec[] {
   return [LLM[tier], WHISPER, KOKORO];
 }

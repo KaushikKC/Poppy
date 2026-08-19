@@ -21,7 +21,7 @@ import {
   View,
 } from 'react-native';
 
-import { ensureModels, missingModels, reattach, type Progress } from './core/downloader';
+import { deleteUnused, ensureModels, missingModels, reattach, unusedModels, type Progress } from './core/downloader';
 import { CHOICES, describe, type Tier } from './core/model_tier';
 import * as companion from './core/companion';
 
@@ -41,12 +41,15 @@ export default function ModelSetup({ onReady }: { onReady: () => void }) {
   const [needBytes, setNeedBytes] = useState(0);
   const [tier, setTier] = useState<Tier | null>(null);
   const [showPicker, setShowPicker] = useState(false);
+  const [spare, setSpare] = useState(0);
   const started = useRef(false);
 
   const refresh = useCallback(async (chosen: Tier | null) => {
     setPick(await describe(chosen));
     const missing = await missingModels(chosen);
     setNeedBytes(missing.reduce((n, m) => n + m.bytes, 0));
+    // Models tried and abandoned; each is most of a gigabyte.
+    setSpare((await unusedModels(chosen)).reduce((n, m) => n + m.bytes, 0));
   }, []);
 
   useEffect(() => {
@@ -127,6 +130,19 @@ export default function ModelSetup({ onReady }: { onReady: () => void }) {
             <Pressable style={styles.button} onPress={start}>
               <Text style={styles.buttonText}>Download and continue</Text>
             </Pressable>
+
+            {spare > 0 && (
+              <Pressable
+                onPress={async () => {
+                  await deleteUnused(tier);
+                  await refresh(tier);
+                }}
+              >
+                <Text style={styles.link}>
+                  Delete the models you're not using ({mb(spare)})
+                </Text>
+              </Pressable>
+            )}
 
             <Pressable onPress={() => setShowPicker((v) => !v)}>
               <Text style={styles.link}>

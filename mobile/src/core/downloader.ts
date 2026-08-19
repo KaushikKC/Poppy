@@ -37,7 +37,7 @@ import {
   writeFile,
 } from '@dr.pogodin/react-native-fs';
 
-import { requiredModels, type ModelSpec, type Tier } from './model_tier';
+import { ALL_TIERS, requiredModels, specsForTier, type ModelSpec, type Tier } from './model_tier';
 
 export type Phase = 'checking' | 'downloading' | 'extracting' | 'verifying' | 'done' | 'error';
 
@@ -182,6 +182,48 @@ function fetchOne(
       throw new Error(`HTTP ${res.statusCode}`);
     }
   });
+}
+
+/**
+ * Language models on disk that are not the chosen one, with what they cost.
+ *
+ * Each model has its own file so switching back is instant, which means trying a few
+ * leaves the others behind. This is what makes that recoverable.
+ */
+export async function unusedModels(saved?: Tier | null): Promise<
+  Array<{ path: string; label: string; bytes: number }>
+> {
+  const keep = (await requiredModels(saved)).map((m) => m.path);
+  const out: Array<{ path: string; label: string; bytes: number }> = [];
+  for (const tier of ALL_TIERS) {
+    for (const spec of specsForTier(tier)) {
+      if (spec.archive || keep.includes(spec.path)) continue;
+      if (out.some((o) => o.path === spec.path)) continue;
+      const full = abs(spec.path);
+      if (!(await exists(full))) continue;
+      try {
+        const s = await stat(full);
+        out.push({ path: spec.path, label: spec.label, bytes: Number(s.size) });
+      } catch {
+        /* unreadable: leave it alone rather than guess */
+      }
+    }
+  }
+  return out;
+}
+
+/** Delete them. Returns how many bytes came back. */
+export async function deleteUnused(saved?: Tier | null): Promise<number> {
+  let freed = 0;
+  for (const m of await unusedModels(saved)) {
+    try {
+      await unlink(abs(m.path));
+      freed += m.bytes;
+    } catch {
+      /* already gone */
+    }
+  }
+  return freed;
 }
 
 /** Nothing to reattach to with this downloader; kept so callers do not change. */
