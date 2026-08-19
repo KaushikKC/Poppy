@@ -3,6 +3,41 @@ import { Vad, type VadConfig } from './core/vad';
 
 const TARGET_RATE = 16000; // whisper.cpp wants 16 kHz mono float PCM
 
+/**
+ * The audio session, in one place, because it is set from three.
+ *
+ * ## Why headphones killed both directions
+ *
+ * Reported from a tester's phone: with headphones on, her voice was inaudible and
+ * nothing they said was transcribed. Unplug them and everything worked.
+ *
+ * playAndRecord with allowBluetoothHFP and nothing else forces a connected Bluetooth
+ * headset onto HFP — the hands-free *telephone* profile. That is mono, narrowband, and
+ * it takes over the output route as well as the input, so her voice arrives over a
+ * link built for phone calls in 1998, at a hardware rate that is no longer the one
+ * anything here was configured against.
+ *
+ * allowBluetoothA2DP lets output stay on the high-quality stereo route, and
+ * bluetoothHighQualityRecording asks for input that is not narrowband. defaultToSpeaker
+ * stays for the case with no accessory at all, where it is what keeps her out of the
+ * earpiece; an attached headset outranks it.
+ */
+export const SESSION_OPTIONS = {
+  iosCategory: 'playAndRecord' as const,
+  iosOptions: [
+    'defaultToSpeaker' as const,
+    'allowBluetoothHFP' as const,
+    'allowBluetoothA2DP' as const,
+    'bluetoothHighQualityRecording' as const,
+  ],
+};
+
+/** Claim the session with our options. Safe to call again; routes change under us. */
+export async function activateSession(): Promise<void> {
+  AudioManager.setAudioSessionOptions(SESSION_OPTIONS);
+  await AudioManager.setAudioSessionActivity(true);
+}
+
 /** Linear-resample mono float PCM to 16 kHz. Good enough for STT (spike-grade). */
 function resampleTo16k(input: Float32Array, inRate: number): Float32Array {
   if (inRate === TARGET_RATE || input.length === 0) return input;
@@ -92,11 +127,7 @@ export class MicRecorder {
 
   async start(): Promise<void> {
     // iOS: a play-and-record session so we can capture the mic and later speak.
-    AudioManager.setAudioSessionOptions({
-      iosCategory: 'playAndRecord',
-      iosOptions: ['defaultToSpeaker', 'allowBluetoothHFP'],
-    });
-    await AudioManager.setAudioSessionActivity(true);
+    await activateSession();
 
     this.chunks = [];
     this.startedAt = Date.now();
@@ -162,7 +193,7 @@ export class PcmPlayer {
   private ctx: AudioContext;
   private logged = false;
 
-  constructor(preferredRate = 24000) {
+  constructor(private preferredRate = 24000) {
     // iOS may refuse and give the hardware rate anyway; the resample below covers that.
     this.ctx = new AudioContext({ sampleRate: preferredRate });
   }
@@ -188,6 +219,24 @@ export class PcmPlayer {
       source.onEnded = () => resolve();
       source.start();
     });
+  }
+
+  /**
+   * Rebuild the context against whatever the route is now.
+   *
+   * A context is created once, at startup, against whatever was plugged in then. Put
+   * headphones on afterwards and the hardware graph moves while this one keeps its old
+   * rate and its old destination — which is silence, and silence with nothing logged.
+   */
+  reset(): void {
+    const old = this.ctx;
+    this.ctx = new AudioContext({ sampleRate: this.preferredRate });
+    this.logged = false;
+    try {
+      old.close();
+    } catch {
+      // Already gone with the route it belonged to; nothing to reclaim.
+    }
   }
 
   close() {
@@ -245,11 +294,7 @@ export class ContinuousMic {
   ) {}
 
   async start(cfg?: VadConfig): Promise<void> {
-    AudioManager.setAudioSessionOptions({
-      iosCategory: 'playAndRecord',
-      iosOptions: ['defaultToSpeaker', 'allowBluetoothHFP'],
-    });
-    await AudioManager.setAudioSessionActivity(true);
+    await activateSession();
 
     this.samples = 0;
     this.startedAt = Date.now();

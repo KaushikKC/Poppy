@@ -34,7 +34,7 @@ import { registerHandlers } from './core/handlers';
 import { createSocketHandler } from './core/socket';
 import { loadNativeEngines } from './core/native_engines';
 import { playback, setSpeaker } from './core/playback';
-import { PcmPlayer } from './audio';
+import { PcmPlayer, activateSession } from './audio';
 import { modelsPresent } from './core/downloader';
 import type { Tier } from './core/model_tier';
 import * as companion from './core/companion';
@@ -82,6 +82,7 @@ function setupCore() {
 export default function AppShell() {
   const webRef = useRef<WebViewComponent>(null);
   const micRef = useRef<{ release: () => Promise<void> } | null>(null);
+  const pcmRef = useRef<PcmPlayer | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [engineStatus, setEngineStatus] = useState('');
@@ -148,11 +149,7 @@ export default function AppShell() {
           return;
         }
 
-        AudioManager.setAudioSessionOptions({
-          iosCategory: 'playAndRecord',
-          iosOptions: ['defaultToSpeaker', 'allowBluetoothHFP'],
-        });
-        await AudioManager.setAudioSessionActivity(true);
+        await activateSession();
       } catch (err) {
         // Swallowed into a console line before. On a phone that log belongs to
         // nobody, so the one message explaining why the app is silent was written
@@ -195,10 +192,34 @@ export default function AppShell() {
     return () => sub.remove();
   }, []);
 
+  // Headphones going on or coming off, a Bluetooth headset connecting, a call ending.
+  //
+  // Nothing watched for this before, so the session and the playback graph stayed
+  // configured for whatever was attached at launch. Put headphones on afterwards and
+  // the hardware route moved while everything here kept pointing at the old one: her
+  // voice inaudible, nothing transcribed, and no error anywhere because as far as the
+  // app was concerned it was playing and recording perfectly well.
+  useEffect(() => {
+    const sub = AudioManager.addSystemEventListener('routeChange', ({ reason }) => {
+      console.log(`[audio] route changed (${reason}); reclaiming the session`);
+      playback.stop();
+      void (async () => {
+        try {
+          await activateSession();
+          pcmRef.current?.reset();
+        } catch (err) {
+          fail(`Audio could not follow the route change: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      })();
+    });
+    return () => sub?.remove();
+  }, [fail]);
+
   const onMessage = useMemo(() => {
     // The one thing that actually makes sound, handed to the core so the core itself
     // stays free of native imports.
     const pcm = new PcmPlayer();
+    pcmRef.current = pcm;
     setSpeaker({ play: (samples, rate) => pcm.play(samples, rate) });
 
     const send = (js: string) => webRef.current?.injectJavaScript(js);
