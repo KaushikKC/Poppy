@@ -17,23 +17,22 @@
  * the rest of the reply still plays; the failure is logged with the phrase so it
  * can be recognised in a user's log.
  *
- * Audio is *emitted*, not played. The WebView plays it, exactly as the browser
- * does on desktop, because `audio_player.js`'s AnalyserNode is what drives the
- * orb; playing natively would leave the orb motionless. So this hands WAV bytes
- * up to the socket layer, which sends them as binary frames like the Python
- * server does, and playback ordering is the page's job.
+ * Audio is played natively, not sent to the page. That was the other way round first,
+ * to match the desktop server and to keep the orb fed from the page's own analyser, and
+ * on device it produced a reply in text with no sound at all. See core/playback.ts for
+ * what settled it. The orb is driven from a loudness envelope instead.
  */
 
 import { PhraseChunker } from './chunker';
 import { getEngines } from './engines';
-import { wavBase64 } from './wav';
+import { playback } from './playback';
 
 export type TurnEvents = {
   /** A config frame, before any audio: the UI initialises its player from this. */
   onConfig?: (sampleRate: number) => void;
   onToken?: (text: string) => void;
-  /** One spoken phrase as base64 WAV, in order, for the page to play. */
-  onAudio?: (wavBase64: string) => void;
+  /** First phrase handed to the speaker, for the page's playback-started hook. */
+  onAudio?: () => void;
   /** First phrase handed over — the latency number that matters. */
   onFirstAudio?: () => void;
   onDone?: (reply: string) => void;
@@ -100,7 +99,8 @@ class SpeechStream {
           this.firstAudioSent = true;
           this.events.onFirstAudio?.();
         }
-        this.events.onAudio?.(wavBase64(out.samples, out.sampleRate));
+        playback.push(out.samples, out.sampleRate);
+        this.events.onAudio?.();
       } catch (err) {
         // One bad phrase must not silence the rest of the reply.
         const msg = err instanceof Error ? err.message : String(err);
@@ -173,13 +173,17 @@ export async function runTurn(
     // still being synthesised. That path throws nothing, so it is checked here too
     // or the turn would report done for a reply the user cut off. Cutting the
     // audio itself is the page's job: it owns the player.
-    if (opts.signal?.aborted) return reply.trim();
+    if (opts.signal?.aborted) {
+      playback.stop();
+      return reply.trim();
+    }
 
     events.onDone?.(reply.trim());
     return reply.trim();
   } catch (err) {
     if (opts.signal?.aborted) {
-      // Barge-in, not a failure: leave quietly.
+      // Barge-in, not a failure: cut the voice and leave quietly.
+      playback.stop();
       return reply.trim();
     }
     const msg = err instanceof Error ? err.message : String(err);
