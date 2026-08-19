@@ -44,17 +44,39 @@ handlers.registerHandlers();
 // A minimal window: the shim is written to run before any polyfills, so if it
 // needs more than this it would also fail inside WKWebView.
 const listeners = {};
+const createdStyles = [];
+// A minimal stand-in for a DOM element: only what the shim's focus-gate and
+// style-injection code actually touch.
+class FakeElement {
+  constructor(tag) {
+    this.tagName = (tag || '').toUpperCase();
+    this.children = [];
+    this.id = '';
+    this.textContent = '';
+  }
+  appendChild(child) { this.children.push(child); return child; }
+  focus() { this._focused = true; }
+}
 const win = {
   ReactNativeWebView: {
     postMessage: (json) => queue.push(JSON.parse(json)),
   },
-  // The shim attaches touch listeners to unlock the AudioContext. document exists in
-  // WKWebView at before-content-loaded time, so stubbing it here is right; leaving it
-  // out made this fail where the real thing would not.
+  // The shim attaches touch listeners to unlock the AudioContext, gate the
+  // keyboard, and (once loading) inject a stylesheet. All of this exists in
+  // WKWebView at before-content-loaded time, so stubbing it here is right;
+  // leaving any of it out made this fail where the real thing would not.
   document: {
     addEventListener: (type, fn) => { (listeners[type] ||= []).push(fn); },
     removeEventListener: () => {},
     hidden: false,
+    readyState: 'complete', // so the style injection runs immediately, not on an event
+    getElementById: (id) => createdStyles.find((s) => s.id === id) || null,
+    createElement: (tag) => {
+      const el = new FakeElement(tag);
+      if (tag === 'style') createdStyles.push(el);
+      return el;
+    },
+    head: { appendChild: (el) => el },
   },
   // The shim throttles animation to 30fps for battery and heat, so it needs this.
   // WKWebView has it; the stub did not, which is a gap in the stub rather than in the
@@ -63,12 +85,14 @@ const win = {
   fetch: () => Promise.reject(new Error('real fetch should not be called for core URLs')),
   atob: (b64) => Buffer.from(b64, 'base64').toString('binary'),
   Blob: class { constructor(parts) { this.parts = parts; } },
+  // Only what the shim's keyboard gate needs: a prototype it can wrap .focus() on.
+  HTMLElement: FakeElement,
 };
 const queue = [];
 
 // Evaluate the real injected source with `window` and `this` bound to our stub.
-new Function('window', 'atob', 'Blob', 'document', `with (window) { ${SHIM_JS} }`)(
-  win, win.atob, win.Blob, win.document,
+new Function('window', 'atob', 'Blob', 'document', 'HTMLElement', `with (window) { ${SHIM_JS} }`)(
+  win, win.atob, win.Blob, win.document, win.HTMLElement,
 );
 
 check('shim installs itself', win.__poppysShim === true);
@@ -181,6 +205,31 @@ async function get(url, init) {
 
   win.__poppysBridge({ t: 'ws:msg', id: sock._id, data: Buffer.from([1, 2, 3]).toString('base64'), b64: true });
   check('binary frames decode to bytes', got instanceof win.Blob || got instanceof ArrayBuffer);
+
+  console.log('\n== a stray focus() does not pop the keyboard ==');
+  // Reported from the phone: the keyboard opened on its own while she spoke, then
+  // the layout resized mid-reply and everything visibly lagged. chat.js calls
+  // input.focus() after every reply; that call must be refused unless a real touch
+  // happened moments ago.
+  {
+    const input = new win.HTMLElement('input');
+    input.focus(); // no gesture yet
+    check('unsolicited focus is refused', input._focused !== true);
+
+    // Fire the real listeners the shim registered for touchend, as a genuine tap
+    // on the input itself would.
+    for (const fn of listeners.touchend || []) fn({});
+    input.focus();
+    check('focus works right after a real touch', input._focused === true);
+  }
+
+  console.log('\n== the call screen gets a mobile stylesheet ==');
+  const mobileStyle = createdStyles.find((s) => s.id === 'poppys-mobile-call-css');
+  check('the style tag was injected', !!mobileStyle);
+  check('it caps the transcript panel height', mobileStyle && mobileStyle.textContent.includes('.call-rail'));
+  check('it shows only the current exchange',
+    mobileStyle && mobileStyle.textContent.includes('nth-last-child(-n+2)'));
+  check('injected once, not duplicated', createdStyles.filter((s) => s.id === 'poppys-mobile-call-css').length === 1);
 
   console.log('\n== coverage against backend/main.py ==');
   const have = router.registered().length;

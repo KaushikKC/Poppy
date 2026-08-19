@@ -149,6 +149,13 @@ export const SHIM_JS = String.raw`
     });
   };
 
+  // ── tracking a real user gesture ──────────────────────────────────────────
+  // Both the audio unlock and the keyboard fix below need to know "did a human
+  // just touch the screen", so it is tracked once, here, rather than twice.
+  var lastGestureAt = 0;
+  function noteGesture() { lastGestureAt = Date.now(); }
+  function recentGesture(windowMs) { return Date.now() - lastGestureAt < windowMs; }
+
   // ── a way back to the model picker ────────────────────────────────────────
   // Tapping the version line on the home screen reopens setup, which is where the
   // model is chosen. Done here rather than in flow.js so the desktop build is
@@ -159,6 +166,36 @@ export const SHIM_JS = String.raw`
       post({ t: 'setup:open' });
     }
   }, true);
+
+  // ── stopping the keyboard from opening on its own ─────────────────────────
+  // Reported from the phone: while she is speaking, scrolling, or between turns,
+  // the on-screen keyboard pops up with nobody having touched the input, and while
+  // it is open everything visibly lags. chat.js calls input.focus() after every
+  // reply finishes (and on error) so a mouse-and-keyboard desktop user can keep
+  // typing without a click. Under WKWebView the bridge delivers that call through
+  // evaluateJavaScript, which is not treated as page-originated script the way a
+  // real DOM event handler is, so the "requires a user gesture" rule Safari
+  // normally enforces on focus() does not apply here — the keyboard opens anyway.
+  // Opening it mid-reply then resizes the whole viewport (#app uses 100dvh), which
+  // is the layout "moving around" and the reflow is the reported lag.
+  //
+  // Programmatic focus on a text field is now only honoured shortly after a real
+  // touch. Tapping the input directly still focuses it exactly as before — that
+  // tap IS the gesture — but a focus() called from a websocket handler seconds
+  // after the last tap is silently ignored, which is what iOS would have done if
+  // the call had gone through the normal restricted path.
+  var FOCUS_GESTURE_WINDOW_MS = 600;
+  var realFocus = HTMLElement.prototype.focus;
+  HTMLElement.prototype.focus = function () {
+    var tag = this && this.tagName;
+    if ((tag === 'INPUT' || tag === 'TEXTAREA') && !recentGesture(FOCUS_GESTURE_WINDOW_MS)) {
+      return;
+    }
+    return realFocus.apply(this, arguments);
+  };
+
+  document.addEventListener('touchend', noteGesture, true);
+  document.addEventListener('click', noteGesture, true);
 
   // ── unlocking audio ───────────────────────────────────────────────────────
   // iOS starts a WKWebView's AudioContext *suspended* and refuses to resume it
@@ -202,6 +239,46 @@ export const SHIM_JS = String.raw`
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden) { audioUnlocked = false; unlockAudio(); }
   });
+
+  // ── a call screen sized for a phone ───────────────────────────────────────
+  // Reported: the transcript panel covers the character and grows to take up to
+  // 46% of the screen height (desktop's own narrow-window rule, meant for a
+  // resized browser, not a 6-inch phone); the layout looked "enlarged" and did
+  // not "fit". Injected as CSS rather than edited into style.css, so the desktop
+  // stylesheet stays exactly as it is and this only ever runs inside the app.
+  //
+  // The transcript itself is untouched — chat.js still appends every bubble and
+  // scrolls it the way it always has. Older bubbles are hidden with display:none,
+  // which removes them from layout (so the panel does not grow to 46vh in the
+  // first place) without detaching them from the DOM, so nothing that reads the
+  // transcript's history breaks.
+  function addMobileCallStyle() {
+    if (document.getElementById('poppys-mobile-call-css')) return;
+    var style = document.createElement('style');
+    style.id = 'poppys-mobile-call-css';
+    style.textContent =
+      '@media (max-width: 820px) {' +
+      // A strict ceiling so a single long reply cannot regrow the panel over the
+      // character; in practice showing only the current exchange stays far
+      // smaller than this.
+      '.call-rail { max-height: 22vh !important; }' +
+      // Only the current exchange (her last line and, if present, what was just
+      // said to her) stays visible — "the new chat only", not the scrollback.
+      '.rail-scroll .bubble:not(:nth-last-child(-n+2)) { display: none !important; }' +
+      // The dock and the input row now sit closer to the very bottom edge than
+      // desktop's layout assumed; keep them clear of the home-indicator gesture
+      // area rather than sitting under it.
+      '.dock { margin-bottom: env(safe-area-inset-bottom, 0px); }' +
+      '.call-rail #chat-form { padding-bottom: calc(0.7rem + env(safe-area-inset-bottom, 0px)); }' +
+      '}';
+    document.head.appendChild(style);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', addMobileCallStyle);
+  } else {
+    addMobileCallStyle();
+  }
 
   // ── inbound, called by the native side ─────────────────────────────────────
   window.__poppysBridge = function (msg) {
