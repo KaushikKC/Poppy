@@ -334,7 +334,10 @@
     onSelect = (opts && opts.onSelect) || null;
     if (!canvas || !state || !state.flowers) return;
     const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    // A phone can refuse a second large canvas when memory is tight, and it
+    // refuses by handing back null. Silently returning here is what leaves the
+    // garden as an empty cream screen with no way to tell why.
+    if (!ctx) { console.error("[garden] no 2d context — the field cannot be drawn"); return; }
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const pal = SEASONS[state.season] || SEASONS.summer;
     const kinds = state.kinds || {};
@@ -343,27 +346,49 @@
     // Draw far flowers first so the field has depth.
     const order = flowers.map((_, i) => i).sort((a, b) => positions[a].depth - positions[b].depth);
     let land = null;
+    let failures = 0;
 
     function frame(t) {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const W = canvas.clientWidth;
       const H = canvas.clientHeight;
+      // The view is unhidden and rendered in the same tick, so the first frame can
+      // arrive before the canvas has been laid out and measure 0×0. Building the
+      // land at that size makes a zero-width offscreen canvas, and drawing one
+      // throws — which killed the loop on its first frame and left nothing but the
+      // background. Wait for a real size instead of drawing at a fake one.
+      if (W < 2 || H < 2) { _raf = requestAnimationFrame(frame); return; }
       if (canvas.width !== Math.floor(W * dpr)) {
         canvas.width = Math.floor(W * dpr);
         canvas.height = Math.floor(H * dpr);
       }
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      if (!land || land.W !== W || land.H !== H) land = buildLand(W, H, pal);
-      ctx.drawImage(land.canvas, 0, 0, W, H);
-      drawClouds(ctx, W, land.horizon, pal, t, reduced);
-      order.forEach((i) => drawFlower(ctx, flowers[i], positions[i], land.horizon, W, H, t, kinds, reduced));
 
-      // One label at a time, on the flower under the cursor or the one being
-      // named. Showing them all would bury the field in text.
-      const showing = dragging !== null ? dragging : (selected !== null ? selected : hovered);
-      if (showing !== null && showing !== undefined && flowers[showing]) {
-        drawTag(ctx, flowers[showing], positions[showing], land.horizon, W, H);
+      try {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        if (!land || land.W !== W || land.H !== H) land = buildLand(W, H, pal);
+        ctx.drawImage(land.canvas, 0, 0, W, H);
+        drawClouds(ctx, W, land.horizon, pal, t, reduced);
+        order.forEach((i) => drawFlower(ctx, flowers[i], positions[i], land.horizon, W, H, t, kinds, reduced));
+
+        // One label at a time, on the flower under the cursor or the one being
+        // named. Showing them all would bury the field in text.
+        const showing = dragging !== null ? dragging : (selected !== null ? selected : hovered);
+        if (showing !== null && showing !== undefined && flowers[showing]) {
+          drawTag(ctx, flowers[showing], positions[showing], land.horizon, W, H);
+        }
+      } catch (err) {
+        // One bad frame used to end the garden for good: the throw escaped the
+        // rAF callback, nothing rescheduled, and the screen stayed blank. Retry
+        // from a clean land a few times, then give up quietly rather than log a
+        // loop. Reported once, so the reason is in the console either way.
+        failures += 1;
+        land = null;
+        if (failures === 1) console.error("[garden] could not draw the field:", err);
+        if (failures > 8) { _raf = null; return; }
+        _raf = requestAnimationFrame(frame);
+        return;
       }
+
       _raf = reduced ? null : requestAnimationFrame(frame);
     }
 
@@ -493,15 +518,27 @@
       if (f) { if (text) f.label = text; else delete f.label; }
     };
 
+    // The land is a full-screen offscreen canvas — a few megabytes of backing
+    // store that this closure keeps alive for as long as _setLabel does. On a
+    // phone sharing its memory with the model that is worth handing back the
+    // moment the garden is closed, and a canvas is only freed by being resized
+    // to nothing.
+    _release = () => {
+      if (land && land.canvas) { land.canvas.width = 0; land.canvas.height = 0; }
+      land = null;
+    };
+
     if (_raf) cancelAnimationFrame(_raf);
     _raf = requestAnimationFrame(frame);
   }
 
   let _setLabel = null;
+  let _release = null;
 
   function stop(canvas) {
     if (_raf) cancelAnimationFrame(_raf);
     _raf = null;
+    if (_release) { _release(); _release = null; }
     if (canvas) {
       canvas.onpointerdown = canvas.onpointermove = null;
       canvas.onpointerup = canvas.onpointercancel = null;
