@@ -205,6 +205,16 @@ export function createSocketHandler(): SocketHandler {
       }
 
       try {
+        // Voice notes or text, never both. The page does not have to be told which:
+        // in voice mode it receives a recording and no tokens, in text mode tokens
+        // and no recording, and it renders whatever arrives.
+        const deliver = profile.reply_mode === 'text' ? 'text' : 'voice';
+        if (deliver === 'voice') {
+          // She is recording. Sent before the model starts, because the whole point
+          // of the voice-note shape is that the wait is visible and explained.
+          reply.text(JSON.stringify({ type: 'recording' }));
+        }
+
         const said = await runTurn(
           msg.text,
           {
@@ -212,12 +222,15 @@ export function createSocketHandler(): SocketHandler {
             history: session.history.slice(-MAX_HISTORY_TURNS * 2),
             voice: profile.voice,
             signal: session.abort.signal,
+            deliver,
           },
           {
             onConfig: (sampleRate) =>
               reply.text(JSON.stringify({ type: 'config', sampleRate })),
             onAudio: () => {},
             onToken: (text) => reply.text(JSON.stringify({ type: 'token', text })),
+            onVoice: (durationMs) =>
+              reply.text(JSON.stringify({ type: 'voice', durationMs })),
             onError: (message) => reply.text(JSON.stringify({ type: 'error', message })),
           },
         );

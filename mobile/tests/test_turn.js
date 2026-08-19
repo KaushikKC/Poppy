@@ -97,85 +97,87 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
 }
 
 (async () => {
-  console.log('\n== a whole turn, start to finish ==');
+  console.log('\n== voice mode: one recording, no tokens ==');
   {
     const log = fakes({ reply: 'Well, that sounds hard. I am glad you told me. How are you now?' });
-    const events = { tokens: [], config: [], done: [], firstAudio: 0, audio: [] };
-    const text = await runTurn('hello', { system: 's', voice: 'af_heart' }, {
+    const events = { tokens: [], config: [], done: [], firstAudio: 0, audio: [], voice: [] };
+    const text = await runTurn('hello', { system: 's', voice: 'af_heart', deliver: 'voice' }, {
       onToken: (t) => events.tokens.push(t),
       onConfig: (r) => events.config.push(r),
       onFirstAudio: () => { events.firstAudio++; },
       onAudio: () => { events.audio.push(1); },
+      onVoice: (ms) => events.voice.push(ms),
       onDone: (r) => events.done.push(r),
     });
     check('reply returned', text.startsWith('Well, that sounds hard.'), JSON.stringify(text.slice(0, 30)));
-    check('tokens streamed', events.tokens.length > 5, `${events.tokens.length}`);
+    // The whole point of the mode: nothing readable arrives while she records.
+    check('no tokens reach the page', events.tokens.length === 0, `${events.tokens.length}`);
     check('config sent once, before audio', events.config.length === 1 && events.config[0] === 24000);
     check('first-audio fired exactly once', events.firstAudio === 1, `${events.firstAudio}`);
     check('done carries the full reply', events.done.length === 1 && events.done[0] === text);
-    check('every phrase produced audio', events.audio.length === log.synthesized.length,
-      `${events.audio.length}/${log.synthesized.length}`);
 
-    // Wait for the speaker queue to drain: playback is asynchronous now.
+    // One call, not one per phrase — that is what removes the gaps and the overhead.
+    check('synthesised exactly once', log.synthesized.length === 1, `${log.synthesized.length} calls`);
+    check('the whole reply was rendered', log.synthesized[0] === text, JSON.stringify(log.synthesized[0]));
+    check('a duration is known before it plays', events.voice.length === 1 && events.voice[0] > 0,
+      `${events.voice[0]}ms`);
+
     await sleep(120);
-    check('every phrase was actually spoken', log.spoken.length === log.synthesized.length,
-      `${log.spoken.length}/${log.synthesized.length}`);
-    check('spoken in the order written',
-      JSON.stringify(log.spoken) === JSON.stringify(log.synthesized));
+    check('it was actually spoken', log.spoken.length === 1, `${log.spoken.length}`);
 
     // The orb is driven from these, so they have to arrive with a shape and a length.
     const chunks = log.levels.filter((m) => m.t === 'audio:chunk');
-    check('the page was sent an envelope per phrase', chunks.length === log.synthesized.length,
-      `${chunks.length}`);
-    check('each envelope has values', chunks.every((c) => Array.isArray(c.envelope) && c.envelope.length > 0));
-    check('each carries a duration', chunks.every((c) => c.durationMs > 0));
+    check('the page was sent one envelope', chunks.length === 1, `${chunks.length}`);
+    check('the envelope has values', chunks.every((c) => Array.isArray(c.envelope) && c.envelope.length > 0));
+    check('it carries a duration', chunks.every((c) => c.durationMs > 0));
   }
 
-  console.log('\n== never two syntheses at once (the desktop thrash) ==');
+  console.log('\n== text mode: tokens, and never a sound ==');
   {
-    const log = fakes({
-      reply: 'One. Two. Three. Four. Five. Six. Seven. Eight. Nine. Ten. Eleven. Twelve.',
-      synthMs: 15,
+    const log = fakes({ reply: 'Well, that sounds hard. I am glad you told me. How are you now?' });
+    const events = { tokens: [], done: [], voice: [], firstAudio: 0 };
+    const text = await runTurn('hello', { system: 's', voice: 'af_heart', deliver: 'text' }, {
+      onToken: (t) => events.tokens.push(t),
+      onVoice: (ms) => events.voice.push(ms),
+      onFirstAudio: () => { events.firstAudio++; },
+      onDone: (r) => events.done.push(r),
     });
-    await runTurn('hi', { system: 's', voice: 'v' }, {});
-    check('peak concurrent synthesis is 1', log.concurrentPeak === 1, `peak=${log.concurrentPeak}`);
-    check('several phrases were produced', log.synthesized.length >= 4, `${log.synthesized.length}`);
-  }
+    check('tokens streamed', events.tokens.length > 5, `${events.tokens.length}`);
+    check('the streamed tokens are the reply', events.tokens.join('').trim() === text);
+    check('done carries the full reply', events.done.length === 1 && events.done[0] === text);
 
-  console.log('\n== phrases play in the order they were written ==');
-  {
-    const log = fakes({ reply: 'Alpha. Bravo. Charlie. Delta. Echo.', synthMs: 25, tokenMs: 1 });
-    await runTurn('hi', { system: 's', voice: 'v' }, {});
-    await sleep(150);
-    const seen = log.spoken;
-    const order = seen.join(' ');
-    check('Alpha before Echo', order.indexOf('Alpha') >= 0 &&
-      order.indexOf('Echo') > order.indexOf('Alpha'), order.slice(0, 60));
-    check('emitted in synthesis order',
-      JSON.stringify(seen) === JSON.stringify(log.synthesized));
-  }
-
-  console.log('\n== one failed phrase does not silence the rest ==');
-  {
-    const log = fakes({ reply: 'First one. Second BADPHRASE here. Third one is fine.', failOn: 'BADPHRASE' });
-    const text = await runTurn('hi', { system: 's', voice: 'v' }, {});
     await sleep(120);
-    check('the turn still completed', text.length > 0);
-    check('phrases after the failure still spoke', log.spoken.length >= 2, `${log.spoken.length}`);
-    check('the bad phrase is absent', !log.synthesized.some((p) => p.includes('BADPHRASE')));
+    // Silent by design: synthesis is most of the latency and most of the heat, and
+    // this mode exists for the person who wants neither.
+    check('nothing was synthesised', log.synthesized.length === 0, `${log.synthesized.length}`);
+    check('nothing was spoken', log.spoken.length === 0, `${log.spoken.length}`);
+    check('no recording was announced', events.voice.length === 0);
+    check('no first-audio', events.firstAudio === 0);
+  }
+
+  console.log('\n== a failed recording does not fail the turn ==');
+  {
+    const log = fakes({ reply: 'This reply contains BADPHRASE and cannot be spoken.', failOn: 'BADPHRASE' });
+    const errors = [];
+    const text = await runTurn('hi', { system: 's', voice: 'v', deliver: 'voice' }, {
+      onError: (m) => errors.push(m),
+    });
+    await sleep(120);
+    check('the turn still completed', text.length > 0, JSON.stringify(text.slice(0, 30)));
+    check('nothing was spoken', log.spoken.length === 0, `${log.spoken.length}`);
+    check('the page was told why', errors.length === 1, `${errors.length}`);
   }
 
   console.log('\n== barge-in stops the voice and does not throw ==');
   {
-    const log = fakes({ reply: 'This is a long reply. It keeps going. And going. And going still.', synthMs: 30 });
+    const log = fakes({ reply: 'This is a long reply. It keeps going. And going. And going still.', synthMs: 60 });
     const abort = new AbortController();
-    const p = runTurn('hi', { system: 's', voice: 'v', signal: abort.signal }, {});
-    await sleep(45);
+    const p = runTurn('hi', { system: 's', voice: 'v', deliver: 'voice', signal: abort.signal }, {});
+    await sleep(30);
     abort.abort();
     const text = await p;
     check('resolved rather than rejected', typeof text === 'string');
-    check('it stopped early', log.spoken.length < 4, `${log.spoken.length} phrases`);
-    check('the page was told playback ended', log.levels.some((m) => m.t === 'audio:end'));
+    check('nothing reached the speaker', log.spoken.length === 0, `${log.spoken.length} spoken`);
   }
 
   console.log('\n== the socket speaks what chat.js expects ==');
@@ -200,9 +202,15 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
 
     const sent = frames.filter((f) => f.t === 'ws:msg' && !f.b64).map((f) => JSON.parse(f.data));
     const types = sent.map((m) => m.type);
-    check('config is the first frame, before any token',
-      types[0] === 'config', types.slice(0, 4).join(','));
-    check('tokens were sent', types.filter((t) => t === 'token').length > 3);
+    // The default is voice, so the page is told she is recording before anything
+    // else happens — that frame is what makes the wait legible instead of dead air.
+    check('recording is announced first', types[0] === 'recording', types.slice(0, 4).join(','));
+    check('config follows it', types[1] === 'config', types.slice(0, 4).join(','));
+    check('one recording frame, carrying a duration',
+      sent.filter((m) => m.type === 'voice').length === 1
+      && sent.find((m) => m.type === 'voice').durationMs > 0);
+    check('not a single token in voice mode',
+      types.filter((t) => t === 'token').length === 0, types.join(','));
     check('done is last', types[types.length - 1] === 'done', types.slice(-3).join(','));
     // Audio is spoken natively now, so no binary frame should reach the page at all;
     // the orb is driven by an envelope on its own channel instead.
@@ -249,8 +257,9 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
     check('a safety frame was sent', !!safetyMsg);
     check('it carries the helplines', !!safetyMsg && /1800-599-0019|988/.test(safetyMsg.resources));
     // Someone in the acute tier should not have to sit through a spoken reply first.
-    check('it arrives before the first token',
-      types.indexOf('safety') < types.indexOf('token'), types.slice(0, 4).join(','));
+    // The helplines must not wait behind a recording that takes seconds to render.
+    check('it arrives before she starts recording',
+      types.indexOf('safety') < types.indexOf('recording'), types.slice(0, 4).join(','));
     check('the turn still completes', types[types.length - 1] === 'done');
 
     console.log('\n== ordinary talk sends no safety frame ==');
