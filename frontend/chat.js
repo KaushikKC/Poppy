@@ -244,6 +244,23 @@ function renderVoiceNote(bubble, durationMs) {
   requestAnimationFrame(tick);
 }
 
+/**
+ * The composer shows a mic or a send button, never both.
+ *
+ * Not decoration: it is the same rule the reply follows. An empty field means the
+ * next thing said will be spoken, and a field with something in it means it will be
+ * typed — so the button is already telling you which kind of reply is coming back.
+ */
+(function composerMode() {
+  const form = document.getElementById("chat-form");
+  const field = document.getElementById("user-input");
+  if (!form || !field) return;
+  const sync = () => form.classList.toggle("has-text", field.value.trim().length > 0);
+  field.addEventListener("input", sync);
+  form.addEventListener("submit", () => setTimeout(sync, 0));
+  sync();
+})();
+
 function addBubble(role, text = "") {
   const div = document.createElement("div");
   div.className = `bubble ${role}`;

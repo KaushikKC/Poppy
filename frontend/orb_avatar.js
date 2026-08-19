@@ -90,7 +90,14 @@
 
     ctx.clearRect(0, 0, W, H);
     const cx = W / 2, cy = H / 2;
-    const base = Math.min(W, H) * 0.22;
+    const small = Math.min(W, H);
+    // She is drawn full-page in some views and into a 42px slot in the thread's
+    // header in another. A single fraction cannot serve both: 0.22 of a phone screen
+    // is a presence, and 0.22 of a 42px circle is a dot adrift in an empty ring. So
+    // the fill grows as the box shrinks, and the glow shrinks with it — a 36px blur
+    // around an 18px orb is not a glow, it is a smear.
+    const compact = small < 120;
+    const base = small * (compact ? 0.34 : 0.22);
 
     // Target amplitude by state, then smooth toward it.
     let target = 0;
@@ -105,7 +112,7 @@
 
     ctx.save();
     ctx.shadowColor = `rgba(${palette.glow},${0.45 + level * 0.4})`;
-    ctx.shadowBlur = 36 + level * 80;
+    ctx.shadowBlur = compact ? 6 + level * 10 : 36 + level * 80;
 
     const g = ctx.createRadialGradient(cx, cy - r * 0.18, r * 0.1, cx, cy, r);
     g.addColorStop(0, palette.core);

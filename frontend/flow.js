@@ -33,12 +33,12 @@
   function setView(v) {
     onboarding.classList.toggle("hidden", v !== "onboarding");
     home.classList.toggle("hidden", v !== "home");
-    app.classList.toggle("hidden", v !== "call");
+    app.classList.toggle("hidden", v !== "chat");
     onboarding.setAttribute("aria-hidden", v !== "onboarding");
     home.setAttribute("aria-hidden", v !== "home");
     document.body.dataset.view = v;
-    if (v === "call") {
-      // #stage just resized to the left column — nudge TalkingHead to refit the canvas.
+    if (v === "chat") {
+      // The orb's container just became a 42px slot in the header; nudge it to refit.
       requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
       setTimeout(() => window.dispatchEvent(new Event("resize")), 320);
     }
@@ -930,7 +930,7 @@
     const transcript = document.getElementById("transcript");
     if (transcript) transcript.innerHTML = "";
     window._lastUserText = "";
-    setView("call");
+    setView("chat");
 
     const opening = r.opening || "";
     if (r.profile) profile = r.profile;

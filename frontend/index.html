@@ -99,7 +99,7 @@
     <div class="home-lower">
       <p class="home-remembers" id="home-remembers"></p>
       <button type="button" id="home-call" class="home-call">
-        <span class="home-call-label">Call</span>
+        <span class="home-call-label">Chat with</span>
         <strong id="home-name">Poppy</strong>
       </button>
       <div class="home-modes" id="home-modes"></div>
@@ -179,80 +179,66 @@
       <p class="connect-sub">She picks up in a moment…</p>
     </div>
 
-    <!-- ── LEFT: the stage — the character's presence (3D avatar shows through) ── -->
-    <section class="call-stage">
-      <header class="call-top">
-        <div class="who">
-          <span class="who-live"><i aria-hidden="true"></i>Live</span>
-          <strong id="call-name">Poppy</strong>
-          <div id="status-pill" class="idle">
-            <span id="status-dot" class="dot idle" title="idle"></span>
-            <span id="status-label">Ready</span>
-            <span id="status-eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
-          </div>
-        </div>
-        <div class="call-top-right">
-          <span class="private-badge" title="Nothing leaves this device unless you save it">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v6c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9V6l7-3z"/></svg>
-            Private
-          </span>
-          <span id="latency-badge" title="last response latency">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-            <i class="chip-label"></i>
-          </span>
-        </div>
-      </header>
+    <!-- ── The thread. This is the product now: a conversation you keep, not a
+         call you join. The character sits in the header the way a contact does,
+         and the messages take the screen. ── -->
+    <header class="chat-top">
+      <button type="button" id="end-call-btn" class="chat-back" title="Back" aria-label="Back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
 
-      <!-- the 3D avatar (full-page #stage behind) occupies this area -->
-      <div id="stage-spacer">
-        <!-- voice-reactive aura rings that breathe with her voice -->
-        <div class="call-aura" aria-hidden="true"><span></span><span></span><span></span></div>
-        <!-- turn-taking indicator — never ambiguous whose turn it is -->
-        <div id="turn-pill" class="turn-pill">
-          <span class="turn-dot" aria-hidden="true"></span>
-          <span id="turn-label">Your turn</span>
+      <!-- The orb is positioned into this slot by CSS; the canvas itself lives in
+           #avatar3d, which is a full-page layer in every other view. -->
+      <span class="chat-orb-slot" aria-hidden="true"></span>
+
+      <div class="chat-id">
+        <strong id="call-name">Poppy</strong>
+        <div id="status-pill" class="idle">
+          <span id="status-dot" class="dot idle" title="idle"></span>
+          <span id="status-label">Ready</span>
+          <span id="status-eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
         </div>
       </div>
 
-      <!-- control dock -->
-      <div class="dock" role="toolbar" aria-label="Call controls">
-        <!-- mic.js swaps this button's className; styling hangs off the ID -->
-        <button type="button" id="mic-btn" class="dock-btn" title="Click to record, click again to send" aria-label="Record voice message">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.93V21h2v-2.07A7 7 0 0 0 19 12h-2z"/></svg>
-          <span class="dock-label">Talk</span>
-        </button>
-        <button type="button" id="vad-btn" class="dock-btn" title="Auto-listen" aria-label="Toggle auto-listen">
+      <div class="chat-top-right">
+        <span id="latency-badge" title="last response latency">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          <i class="chip-label"></i>
+        </span>
+        <!-- Hands-free listening. A call's idea, kept reachable but out of the way:
+             in a thread you tap to record, the way you would anywhere else. -->
+        <button type="button" id="vad-btn" class="chat-icon-btn" title="Auto-listen" aria-label="Toggle auto-listen">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3a9 9 0 0 0-9 9 9 9 0 0 0 9 9 9 9 0 0 0 9-9 9 9 0 0 0-9-9zm0 2a7 7 0 0 1 7 7 7 7 0 0 1-7 7 7 7 0 0 1-7-7 7 7 0 0 1 7-7zm0 3a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4zm0 2a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/></svg>
-          <span class="dock-label">Auto</span>
         </button>
-        <button type="button" id="end-call-btn" class="dock-btn dock-btn--end" title="End call" aria-label="End call">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 15.46l-5.27-.61-2.52 2.52a15.05 15.05 0 0 1-6.59-6.59l2.53-2.53L8.54 3H3.03C2.45 13.18 10.82 21.55 21 20.97v-5.51z" transform="rotate(135 12 12)"/></svg>
-          <span class="dock-label">End</span>
-        </button>
-        <button type="button" id="memory-btn" class="dock-btn" title="What she remembers about you" aria-label="What she remembers about you">
+        <button type="button" id="memory-btn" class="chat-icon-btn" title="What she remembers about you" aria-label="What she remembers about you">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-          <span class="dock-label">Memory</span>
         </button>
       </div>
-    </section>
+    </header>
 
-    <!-- ── RIGHT: the rail — live transcript + input (warm paper, our cream) ── -->
-    <aside class="call-rail" aria-label="Conversation">
+    <section class="chat-thread" aria-label="Conversation">
       <div class="rail-scroll">
         <div id="memory-consent" class="hidden"></div>
         <div id="transcript"></div>
-        <div id="hint">Tap Talk and just start speaking</div>
+        <div id="hint">Tap the mic and just start speaking</div>
       </div>
-      <form id="chat-form" class="rail-input">
-        <input id="user-input" type="text" placeholder="Type a message or just speak…" autocomplete="off" />
-        <button type="submit" id="send-btn" title="Send" aria-label="Send message">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-        </button>
-        <button type="button" id="clear-btn" title="Clear conversation" aria-label="Clear conversation">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
-        </button>
-      </form>
-    </aside>
+    </section>
+
+    <!-- Mic when the field is empty, send once there is something to send. The
+         swap is not decoration: it is the same rule the reply follows — speak and
+         she speaks back, type and she types back. -->
+    <form id="chat-form" class="chat-composer">
+      <input id="user-input" type="text" placeholder="Message" autocomplete="off" />
+      <button type="button" id="clear-btn" title="Clear conversation" aria-label="Clear conversation">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
+      </button>
+      <button type="button" id="mic-btn" class="composer-mic" title="Hold a moment and speak" aria-label="Record voice message">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.93V21h2v-2.07A7 7 0 0 0 19 12h-2z"/></svg>
+      </button>
+      <button type="submit" id="send-btn" title="Send" aria-label="Send message">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </form>
 
     <!-- overlays / legacy (kept for JS; hidden) -->
     <div id="memory-panel" class="hidden"></div>
