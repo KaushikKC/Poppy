@@ -55,7 +55,7 @@ async function startRecording() {
     releaseStream(stream);
     try {
       const blob = new Blob(audioChunks, { type: mimeType });
-      await transcribeAndSend(blob, mimeType);
+      await transcribeAndSend(blob, mimeType, Date.now() - recordingStartedAt);
     } catch (err) {
       // transcribeAndSend handles its own STT errors; this catches anything
       // after it, such as the send failing on a closed socket. Without it the
@@ -68,6 +68,7 @@ async function startRecording() {
   };
 
   mediaRecorder.start(250);
+  recordingStartedAt = Date.now();
   isRecording = true;
   setMicState("recording");
 }
@@ -132,8 +133,8 @@ if (vadBtn) {
         vadBtn.title = "Processing…";
       };
 
-      vadInstance.onSpeech = async (blob, mimeType) => {
-        await transcribeAndSend(blob, mimeType);
+      vadInstance.onSpeech = async (blob, mimeType, durationMs) => {
+        await transcribeAndSend(blob, mimeType, durationMs);
         vadBtn.title = "Auto-listening — click to stop";
       };
 
@@ -161,7 +162,14 @@ if (vadBtn) {
 
 // ── Shared transcribe + send ──────────────────────────────────────────────────
 
-async function transcribeAndSend(blob, mimeType) {
+/**
+ * How long the recording ran. Taken from the clock rather than decoded from the blob:
+ * the length is wanted before the bubble is drawn, and decoding a webm to find out
+ * would cost more than the number is worth.
+ */
+let recordingStartedAt = 0;
+
+async function transcribeAndSend(blob, mimeType, durationMs = 0) {
   window._turnStart = Date.now(); // latency timer starts here
 
   const detectOn = window.detectionEnabled?.() ?? false;
@@ -198,5 +206,9 @@ async function transcribeAndSend(blob, mimeType) {
   if (!transcript) return;
 
   userInput.value = "";
-  sendMessage(transcript);
+  // A voice message goes into the thread as a voice message. It used to arrive as
+  // text, which quietly threw away the thing that was actually sent: the recording
+  // is what the user made, and the transcript is a reading of it. The transcript is
+  // still there, one tap away, because a machine reading is worth checking.
+  sendMessage(transcript, true, { audio: { blob, durationMs } });
 }

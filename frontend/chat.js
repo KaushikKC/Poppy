@@ -158,6 +158,13 @@ let currentWs = null;
 let currentReplyBubble = null;
 window._replyActive = false;
 
+// A turn's identity, and it outlives its socket. `currentWs` is cleared at
+// "done" — while the voice may still have seconds left to play — so anything
+// that has to survive until the audio actually stops cannot use the socket to
+// tell whether it is still the live turn. Each turn takes the next number and
+// checks it is still the current one before acting.
+let turnSeq = 0;
+
 function endReply(ws) {
   if (ws && ws !== currentWs) return; // a newer turn already took over
   window._replyActive = false;
@@ -188,6 +195,42 @@ window.interruptReply = function interruptReply() {
 };
 
 /**
+ * The bubble while she is recording.
+ *
+ * Built from elements rather than a ::after string so it can carry a mic and moving
+ * level bars — the vocabulary of something being recorded right now. A line of text
+ * saying "recording" asks you to believe it; bars that move show it.
+ *
+ * `.streaming` is dropped here on purpose. It drives the typing indicator, whose
+ * selector is more specific than this one, so leaving it on meant the dots won and
+ * the recording state was never seen at all.
+ */
+function renderRecording(bubble) {
+  const who = document.getElementById("call-name")?.textContent?.trim()
+    || window.Pronouns?.Subj() || "She";
+  bubble.classList.remove("streaming");
+  bubble.classList.add("recording");
+  bubble.textContent = "";
+
+  const mic = document.createElement("span");
+  mic.className = "rec-mic";
+  mic.setAttribute("aria-hidden", "true");
+
+  const label = document.createElement("span");
+  label.className = "rec-text";
+  label.textContent = `${who} is recording`;
+
+  const bars = document.createElement("span");
+  bars.className = "rec-bars";
+  bars.setAttribute("aria-hidden", "true");
+  for (let i = 0; i < 5; i += 1) bars.appendChild(document.createElement("i"));
+
+  bubble.append(mic, label, bars);
+  bubble.setAttribute("aria-label", `${who} is recording a voice message`);
+  transcript.scrollTop = transcript.scrollHeight;
+}
+
+/**
  * Turn a bubble into a voice note: a play mark, a duration, and a bar that fills as
  * she speaks.
  *
@@ -196,7 +239,7 @@ window.interruptReply = function interruptReply() {
  * indeterminate spinner — the difference between "this will take four seconds" and
  * "something may be happening".
  */
-function renderVoiceNote(bubble, durationMs) {
+function renderVoiceNote(bubble, durationMs, transcriptText = "") {
   const secs = Math.max(1, Math.round(durationMs / 1000));
   bubble.classList.remove("recording", "streaming");
   bubble.classList.add("voice-note");
@@ -228,8 +271,33 @@ function renderVoiceNote(bubble, durationMs) {
     wave.appendChild(b);
   }
 
-  bubble.append(mark, wave, bar, time);
+  const row = document.createElement("span");
+  row.className = "vn-row";
+  row.append(mark, wave, bar, time);
+  bubble.append(row);
   bubble.setAttribute("aria-label", `Voice message, ${secs} seconds`);
+
+  // The words, behind a tap, from the moment the note appears rather than once it
+  // has finished playing. Waiting for the end was the same as not having it: a
+  // forty-second reply is forty seconds before you can read a line of it, which is
+  // exactly the situation where someone wants to read instead of listen.
+  if (transcriptText) {
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "vn-transcript";
+    toggle.textContent = "Transcript";
+    toggle.setAttribute("aria-expanded", "false");
+    const text = document.createElement("span");
+    text.className = "vn-text hidden";
+    text.textContent = transcriptText;
+    toggle.addEventListener("click", () => {
+      const shown = !text.classList.toggle("hidden");
+      toggle.setAttribute("aria-expanded", String(shown));
+      toggle.textContent = shown ? "Hide transcript" : "Transcript";
+      transcript.scrollTop = transcript.scrollHeight;
+    });
+    bubble.append(toggle, text);
+  }
 
   // Playback is native, so the bar is driven from the duration we were given rather
   // than from a player the page can query.
@@ -284,6 +352,7 @@ function setInputLocked(locked) {
 // already known, so it's revealed at once and the avatar lip-syncs to the audio.
 window.speakLine = function speakLine(text) {
   if (!text) return;
+  const myTurn = ++turnSeq;   // supersedes any earlier turn's playback callback
   const bubble = addBubble("assistant");
   bubble.classList.add("streaming");
   setStatus("thinking");
@@ -299,7 +368,24 @@ window.speakLine = function speakLine(text) {
     avatar?.setState("speaking");
   });
 
+  let lineMs = 0;
+  let lineClipId = null;
+  let lineText = "";
+
   function finish() {
+    // Once it has played out it becomes a note that can be played again and read,
+    // exactly like a reply. Before this, her opener was the one recording in the app
+    // you got a single pass at.
+    if (lineMs && window.VoiceNote && (replyWav || lineClipId)) {
+      window.VoiceNote.render(bubble, {
+        durationMs: lineMs,
+        transcript: lineText,
+        handle: replyWav
+          ? window.VoiceNote.blobHandle(replyWav)
+          : window.VoiceNote.nativeHandle(lineClipId, lineMs),
+      });
+      bubble.classList.add("played");
+    }
     setStatus("idle");
     avatar?.setState("idle");
   }
@@ -314,7 +400,13 @@ window.speakLine = function speakLine(text) {
   ws.onmessage = async (event) => {
     if (ws !== currentWs) return;
     if (event.data instanceof ArrayBuffer) {
-      await player.enqueueWav(event.data.slice(0));
+      const bytes = event.data.slice(0);
+      // Kept as well as played. A reply used to be audible exactly once: the bytes
+      // went into the player and nothing held on to them, so when it finished there
+      // was nothing left to play again. One recording per reply (ws_handler renders
+      // the whole thing in one call), so this is one blob, not a growing buffer.
+      replyWav = new Blob([bytes], { type: "audio/wav" });
+      await player.enqueueWav(bytes);
       return;
     }
     const msg = JSON.parse(event.data);
@@ -324,6 +416,14 @@ window.speakLine = function speakLine(text) {
     } else if (msg.type === "token") {
       bubble.textContent = msg.text;
       transcript.scrollTop = transcript.scrollHeight;
+    } else if (msg.type === "voice") {
+      // Her opening line, spoken. This frame was never handled here, so a line long
+      // enough to be worth saying out loud arrived as an empty bubble: no player, no
+      // words, nothing. It gets the same note the rest of her replies get.
+      lineMs = msg.durationMs;
+      lineClipId = msg.clipId || null;
+      lineText = msg.text || "";
+      renderVoiceNote(bubble, msg.durationMs, lineText);
     } else if (msg.type === "avatar_clip") {
       window.poppyPlayClip?.(`${BACKEND}${msg.url}`);
     } else if (msg.type === "done") {
@@ -331,8 +431,11 @@ window.speakLine = function speakLine(text) {
       ws.close();
       endReply(ws);
       if (player.isPlaying()) {
-        // Reset the avatar to idle once the voice has fully played out.
+        // Reset the avatar to idle once the voice has fully played out. Stops if
+        // a newer turn has started, so a barge-in's reply is not dropped to idle
+        // by the poll belonging to the line it interrupted.
         const poll = setInterval(() => {
+          if (myTurn !== turnSeq) { clearInterval(poll); return; }
           if (!player.isPlaying()) { clearInterval(poll); finish(); }
         }, 200);
       } else {
@@ -350,12 +453,36 @@ window.speakLine = function speakLine(text) {
   ws.onerror = () => { if (ws === currentWs) { endReply(ws); finish(); } };
 };
 
-window.sendMessage = async function sendMessage(text) {
+/**
+ * Send a turn.
+ *
+ * `spoken` is how it arrived, and it decides how the answer comes back: speak to her
+ * and she speaks back, type and she types back. It is not a setting anybody chooses —
+ * the app already knows which control was used, and mirroring that is what a person
+ * would do. Defaults to typed, because every caller that does not say otherwise is a
+ * keyboard.
+ */
+window.sendMessage = async function sendMessage(text, spoken = false, opts = {}) {
   // The user's speaking again — cancel any pending memory extraction so it never
   // fires mid-conversation and steals the model from this reply.
   clearTimeout(window._memProposeTimer);
+  const myTurn = ++turnSeq;   // supersedes any earlier turn's playback callback
   window._lastUserText = text; // last turn, used to pair a memory candidate with its source
-  addBubble("user", text);
+  // Sent as a recording, so it appears as one. `opts.audio` is present only when the
+  // message actually came from the microphone; typing is unchanged and still arrives
+  // as text, because answering in kind starts with showing in kind.
+  const userBubble = addBubble("user", opts.audio ? "" : text);
+  if (opts.audio && window.VoiceNote) {
+    const { blob, clipId, durationMs = 0 } = opts.audio;
+    // A blob on desktop, an id on iOS where the samples never leave the native side.
+    // The bubble does not care which it was handed.
+    const handle = blob
+      ? window.VoiceNote.blobHandle(blob)
+      : clipId
+        ? window.VoiceNote.nativeHandle(clipId, durationMs)
+        : null;
+    window.VoiceNote.render(userBubble, { durationMs, transcript: text, handle });
+  }
   const replyBubble = addBubble("assistant");
   replyBubble.classList.add("streaming");
 
@@ -382,8 +509,21 @@ window.sendMessage = async function sendMessage(text) {
   let revealDead = false;      // barge-in / superseded — stop this turn's reveal
   let lastTick = 0;
   let revealTimer = null;
+  // Set once she starts recording. The paced reveal below writes textContent on a
+  // 40ms interval and again on `done`, and in a spoken turn `target` is empty — so
+  // without this it wiped the voice note it had just been handed, every time. The
+  // bubble kept its class and lost its contents, which is exactly what was seen.
+  let voiceReply = false;
+  // Her recording for this turn, once it arrives. Used to make the bubble replayable
+  // after the live playback (which owns the analyser, and so the orb) has finished.
+  let replyWav = null;
+  let replyMs = 0;
+  // The native side's copy, on iOS, where no bytes cross the bridge.
+  let replyClipId = null;
+  let replyText = "";
 
   function renderShown() {
+    if (voiceReply) return;
     replyBubble.textContent = target.slice(0, Math.floor(shownF));
     transcript.scrollTop = transcript.scrollHeight;
   }
@@ -433,10 +573,44 @@ window.sendMessage = async function sendMessage(text) {
     avatar?.setState("speaking");
   });
 
+  // The only thing that returned this turn to idle was the reveal loop, and a
+  // spoken reply never starts one: a voice note carries no text, so no `token`
+  // frame ever arrives and startReveal() is never called. The status sat on
+  // "speaking" for the rest of the session once the audio had finished.
+  //
+  // Two guards. The queue can drain mid-turn when synthesis falls behind the
+  // voice, so this only ends the turn once the model has finished producing;
+  // and _onEnd is a single slot on the player, so a stale closure from a
+  // superseded turn has to bow out rather than end the live one.
+  player.onPlaybackEnd(() => {
+    if (myTurn !== turnSeq) return;
+    if (!llmDone) return;
+    flushAll();
+    killReveal();
+    // Now that the live pass is done the bubble stops being a picture of a voice note
+    // and becomes one: play, pause, scrub, play again. Deliberately not before —
+    // during the live pass the audio belongs to the analyser that drives the orb, and
+    // two things playing the same reply at once is worse than not being able to
+    // replay it.
+    if (voiceReply && window.VoiceNote && (replyWav || replyClipId)) {
+      window.VoiceNote.render(replyBubble, {
+        durationMs: replyMs,
+        transcript: replyText,
+        handle: replyWav
+          ? window.VoiceNote.blobHandle(replyWav)
+          : window.VoiceNote.nativeHandle(replyClipId, replyMs),
+      });
+      replyBubble.classList.add("played");
+    }
+    setStatus("idle");
+    avatar?.setState("idle");
+  });
+
   ws.onopen = () => {
     ws.send(JSON.stringify({
       type: "chat",
       text,
+      spoken,
       persona: PersonaPicker.current(),
       accent: window._accent || undefined,
       gender: window._gender || undefined,
@@ -451,7 +625,13 @@ window.sendMessage = async function sendMessage(text) {
     if (ws !== currentWs) return;
 
     if (event.data instanceof ArrayBuffer) {
-      await player.enqueueWav(event.data.slice(0));
+      const bytes = event.data.slice(0);
+      // Kept as well as played. A reply used to be audible exactly once: the bytes
+      // went into the player and nothing held on to them, so when it finished there
+      // was nothing left to play again. One recording per reply (ws_handler renders
+      // the whole thing in one call), so this is one blob, not a growing buffer.
+      replyWav = new Blob([bytes], { type: "audio/wav" });
+      await player.enqueueWav(bytes);
       return;
     }
 
@@ -469,20 +649,23 @@ window.sendMessage = async function sendMessage(text) {
       transcript.scrollTop = transcript.scrollHeight;
 
     } else if (msg.type === "recording") {
-      // Voice mode. She is rendering the whole reply before a sound is made, which
-      // takes seconds, so the bubble says so instead of sitting blank. Nothing
-      // readable arrives in this mode at all — that is what makes it a voice note
-      // rather than a subtitle you finish before she starts.
-      replyBubble.classList.add("recording");
-      replyBubble.textContent = "";
-      // Her name, not a bare "recording…". The whole point of the wait is that it
-      // reads as a person taking a moment, and a person has a name.
-      const who = document.getElementById("call-name")?.textContent?.trim() || "She";
-      replyBubble.dataset.who = `${who} is recording a voice message…`;
-      setStatus("thinking");
+      // Only now: during generation nobody knew whether this reply would be spoken
+      // at all, so the bubble sat as a typing indicator rather than claiming a
+      // recording that might never happen. Nothing readable arrives in a spoken
+      // turn, which is what makes it a voice note rather than a subtitle you finish
+      // before she starts.
+      voiceReply = true;
+      renderRecording(replyBubble);
+      setStatus("recording");
 
     } else if (msg.type === "voice") {
-      renderVoiceNote(replyBubble, msg.durationMs);
+      replyMs = msg.durationMs;
+      replyClipId = msg.clipId || null;
+      // What she actually said. Kept, not shown: it goes behind the transcript tap
+      // once the note becomes a player, so a reply is readable when sound is not an
+      // option and quotable when it is.
+      replyText = msg.text || "";
+      renderVoiceNote(replyBubble, msg.durationMs, replyText);
 
     } else if (msg.type === "token") {
       if (statusDot.title === "thinking") setStatus("thinking");
@@ -558,7 +741,7 @@ form.addEventListener("submit", (e) => {
   if (!text) return;
   input.value = "";
   window._turnStart = Date.now();
-  sendMessage(text);
+  sendMessage(text, false);
 });
 
 clearBtn.addEventListener("click", async () => {

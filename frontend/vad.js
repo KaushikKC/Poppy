@@ -59,7 +59,7 @@ class VAD {
     this._ringLen   = 0;
     this._utt       = [];     // the utterance being collected
 
-    this.onSpeech = null; // (blob, mimeType) => void
+    this.onSpeech = null; // (blob, mimeType, durationMs) => void
     this.onStart  = null; // () => void — speech detected, recording began
     this.onEnd    = null; // () => void — silence detected, about to send
   }
@@ -175,9 +175,12 @@ class VAD {
 
   _send() {
     const chunks = this._utt;
+    // Measured before the buffer is dropped: the bubble is drawn from this, and the
+    // clip's own length is the one number the page cannot work out for itself.
+    const ms = this._uttMs();
     this._discard();
     if (!chunks.length) return;
-    this.onSpeech?.(this._toWav(chunks), "audio/wav");
+    this.onSpeech?.(this._toWav(chunks), "audio/wav", ms);
   }
 
   _discard() {

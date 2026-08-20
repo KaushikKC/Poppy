@@ -21,6 +21,10 @@
   const LABELS = {
     idle: "Ready",
     thinking: "Thinking…",
+    // Hers, not the user's: she is rendering a voice message. The mic button's own
+    // "recording" class means the opposite — that the user is talking — and the two
+    // are told apart below by which element carries the class.
+    recording: "Recording…",
     speaking: "Speaking",
     listening: "Listening…",
     transcribing: "Transcribing…",
@@ -30,6 +34,7 @@
     // The user's own voice activity wins over the assistant's state.
     if (micBtn?.classList.contains("recording"))    return "listening";
     if (micBtn?.classList.contains("transcribing")) return "transcribing";
+    if (dot.classList.contains("recording")) return "recording";
     if (dot.classList.contains("thinking")) return "thinking";
     if (dot.classList.contains("speaking")) return "speaking";
     return "idle";
@@ -38,20 +43,23 @@
   function sync() {
     const state = currentState();
     // "transcribing" shares the thinking (amber) look
-    const visual = state === "transcribing" ? "thinking" : state;
+    // Both borrow the thinking look: amber, working, not yet speaking.
+    const visual = (state === "transcribing" || state === "recording") ? "thinking" : state;
     pill.className = visual;
     label.textContent = LABELS[state];
     app.dataset.state = visual;
 
     // Turn-taking pill — never ambiguous whose turn it is.
     if (turnLabel) {
-      const nm = document.getElementById("call-name")?.textContent?.trim() || "She";
+      const nm = document.getElementById("call-name")?.textContent?.trim()
+        || window.Pronouns?.Subj() || "She";
       const TURN = {
         idle: "Your turn",
         thinking: "Thinking…",
         speaking: `${nm} is speaking`,
         listening: "Listening to you",
         transcribing: "Got that…",
+        recording: `${nm} is recording`,
       };
       turnLabel.textContent = TURN[state] || "Your turn";
     }
