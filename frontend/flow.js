@@ -37,6 +37,13 @@
     onboarding.setAttribute("aria-hidden", v !== "onboarding");
     home.setAttribute("aria-hidden", v !== "home");
     document.body.dataset.view = v;
+    // Onboarding is a sequence, not a place, so it has no navigation. Everywhere
+    // else does.
+    const bar = document.getElementById("tabbar");
+    if (bar) {
+      bar.classList.toggle("hidden", v === "onboarding");
+      markTab(v === "home" ? "you" : "thread");
+    }
     if (v === "chat") {
       // The orb's container just became a 42px slot in the header; nudge it to refit.
       requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
@@ -44,11 +51,25 @@
     }
   }
 
-  // Point the 3D avatar at a character's gender (loads the male/female model).
+  // Point the 3D avatar at a character's gender (loads the male/female model),
+  // and swap the app's pronouns with it. Every place the companion can change
+  // already routes through here, so this is the one hook the chrome needs: half
+  // the cast is male and the whole app used to say "she" regardless.
+  // The companion's name, everywhere the chrome says it: the thread header and the
+  // tab that leads back to the thread.
+  function nameCompanion(name) {
+    const who = name || "Poppy";
+    const nm = document.getElementById("call-name");
+    if (nm) nm.textContent = who;
+    const tab = document.getElementById("tab-thread-label");
+    if (tab) tab.textContent = who;
+  }
+
   function setAvatarGender(gender) {
     const g = gender === "male" ? "male" : "female";
     window._gender = g;
     window.companionAvatar?.setIdentity?.(null, g);
+    window.Pronouns?.set(g);
   }
 
   // ── Boot ────────────────────────────────────────────────────────────────────
@@ -59,10 +80,17 @@
       profile = { onboarded: false };
     }
     if (profile.onboarded) {
-      // Show home FIRST, so a later error (loadHome, etc.) can't leave the call
-      // view (#app) showing by default.
-      setView("home");
+      // Straight into the thread. It is the product (design system: core.jsx Home is
+      // the conversation, not a hub), and it is also the honest default: the last
+      // thing that happened is the last thing you were doing. The hub still exists
+      // behind the You tab, and loadHome() still runs so its counters are current
+      // the moment it is opened.
+      setView("chat");
       setAvatarGender(profile.gender);
+      // The header used to be named on the way into a call, which was the only way
+      // in. Opening straight onto the thread meant it kept the default name while
+      // the tab beside it said who you were actually talking to.
+      nameCompanion(profile.companion_name);
       try { await loadHome(); } catch (e) { console.error("[flow] loadHome failed", e); }
     } else {
       startOnboarding();
@@ -72,7 +100,7 @@
   // ── Onboarding (§2) ───────────────────────────────────────────────────────────
   const ob = {
     step: "hook",
-    order: ["hook", "age", "character", "seed", "call"],
+    order: ["hook", "signin", "age", "character", "seed", "mic", "call"],
     character: "poppy",
     name: "Poppy",
     seed: "",
@@ -130,6 +158,9 @@
         `<div class="char-info">` +
           `<div class="char-name">${c.name}<span class="char-gsym">${c.gender === "male" ? "♂" : "♀"}</span></div>` +
           `<div class="char-tag">${c.tagline}</div>` +
+          // The one concrete thing about them, so the choice is made knowing who
+          // they are rather than discovered afterwards by asking.
+          (c.blurb ? `<div class="char-blurb">${c.blurb}</div>` : "") +
         `</div>` +
         // Warm, relevant labels — you're meeting companions, not judging people.
         `<span class="char-tag-pick">CHOOSE</span><span class="char-tag-pass">NEXT</span>` +
@@ -165,6 +196,12 @@
   function selectCharacter(c) {
     ob.character = c.key;
     ob.name = c.name;
+    // Every line that names her in the rest of onboarding. Half the cast is not
+    // Poppy, and the question screen is asked in their voice.
+    ["ob-asker", "ob-mic-name"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = c.name;
+    });
     setAvatarGender(c.gender); // the avatar behind switches to match
     if (c.color) window.companionAvatar?.setColors?.(c.color); // tint the orb
     const ready = document.getElementById("ob-ready");
@@ -248,6 +285,108 @@
     startCall({ seed: ob.seed });
   });
 
+  // The mic screen asks for the permission the browser is about to demand, with the
+  // reason attached. Allowing here triggers the real prompt while the explanation is
+  // still on screen; declining is a real answer, not a dead end — the composer types.
+  document.getElementById("ob-mic-allow")?.addEventListener("click", async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((t) => t.stop());
+    } catch {
+      // Denied or unavailable. Nothing to do here: the composer still works, and
+      // nagging about it on the next screen would be the opposite of asking once.
+    }
+    nextStep();
+  });
+  document.getElementById("ob-mic-skip")?.addEventListener("click", () => nextStep());
+
+  // "I'm not" is an answer we have to take. No scolding, no dead end that looks like
+  // a bug: it says what it is and stops.
+  document.getElementById("ob-under")?.addEventListener("click", () => {
+    const box = document.querySelector('[data-step="age"] .glass');
+    if (!box) return;
+    box.innerHTML =
+      '<p class="t-title">Come back when you are 18.</p>' +
+      '<p class="t-sm soft">That is the whole rule, and we would rather say it plainly ' +
+      'than find a way around it.</p>';
+    document.querySelectorAll('[data-step="age"] .btn').forEach((b) => b.remove());
+  });
+
+  // ── Sign in ─────────────────────────────────────────────────────────────────
+  // Providers only. A name-and-email form used to live here and it was a fiction: it
+  // identified nobody, proved nothing, and a "signed in" state that cannot be checked
+  // is worse than no account at all once credits hang off it. "Not now" is still a
+  // real answer — everything works on this device without an account.
+
+  /** Tell the backend who signed in. The provider verified them, not us. */
+  async function postSignIn(provider, subject, email, name) {
+    try {
+      await fetch(`${BACKEND}/account/signin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, subject, email, name }),
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Run a provider's flow from a button, and say so when it does not complete.
+   *
+   * Shared by the onboarding screen and the account sheet, because the two behaved
+   * differently once and the one that was tested less was the one that was broken.
+   */
+  async function providerSignIn(provider, btn, err, label) {
+    btn.disabled = true;
+    btn.textContent = "Opening…";
+    let claims = null;
+    try {
+      claims = await window.PoppyAuth?.signIn(provider);
+    } catch (e) {
+      console.warn("[auth] sign-in threw", e);
+    }
+    btn.disabled = false;
+    btn.textContent = label;
+    if (!claims) {
+      if (err) {
+        err.textContent = provider === "apple"
+          ? "Apple sign-in did not complete."
+          : "Google sign-in did not complete.";
+        err.classList.remove("hidden");
+      }
+      return false;
+    }
+    return postSignIn(provider, claims.subject, claims.email, claims.name);
+  }
+
+  // Apple only exists where the native flow does; on the web it would open nothing.
+  if (window.PoppyNativeAuth?.signIn) {
+    document.getElementById("si-apple")?.classList.remove("hidden");
+  }
+
+  document.getElementById("si-apple")?.addEventListener("click", async (e) => {
+    const ok = await providerSignIn(
+      "apple", e.currentTarget, document.getElementById("si-error"), "Continue with Apple",
+    );
+    if (ok) nextStep();
+  });
+
+  document.getElementById("si-google")?.addEventListener("click", async (e) => {
+    const ok = await providerSignIn(
+      "google", e.currentTarget, document.getElementById("si-error"), "Continue with Google",
+    );
+    if (ok) nextStep();
+  });
+
+  document.getElementById("si-skip")?.addEventListener("click", () => nextStep());
+
+  function finishOnboarding() {
+    setView("chat");
+    loadHome();
+  }
+
   // Capture the seed as they type so it survives the "That's it" tap.
   document.getElementById("ob-seed")?.addEventListener("input", (e) => {
     ob.seed = e.target.value.trim();
@@ -271,28 +410,79 @@
     // on. So the strip above always shows, and this slot shows exactly one thing:
     // the streak once it's a real run, otherwise how well she knows them — which
     // is never "New" after onboarding, so day 0 is never a zero state (§2).
+    // The profile card: who you are talking to and how long it has been going.
+    const since = document.getElementById("home-since");
+    if (since) {
+      const calls = h.total_calls || 0;
+      const label = (h.closeness && h.closeness.label) || "";
+      since.textContent = [
+        calls ? `${calls} ${calls === 1 ? "call" : "calls"}` : "",
+        label,
+      ].filter(Boolean).join(" · ");
+    }
+    const av = document.getElementById("home-avatar");
+    if (av) av.textContent = (h.companion_name || "P").trim()[0] || "P";
+    // "she knows N things", which is the number the closeness stage is built on and
+    // the one thing on this screen that is hers rather than the app's.
+    const knows = document.getElementById("home-knows");
+    if (knows) {
+      try {
+        const mem = await (await fetch(`${BACKEND}/memory`)).json();
+        const n = (mem.memories || mem.items || []).length;
+        knows.textContent = n ? `${n} ${n === 1 ? "thing" : "things"}` : "not much yet";
+      } catch { knows.textContent = "—"; }
+    }
+    // The account row: who is signed in, and what is left. Shown even when nobody is,
+    // because "Sign in" is the thing that needs to be findable.
+    try {
+      const acc = await (await fetch(`${BACKEND}/account`)).json();
+      const t = document.getElementById("home-account-title");
+      const sub = document.getElementById("home-account-sub");
+      if (t && sub) {
+        if (acc.signed_in) {
+          t.textContent = acc.name || acc.email || "Your account";
+          // "signed in with local" is an implementation detail leaking into copy.
+          // The email is the identity here, so the email is what it says.
+          sub.textContent = acc.provider === "local"
+            ? `${acc.credits} credits · ${acc.email || "on this device"}`
+            : `${acc.credits} credits · ${acc.provider}`;
+        } else {
+          t.textContent = "Sign in";
+          sub.textContent = "Keep your companion if you change phone";
+        }
+      }
+    } catch {}
+
+    const look = document.getElementById("home-look-sub");
+    if (look) {
+      const mode = window.Theme?.get() ?? "auto";
+      look.textContent = mode === "auto"
+        ? "Following your device"
+        : mode === "dark" ? "Dark" : "Light";
+    }
+
     const streak = document.getElementById("home-streak");
     const s = h.streak || {};
     if (s.current > 1) {
       // Opportunity and protection, never threat and shame (§4.1). No countdown,
       // no red, no exclamation mark: the same loss-aversion fires either way, and
       // only one of them produces the "already broke it, why bother" cascade.
-      streak.textContent = s.state === "at_risk" && !s.met_today
-        ? `${s.current} days. one call keeps it going`
-        : `${s.current} day streak`;
-      streak.classList.remove("hidden");
-    } else if (h.closeness && h.closeness.stage > 0) {
-      streak.textContent = h.closeness.label;
-      streak.classList.remove("hidden");
+      streak.textContent = `${s.current} days`;
+      // The at-risk case is said in words rather than in red: the same loss
+      // aversion fires either way, and only one of them produces "already broke
+      // it, why bother".
+      streak.title = s.state === "at_risk" && !s.met_today ? "one call keeps it going" : "";
+    } else if (s.current === 1) {
+      streak.textContent = "1 day";
     } else {
-      streak.classList.add("hidden");
+      // A tile with a label and nothing in it is worse than a tile saying so.
+      streak.textContent = "not yet";
     }
 
     _streakWeek = (h.streak && h.streak.week) || null;
     try { _longYear = await (await fetch(`${BACKEND}/long-year`)).json(); } catch {}
     renderUpdateNotice();
     renderVersion();
-    loadReplyMode();
     renderFreezeNotice(h.freeze_notice);
     renderRepair(h.streak);
     loadToday();
@@ -515,33 +705,258 @@
     await loadHome();
   });
 
-  // ── Voice notes or text ─────────────────────────────────────────────────────
-  // One or the other, never both. With both, the reply is read while it is still
-  // being spoken and the voice becomes something to sit through; and text mode
-  // synthesises nothing at all, which is the fastest and coolest the app can be.
-  async function loadReplyMode() {
-    const box = document.getElementById("reply-mode");
-    if (!box) return;
-    const mode = (profile && profile.reply_mode) || "voice";
-    box.querySelectorAll(".reply-mode-btn").forEach((b) => {
-      b.classList.toggle("on", b.dataset.mode === mode);
-      b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
+  // ── Writing a character ─────────────────────────────────────────────────────
+  // The cast we ship is six people we chose. This is for everyone who wants someone
+  // else — a name, a voice, and a paragraph saying who they are. That paragraph goes
+  // into the prompt in the same slot our own characters' personalities occupy, so a
+  // character someone wrote is assembled exactly like ours and the model cannot tell
+  // the difference.
+  let _voices = null;
+  let _editing = null;   // the character being edited, or null when writing a new one
+
+  async function openCharacterEditor(existing) {
+    _editing = existing || null;
+    if (!_voices) {
+      try { _voices = (await (await fetch(`${BACKEND}/characters/voices`)).json()).voices; }
+      catch { _voices = []; }
+    }
+
+    document.getElementById("ce-title").textContent =
+      _editing ? `Edit ${_editing.name}` : "Write a character";
+    document.getElementById("ce-name").value = _editing?.name || "";
+    document.getElementById("ce-tagline").value = _editing?.tagline || "";
+    document.getElementById("ce-personality").value = _editing?.personality || "";
+    document.getElementById("ce-greeting").value = _editing?.greeting || "";
+    document.getElementById("ce-personality-count").textContent =
+      String((_editing?.personality || "").length);
+    document.getElementById("ce-error").classList.add("hidden");
+    document.getElementById("ce-delete").classList.toggle("hidden", !_editing);
+
+    const box = document.getElementById("ce-voices");
+    box.innerHTML = "";
+    const chosen = _editing?.voice || (_voices[0] && _voices[0].key);
+    _voices.forEach((v) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "ce-voice" + (v.key === chosen ? " on" : "");
+      b.dataset.key = v.key;
+      b.textContent = v.label;
+      b.addEventListener("click", () => {
+        box.querySelectorAll(".ce-voice").forEach((x) => x.classList.remove("on"));
+        b.classList.add("on");
+      });
+      box.appendChild(b);
+    });
+
+    document.getElementById("char-editor").classList.remove("hidden");
+  }
+
+  function closeCharacterEditor() {
+    document.getElementById("char-editor").classList.add("hidden");
+    _editing = null;
+  }
+
+  document.getElementById("ce-cancel")?.addEventListener("click", closeCharacterEditor);
+  document.getElementById("ce-personality")?.addEventListener("input", (e) => {
+    document.getElementById("ce-personality-count").textContent = String(e.target.value.length);
+  });
+
+  document.getElementById("ce-save")?.addEventListener("click", async () => {
+    const err = document.getElementById("ce-error");
+    const body = {
+      name: document.getElementById("ce-name").value.trim(),
+      tagline: document.getElementById("ce-tagline").value.trim(),
+      personality: document.getElementById("ce-personality").value.trim(),
+      greeting: document.getElementById("ce-greeting").value.trim(),
+      voice: document.querySelector("#ce-voices .ce-voice.on")?.dataset.key,
+    };
+    if (_editing) body.key = _editing.key;
+    // Checked here as well as on the server so the message lands next to the empty
+    // field rather than as a failed request nobody sees.
+    if (!body.name) {
+      err.textContent = "They need a name.";
+      err.classList.remove("hidden");
+      return;
+    }
+    let saved = null;
+    try {
+      const res = await fetch(`${BACKEND}/characters/custom`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      saved = (await res.json()).character;
+    } catch {}
+    if (!saved) {
+      err.textContent = "That could not be saved.";
+      err.classList.remove("hidden");
+      return;
+    }
+    _cast = null;                       // the picker has to fetch the new list
+    closeCharacterEditor();
+    document.getElementById("char-switch")?.remove();
+    // Straight into talking to them: writing a character and then hunting for it in
+    // a list is a step nobody wants.
+    await chooseCharacter(saved, null);
+  });
+
+  document.getElementById("ce-delete")?.addEventListener("click", async () => {
+    if (!_editing) return;
+    try {
+      await fetch(`${BACKEND}/characters/custom/${encodeURIComponent(_editing.key)}`, {
+        method: "DELETE",
+      });
+    } catch {}
+    _cast = null;
+    closeCharacterEditor();
+    document.getElementById("char-switch")?.remove();
+    try { profile = await (await fetch(`${BACKEND}/companion`)).json(); } catch {}
+    await loadHome();
+  });
+
+  // ── Who she is ──────────────────────────────────────────────────────────────
+  // The modes on home are a stance for this call. These are the layer underneath,
+  // and they persist — someone who wants a quiet companion should get one in every
+  // mode rather than re-picking it every time. The wording the model actually reads
+  // lives in the backend; the page only ever sees labels.
+  let _axes = null;
+
+  async function openTraits() {
+    let data = { traits: {}, axes: {} };
+    try { data = await (await fetch(`${BACKEND}/companion/traits`)).json(); } catch {}
+    _axes = data.axes || {};
+    const chosen = data.traits || {};
+
+    const box = document.getElementById("traits-axes");
+    box.innerHTML = "";
+    Object.entries(_axes).forEach(([axis, spec]) => {
+      const row = document.createElement("div");
+      row.className = "traits-row";
+
+      const label = document.createElement("p");
+      label.className = "traits-label";
+      label.textContent = spec.label;
+
+      const group = document.createElement("div");
+      group.className = "traits-group";
+      group.dataset.axis = axis;
+      // The API hands these back as an array on desktop and an object on mobile,
+      // because one is Python and the other is the generated TypeScript. Normalised
+      // here rather than forcing either side to pretend to be the other.
+      const options = Array.isArray(spec.options)
+        ? spec.options
+        : Object.entries(spec.options).map(([key, o]) => ({ key, label: o.label }));
+      options.forEach((o) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "traits-opt" + (chosen[axis] === o.key ? " on" : "");
+        b.dataset.key = o.key;
+        b.textContent = o.label;
+        b.addEventListener("click", () => {
+          group.querySelectorAll(".traits-opt").forEach((x) => x.classList.remove("on"));
+          b.classList.add("on");
+        });
+        group.appendChild(b);
+      });
+
+      row.append(label, group);
+      box.appendChild(row);
+    });
+
+    const note = document.getElementById("traits-note");
+    note.value = chosen.note || "";
+    document.getElementById("traits-count").textContent = String(note.value.length);
+    document.getElementById("traits")?.classList.remove("hidden");
+  }
+
+  // ── The tab bar ─────────────────────────────────────────────────────────────
+  // The thread is home (design system: core.jsx Home), so the app opens on it and
+  // the rest of the app is a destination rather than a row on a hub screen. "You"
+  // is where the hub went: the streak, the ritual, who she is, and how it looks.
+  function markTab(id) {
+    document.querySelectorAll("#tabbar .tab").forEach((b) => {
+      b.dataset.on = String(b.dataset.tab === id);
     });
   }
 
-  document.getElementById("reply-mode")?.addEventListener("click", async (e) => {
-    const btn = e.target.closest(".reply-mode-btn");
+  document.getElementById("tabbar")?.addEventListener("click", (e) => {
+    const btn = e.target.closest(".tab");
     if (!btn) return;
-    const mode = btn.dataset.mode;
+    const tab = btn.dataset.tab;
+    if (tab === "thread") {
+      setView("chat");
+    } else if (tab === "you") {
+      setView("home");
+      loadHome();
+    } else if (tab === "garden") {
+      // Not the home button: that one is hidden while the garden is empty (§8 keeps
+      // empty progress surfaces off home), so routing the tab through it meant the
+      // tab silently did nothing on every new account. A tab the user taps has to
+      // answer, even if the answer is "nothing has grown here yet".
+      openGarden();
+    } else if (tab === "memory") {
+      // The panel lives inside #app. Opening it from the You screen rendered it
+      // into a hidden container, so the tap looked ignored.
+      setView("chat");
+      document.getElementById("memory-btn")?.click();
+    } else if (tab === "call") {
+      document.getElementById("home-call")?.click();
+    }
+  });
+
+  // ── Appearance ──────────────────────────────────────────────────────────────
+  // The only setting here that changes nothing about her, which is why it is one
+  // screen away from the ones that do.
+  function paintTheme() {
+    const chosen = window.Theme?.get() ?? "auto";
+    document.querySelectorAll("#look-theme [data-theme-choice]").forEach((b) => {
+      b.dataset.on = String(b.dataset.themeChoice === chosen);
+    });
+  }
+
+  document.getElementById("home-look")?.addEventListener("click", () => {
+    paintTheme();
+    document.getElementById("look")?.classList.remove("hidden");
+  });
+  document.getElementById("look-close")?.addEventListener("click", () => {
+    document.getElementById("look")?.classList.add("hidden");
+  });
+  document.getElementById("look-theme")?.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-theme-choice]");
+    if (!btn) return;
+    // Applied immediately rather than on Done: the whole point of the setting is
+    // visible the instant it is chosen, and a preview you have to confirm is a
+    // preview nobody trusts.
+    window.Theme?.set(btn.dataset.themeChoice);
+    paintTheme();
+  });
+
+  document.getElementById("home-memory")?.addEventListener("click", () => {
+    document.getElementById("memory-btn")?.click();
+  });
+
+  document.getElementById("home-traits")?.addEventListener("click", openTraits);
+  document.getElementById("traits-close")?.addEventListener("click", () => {
+    document.getElementById("traits")?.classList.add("hidden");
+  });
+  document.getElementById("traits-note")?.addEventListener("input", (e) => {
+    document.getElementById("traits-count").textContent = String(e.target.value.length);
+  });
+
+  document.getElementById("traits-save")?.addEventListener("click", async () => {
+    const body = { note: document.getElementById("traits-note").value };
+    document.querySelectorAll("#traits-axes .traits-group").forEach((g) => {
+      const on = g.querySelector(".traits-opt.on");
+      if (on) body[g.dataset.axis] = on.dataset.key;
+    });
     try {
-      await fetch(`${BACKEND}/companion/reply-mode`, {
+      await fetch(`${BACKEND}/companion/traits`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode }),
+        body: JSON.stringify(body),
       });
     } catch {}
-    if (profile) profile.reply_mode = mode;
-    loadReplyMode();
+    document.getElementById("traits")?.classList.add("hidden");
   });
 
   // ── The garden (§3.1) ───────────────────────────────────────────────────────
@@ -561,6 +976,22 @@
   }
 
   let _garden = null;
+
+  function openGarden() {
+    const view = document.getElementById("garden");
+    if (!view) return;
+    if (!_garden || _garden.empty || !_garden.flowers) {
+      // An empty garden is a real state, not an error and not a locked door. It is
+      // also the honest one on day one: nothing has grown because nothing has been
+      // talked about yet.
+      view.classList.remove("hidden");
+      const note = document.getElementById("garden-note");
+      if (note) note.textContent = "Nothing has grown here yet. Every call plants one.";
+      window.PoppyGarden?.stop?.(document.getElementById("garden-canvas"));
+      return;
+    }
+    document.getElementById("home-garden")?.click();
+  }
 
   document.getElementById("home-garden")?.addEventListener("click", () => {
     if (!_garden) return;
@@ -623,14 +1054,35 @@
   });
 
   // ── Change companion from home (memory/voice/orb all swap with it) ───────────
+  // The canvas orb is only half of it. The design system draws her presence in
+  // CSS too — header avatars, the connect veil, the "her world" chat ground —
+  // and all of those read three custom properties. Setting them here is what
+  // makes swapping companion change the whole app rather than one canvas.
+  function applyCharacterSkin(c) {
+    if (!c) return;
+    const root = document.documentElement.style;
+    if (c.color) {
+      root.setProperty("--orb-a", c.color.eyes || c.color.outline || "#7A70B4");
+      root.setProperty("--orb-b", c.color.outline || c.color.gradient || "#5F5696");
+      root.setProperty("--orb-c", c.color.face || "#352C56");
+    }
+    if (c.photo) root.setProperty("--her-photo", `url('${c.photo}')`);
+  }
+
   function tintOrbForCurrent(key) {
-    if (!key || !window.companionAvatar) return;
+    if (!key) return;
     const hit = (_cast || []).find((x) => x.key === key);
-    if (hit && hit.color) { window.companionAvatar.setColors(hit.color); return; }
+    if (hit) {
+      applyCharacterSkin(hit);
+      if (hit.color) window.companionAvatar?.setColors(hit.color);
+      return;
+    }
     fetch(`${BACKEND}/characters`).then((r) => r.json()).then((cast) => {
       _cast = cast;
       const c = cast.find((x) => x.key === key);
-      if (c && c.color) window.companionAvatar.setColors(c.color);
+      if (!c) return;
+      applyCharacterSkin(c);
+      if (c.color) window.companionAvatar?.setColors(c.color);
     }).catch(() => {});
   }
 
@@ -643,11 +1095,82 @@
     // Styled in the stylesheet like everything else. It was inline-styled for a
     // dark background (a white border over a translucent white fill), which on
     // this cream home screen read as a washed-out slab next to the mood pills.
-    b.className = "home-switch";
+    // Not drawn any more: it is a row at the top of the list now. Kept as a
+    // function so nothing that calls it has to know that.
+    b.className = "home-switch hidden";
     b.textContent = "Change companion";
     b.addEventListener("click", openCharacterSwitch);
     host.appendChild(b);
   }
+
+  // The row in the list. The old link under the version number was findable only
+  // by someone already looking for it, and choosing who you talk to is the most
+  // important thing on this screen rather than the least.
+  // Signing in from settings goes through the same door as onboarding.
+  // From settings, the same two fields, in the sheet the rest of the app uses.
+  document.getElementById("home-account")?.addEventListener("click", async () => {
+    let acc = {};
+    try { acc = await (await fetch(`${BACKEND}/account`)).json(); } catch {}
+    openAccountSheet(acc);
+  });
+
+  function openAccountSheet(acc) {
+    const signedIn = !!(acc && acc.signed_in);
+    const native = !!window.PoppyNativeAuth?.signIn;
+    const ov = document.createElement("div");
+    ov.id = "account-sheet";
+    // Providers only. The name-and-email form that used to be here identified nobody
+    // and proved nothing, and a "signed in" state that cannot be checked is worse than
+    // no account at all once credits hang off it.
+    ov.innerHTML =
+      '<div class="traits-card">' +
+        '<p class="traits-kicker">Your account</p>' +
+        '<p class="traits-sub">' +
+          (signedIn
+            ? "Signed in. Your companion, what she remembers and your credits belong to this account."
+            : "So your companion and your credits follow you to any device. No password, ever: Apple and Google ask for it on their own pages.") +
+        "</p>" +
+        (signedIn
+          ? '<div class="glass pad4 stack gap1 acct-who">' +
+              `<span class="t-sm semi">${acc.name || "Signed in"}</span>` +
+              `<span class="t-xs muted">${acc.email || ""}</span>` +
+              `<span class="t-xs muted tnum">${acc.credits} credits · ${acc.provider}</span>` +
+            "</div>"
+          // Apple first where it exists: its guidelines require the option to be at
+          // least as prominent as any other.
+          : (native ? '<button type="button" class="btn btn--ink btn--block" id="acct-apple">Continue with Apple</button>' : "") +
+            '<button type="button" class="btn btn--glass btn--block" id="acct-google">Continue with Google</button>') +
+        '<p class="ce-error hidden" id="acct-error"></p>' +
+        '<div class="traits-actions">' +
+          '<button type="button" class="outro-ghost" id="acct-cancel">Close</button>' +
+        "</div>" +
+        (signedIn ? '<button type="button" class="ce-delete" id="acct-out">Sign out</button>' : "") +
+      "</div>";
+    document.body.appendChild(ov);
+
+    const err = ov.querySelector("#acct-error");
+    ov.querySelector("#acct-cancel").addEventListener("click", () => ov.remove());
+
+    const wire = (id, provider, label) =>
+      ov.querySelector(id)?.addEventListener("click", async (e) => {
+        if (await providerSignIn(provider, e.currentTarget, err, label)) {
+          ov.remove();
+          await loadHome();
+        }
+      });
+    wire("#acct-apple", "apple", "Continue with Apple");
+    wire("#acct-google", "google", "Continue with Google");
+
+    ov.querySelector("#acct-out")?.addEventListener("click", async () => {
+      // Signing out keeps the ledger. It is not deleting an account, and treating it
+      // as one would be the worst possible reading of a mis-tap.
+      try { await fetch(`${BACKEND}/account/signout`, { method: "POST" }); } catch {}
+      ov.remove();
+      await loadHome();
+    });
+  }
+
+  document.getElementById("home-switch-row")?.addEventListener("click", () => openCharacterSwitch());
 
   async function openCharacterSwitch() {
     let cast = _cast;
@@ -656,47 +1179,108 @@
       catch { return; }
     }
     const current = profile && profile.character;
+
+    // Rebuilt as a screen rather than a grid of tiles.
+    //
+    // Six small squares with a name burned into a scrim is the wrong shape for this
+    // decision: the portrait ends up too small to read a face in, the one-liner gets
+    // two cramped lines over a photograph, and the person you are already talking to
+    // is distinguished only by a thin ring. Choosing who to talk to deserves the room
+    // a settings screen gets.
+    //
+    // So: a navbar, a row per companion with a real portrait, their name, and the
+    // line about them at full width. The same .listrow vocabulary as the You screen,
+    // which is also what makes it consistent rather than a one-off modal.
     const ov = document.createElement("div");
     ov.id = "char-switch";
-    Object.assign(ov.style, {
-      position: "fixed", inset: "0", zIndex: "70", padding: "24px",
-      background: "rgba(5,10,7,0.80)", backdropFilter: "blur(12px)",
-      display: "flex", flexDirection: "column", alignItems: "center",
-      justifyContent: "center", gap: "16px",
-    });
-    const title = document.createElement("div");
-    title.textContent = "Who do you want to talk to?";
-    Object.assign(title.style, { color: "#eaf3ec", fontWeight: "800", fontSize: "1.15rem" });
-    const grid = document.createElement("div");
-    Object.assign(grid.style, {
-      display: "grid", gridTemplateColumns: "repeat(3, minmax(96px, 120px))",
-      gap: "12px", maxWidth: "420px",
-    });
+    ov.innerHTML =
+      '<div class="cs-sheet">' +
+        '<div class="navbar cs-nav">' +
+          '<button type="button" class="iconbtn cs-back" aria-label="Back">‹</button>' +
+          '<span class="t-h2">Companions</span>' +
+          '<span class="cs-nav-pad"></span>' +
+        '</div>' +
+        '<div class="cs-body"><div class="list cs-list"></div></div>' +
+      "</div>";
+    const list = ov.querySelector(".cs-list");
+
     cast.forEach((c) => {
-      const card = document.createElement("button");
-      card.type = "button";
-      Object.assign(card.style, {
-        border: "2px solid " + (c.key === current ? (c.color?.outline || "#7c6ef0") : "rgba(255,255,255,0.14)"),
-        borderRadius: "14px", overflow: "hidden", cursor: "pointer",
-        background: (c.color && c.color.gradient) || "#12100f", color: "#eaf3ec", padding: "0",
-      });
-      const img = c.photo
-        ? `<img src="${c.photo}" style="width:100%;height:96px;object-fit:cover;display:block" onerror="this.remove()">`
-        : "";
-      card.innerHTML = img +
-        `<div style="padding:7px 4px;font-weight:700;font-size:.86rem">${c.name}${c.key === current ? " •" : ""}</div>`;
-      card.addEventListener("click", () => chooseCharacter(c, ov));
-      grid.appendChild(card);
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "listrow cs-row" + (c.key === current ? " cs-row--on" : "");
+
+      const face = document.createElement("span");
+      face.className = "cs-face";
+      // The colour is the fallback, not decoration: a portrait that fails to load
+      // leaves a monogram on their own gradient rather than a grey hole.
+      face.style.background = `linear-gradient(158deg, ${
+        (c.color && c.color.gradient) || "#7A70B4"}, ${(c.color && c.color.face) || "#352C56"})`;
+      if (c.photo) {
+        const img = document.createElement("img");
+        img.src = c.photo;
+        img.alt = "";
+        img.addEventListener("error", () => img.remove());
+        face.appendChild(img);
+      } else {
+        face.textContent = c.name[0];
+      }
+
+      const body = document.createElement("span");
+      body.className = "listrow__body";
+      const title = document.createElement("span");
+      title.className = "listrow__title";
+      title.textContent = c.name;
+      const sub = document.createElement("span");
+      sub.className = "listrow__sub";
+      sub.textContent = c.blurb || c.tagline || "";
+      body.append(title, sub);
+
+      const right = document.createElement("span");
+      right.className = "cs-right";
+      if (c.key === current) {
+        right.textContent = "Talking";
+        right.classList.add("cs-current");
+      }
+      row.append(face, body, right);
+      row.addEventListener("click", () => chooseCharacter(c, ov));
+
+      // A character the user wrote can be rewritten. Ours cannot, so ours carry no
+      // pencil rather than one that explains itself with an error.
+      if (c.custom) {
+        const edit = document.createElement("span");
+        edit.className = "cs-edit";
+        edit.textContent = "Edit";
+        edit.addEventListener("click", async (e) => {
+          e.stopPropagation();          // edit it, do not switch to it
+          let full = c;
+          try {
+            const all = await (await fetch(`${BACKEND}/characters/custom`)).json();
+            full = (all.characters || []).find((x) => x.key === c.key) || c;
+          } catch {}
+          ov.remove();
+          openCharacterEditor(full);
+        });
+        right.textContent = "";
+        right.appendChild(edit);
+      }
+      list.appendChild(row);
     });
-    const cancel = document.createElement("button");
-    cancel.type = "button";
-    cancel.textContent = "Cancel";
-    Object.assign(cancel.style, {
-      padding: "9px 18px", borderRadius: "9px", border: "1px solid rgba(255,255,255,0.25)",
-      background: "transparent", color: "#eaf3ec", fontWeight: "700", cursor: "pointer",
-    });
-    cancel.addEventListener("click", () => ov.remove());
-    ov.append(title, grid, cancel);
+
+    // Last, so it reads as "…or someone else" rather than competing with the cast
+    // for the first glance.
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "listrow cs-row cs-add";
+    add.innerHTML =
+      '<span class="cs-face cs-face--add">+</span>' +
+      '<span class="listrow__body">' +
+        '<span class="listrow__title">Write your own</span>' +
+        '<span class="listrow__sub">A name, a voice, and who they are</span>' +
+      '</span>';
+    add.addEventListener("click", () => { ov.remove(); openCharacterEditor(null); });
+    list.appendChild(add);
+
+    ov.querySelector(".cs-back").addEventListener("click", () => ov.remove());
     document.body.appendChild(ov);
   }
 
@@ -728,7 +1312,12 @@
     }
     box.innerHTML = "";
     const msg = document.createElement("span");
-    msg.textContent = "Poppy's had a small update since you two met. She's still her.";
+    // Their name, not "Poppy" — this notice used to tell a user talking to Ravi
+    // that Poppy had changed, and then call him "she".
+    const who = (profile && profile.companion_name) || "Poppy";
+    msg.textContent = window.Pronouns
+      ? window.Pronouns.fill(`${who}'s had a small update since you two met. {Subj}'s still {obj}.`)
+      : `${who}'s had a small update since you two met.`;
     const ok = document.createElement("button");
     ok.type = "button";
     ok.textContent = "Got it";
@@ -776,7 +1365,8 @@
       const set = document.createElement("button");
       set.type = "button";
       set.className = "ritual-link";
-      set.textContent = "+ Set a daily time with Poppy";
+      // Whoever the companion actually is. Half the cast is not Poppy.
+      set.textContent = `+ Set a daily time with ${h.companion_name || "her"}`;
       set.addEventListener("click", () => openRitualPicker(h));
       box.appendChild(set);
     }
@@ -925,8 +1515,7 @@
 
     if (vibe && window.PersonaPicker) window.PersonaPicker.select(vibe);
     if (profile && profile.gender) setAvatarGender(profile.gender);
-    const nm = document.getElementById("call-name");
-    if (nm) nm.textContent = (profile && profile.companion_name) || "Poppy";
+    nameCompanion(profile && profile.companion_name);
     const transcript = document.getElementById("transcript");
     if (transcript) transcript.innerHTML = "";
     window._lastUserText = "";
