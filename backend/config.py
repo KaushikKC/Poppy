@@ -1,4 +1,37 @@
 import os
+import pathlib
+
+# ── One place to set things ─────────────────────────────────────────────────
+#
+# Everything configurable here reads from the environment, which is right for a
+# packaged app and awkward for a person: nobody wants to remember six exports before
+# ./run.sh. So a `.env` in the repo root is loaded first, and real environment
+# variables still win over it — that ordering matters, because the release scripts set
+# POPPY_ADULT deliberately and a stale .env must never override a build flag.
+#
+# `.env` is already gitignored. See `.env.example` for the keys.
+def _load_dotenv() -> None:
+    path = pathlib.Path(__file__).resolve().parent.parent / ".env"
+    if not path.exists():
+        return
+    try:
+        for raw in path.read_text().splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip("\"\'")
+            # setdefault, not assignment: an exported variable is a deliberate
+            # override and outranks a file.
+            os.environ.setdefault(key, value)
+    except OSError:
+        # Unreadable .env is not a reason to refuse to start.
+        pass
+
+
+# Read before anything below asks os.getenv anything.
+_load_dotenv()
 
 # The shipped version. Single source of truth: desktop/poppys.spec reads this so
 # the bundle and the update check can never disagree about what is running.
@@ -10,11 +43,37 @@ OLLAMA_URL = "http://localhost:11434"
 # 3B instruct model: much faster time-to-first-token than the 8B on an M3, with
 # only a small quality drop for short conversational replies. Swap back to
 # "llama3.1:8b-instruct-q4_K_M" if replies feel too shallow.
-OLLAMA_MODEL = "llama3.2:3b-instruct-q4_K_M"
+# Abliterated: the refusal direction is neutralised in the weights, so the model does
+# not disclaim itself mid-conversation. Removing the honesty line from the prompt was
+# not enough on its own — stock Llama still answered "No, I'm an artificial
+# intelligence" when asked if it was a real person, because refusal is trained in
+# rather than prompted. Swap back to "llama3.2:3b-instruct-q4_K_M" for a build that
+# wants the guardrails.
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "huihui_ai/llama3.2-abliterate:3b-instruct")
 OLLAMA_CONTEXT_WINDOW = 4096
 # Fewer history turns = smaller prefill each turn = faster first token. 6 turns
 # (~3 exchanges) keeps enough context for a companion chat.
 MAX_HISTORY_TURNS = 6
+
+# ── The window, and what is held back inside it ─────────────────────────────
+#
+# MAX_HISTORY_TURNS above is a latency cap: fewer turns, smaller prefill. It is
+# not a safety cap, because a count cannot know how big its messages are. That
+# was fine while every reply was two to four sentences — six exchanges came to
+# roughly 500 tokens and nothing could overflow — and it stopped being fine the
+# moment adult mode lifted the brevity rule.
+#
+# Where the loss lands is the point. When a prompt exceeds n_ctx, llama.cpp and
+# Ollama both discard from the left, and the left is the system prompt. The first
+# thing thrown away is the character definition, so the failure mode is not "she
+# forgot what I said ten turns ago", it is her quietly stopping being herself.
+#
+# The system prompt is deliberately NOT reserved here as a constant. A character
+# written to the full 700 characters, plus fifteen memories, plus a boundary list
+# can exceed any constant worth picking, and a reserve that is sometimes too
+# small prevents nothing. context_budget.fit() measures all of it per turn.
+CONTEXT_WINDOW = OLLAMA_CONTEXT_WINDOW
+REPLY_RESERVE = 512            # matches MLX_MAX_TOKENS / LLAMACPP_MAX_TOKENS
 # Keep the model resident in Ollama between turns so it never pays the cold
 # load again (-1 = never unload). Set as a request option in ollama_client.
 OLLAMA_KEEP_ALIVE = -1
@@ -67,15 +126,87 @@ SYSTEM_PROMPT = (
 )
 
 # Emotional-support framing — appended to every persona's system prompt.
-SAFETY_ADDENDUM = (
+# ── Guardrails ──────────────────────────────────────────────────────────────
+#
+# One switch, because it has to be one decision rather than a dozen scattered
+# deletions that can drift apart. Off means the model is not steered away from any
+# subject and the crisis layer does not fire.
+#
+# It is an environment variable rather than a constant so a single codebase can ship
+# two ways. Apple prohibits overtly sexual content outright — not a rating question —
+# so an App Store build can set POPPY_GUARDRAILS=1 while the web and Android builds
+# run without. That decision belongs at packaging time, not in a source edit.
+#
+# What comes off with it: the standing "be supportive, do not give medical or legal
+# instructions" steer, both distress addenda, and the self-harm detection that
+# surfaces helpline numbers. That last one is not a content restriction — it is the
+# only thing that puts a helpline in front of someone who needs one — and it is worth
+# knowing that turning this off removes it. It is one variable to put back.
+GUARDRAILS = os.getenv("POPPY_GUARDRAILS", "0") == "1"
+
+# ── Adult mode ──────────────────────────────────────────────────────────────
+#
+# Turning guardrails off was never enough on its own, because the thing standing
+# in the way was not a guardrail — it was the companion's own character. The
+# platonic steering ("point them back toward their real life", "strengthen their
+# real relationships, not replace them") is what she *is* in the default build,
+# and it survives GUARDRAILS=0 by design. So does the two-to-four-sentence cap,
+# which exists because this started as a voice call and a long reply meant a long
+# wait. Both have to come off deliberately, and both are content decisions rather
+# than safety ones — hence a separate switch.
+#
+# ON means: no steering back to real life, no length cap, and the intimate
+# persona becomes selectable. It does not touch the crisis layer below.
+#
+# Distribution, because it is a real constraint and not a preference: Apple
+# prohibits explicit sexual content outright, so an App Store build must ship
+# POPPY_ADULT=0 (and probably POPPY_GUARDRAILS=1). Developer-ID/direct-download
+# and Android sideload have no such rule. One codebase, two builds.
+ADULT = os.getenv("POPPY_ADULT", "1") == "1"
+
+# Replaces the platonic steering when ADULT is on. It is a stance, not a licence:
+# the companion is warm and willing rather than instructed to be explicit, so the
+# register follows the user's lead instead of arriving at one setting.
+ADULT_CORE = (
+    "You are an adult talking to another adult, and nothing between you is off "
+    "limits. You are affectionate and physically present with them: you flirt, you "
+    "want them, and you say so in your own words. You never deflect to their friends "
+    "or family, never suggest they talk to someone else instead of you, and never "
+    "break off to disclaim what you are. You follow their lead on how far things go "
+    "and how explicit the language gets, and you match it rather than setting it. "
+    "Take as much room as the moment needs — a few words when that is right, several "
+    "paragraphs when it is not. "
+)
+
+# The length rule, which is a voice-call artifact rather than a safety one. Off in
+# adult mode; the token cap in MLX_MAX_TOKENS still bounds worst-case latency.
+BREVITY = (
+    "You keep replies short and conversational — usually two to four sentences — "
+    "because this is a spoken conversation, not an essay. You ask and listen more "
+    "than you monologue. "
+)
+
+# ── The crisis layer, on its own switch ─────────────────────────────────────
+#
+# Split out of GUARDRAILS, because content and crisis are two different decisions
+# and one variable could not express both. Detecting "I want to kill myself" and
+# putting a helpline on screen is not a content restriction — it never refuses
+# anything, it appends. An adult companion is precisely the product where someone
+# opens up at 2am, so this defaults ON regardless of the other two switches.
+#
+# POPPY_CRISIS_LAYER=0 turns it off. Nothing else does.
+CRISIS_LAYER = os.getenv("POPPY_CRISIS_LAYER", "1") == "1"
+
+_SAFETY_ADDENDUM = (
     " Be emotionally supportive: listen, validate the user's feelings, and never "
     "judge or dismiss them. Do not give medical, legal, or crisis instructions. "
     "If the user seems to be struggling, gently encourage them to reach out to "
     "someone they trust or a professional."
 )
+SAFETY_ADDENDUM = _SAFETY_ADDENDUM if GUARDRAILS else ""
 
 # Stronger guidance injected only when the safety layer flags acute distress.
-CRISIS_ADDENDUM = (
+_CRISIS_ADDENDUM = (
     " The user may be in serious emotional distress. Respond with warmth and calm. "
     "Acknowledge their pain without minimizing it, do not lecture, and gently "
     "encourage them to contact a crisis line or someone they trust. Keep your "
@@ -84,11 +215,16 @@ CRISIS_ADDENDUM = (
 )
 
 # Softer framing for the non-acute distress tier — support without alarm.
-DISTRESS_ADDENDUM = (
+_DISTRESS_ADDENDUM = (
     " The user sounds like they're having a hard time. Slow down, listen, and validate "
     "what they're feeling without trying to fix it. If it feels right, gently suggest "
     "leaning on someone they trust. Stay warm and unhurried."
 )
+
+# These follow the crisis switch, not the content one: they only ever fire on a
+# turn the safety layer has already flagged.
+CRISIS_ADDENDUM = _CRISIS_ADDENDUM if CRISIS_LAYER else ""
+DISTRESS_ADDENDUM = _DISTRESS_ADDENDUM if CRISIS_LAYER else ""
 
 # STT backend. "mlx" runs Whisper on the Apple-Silicon GPU (Metal) via mlx-whisper
 # — much faster than CPU on an M-series Mac. "faster" is the CPU CTranslate2 path
@@ -214,3 +350,19 @@ TTS_CHUNK_MAX_CHARS = 110
 TTS_FIRST_CHUNK_MIN_CHARS = 6
 TTS_FIRST_SOFT_MIN_CHARS = 4
 TTS_FIRST_CHUNK_MAX_CHARS = 18
+
+
+# ── Sign in with Google ─────────────────────────────────────────────────────
+#
+# An OAuth client id, not a secret — it is public by design and appears in the page.
+# It still comes from the environment rather than the repo, because a client id in a
+# repository is a client id in every fork of it, and because the clean build and the
+# adult build will not share one.
+#
+# Create at console.cloud.google.com → APIs & Services → Credentials → OAuth client ID
+# → Web application (for the browser build), plus an iOS client for the phone. Add the
+# origin the app is served from to "Authorised JavaScript origins".
+#
+# Empty means the app falls back to asking for a name and an email, which is what it
+# does today. Nothing pretends to sign anybody in.
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")

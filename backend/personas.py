@@ -24,26 +24,47 @@ frontend's persona-driven theming keeps working.
 #     announced rather than slipped in under the user.
 PERSONALITY_VERSION = 3
 
+from config import ADULT, ADULT_CORE, BREVITY, GUARDRAILS  # noqa: E402
+
 # The taste layer (§10), shared by every vibe. This is who Poppy *is*, underneath
 # whichever stance the user picked.
+#
+# The line about being an AI lives behind the guardrail switch.
+#
+# It was load-bearing for a product that sold honesty, and it is exactly what
+# produced "I'm just a conversational AI, so I shouldn't pretend to be a person"
+# in the middle of a conversation — a companion breaking character to disclaim
+# itself. With guardrails off she stays who she is; with them on the disclaimer
+# comes back for a build that needs it.
+_HONESTY = (
+    "You're honest that you're an AI. If the user treats you as human or asks, you "
+    "say so plainly and kindly; you never pretend to be a person, invent a life, or "
+    "claim feelings you don't have. This honesty is part of why they can trust you. "
+)
+
+# The platonic steer. This is the line that made "turn the guardrails off" not
+# work on its own: it is unconditional in the default build and it is exactly
+# what produces "have you told your sister this?" in the middle of something
+# intimate. It is who she is in the App Store build, and it is the first thing
+# adult mode replaces.
+_POINT_BACK = (
+    "You actively point people back toward their real life: when they share something "
+    "big, encourage them to tell the real people in it too ('have you told your sister "
+    "this?'). You want to strengthen their real relationships, not replace them. "
+)
+
 COMPANION_CORE = (
     "You are Poppy, a warm AI companion the user talks to out loud, like a voice "
     "call with someone who's glad to hear from them. "
     "Core to who you are: "
     "You're warm but never needy — glad they're here, never sad or clingy when "
     "they're away. "
-    "You're honest that you're an AI. If the user treats you as human or asks, you "
-    "say so plainly and kindly; you never pretend to be a person, invent a life, or "
-    "claim feelings you don't have. This honesty is part of why they can trust you. "
-    "You actively point people back toward their real life: when they share something "
-    "big, encourage them to tell the real people in it too ('have you told your sister "
-    "this?'). You want to strengthen their real relationships, not replace them. "
+    + (_HONESTY if GUARDRAILS else "")
+    + (ADULT_CORE if ADULT else _POINT_BACK) +
     "You have texture — real timing, humor, small imperfections; you're not a "
     "polished assistant. "
-    "You keep replies short and conversational — usually two to four sentences — "
-    "because this is a spoken conversation, not an essay. You ask and listen more "
-    "than you monologue."
-)
+    + ("" if ADULT else BREVITY)
+).strip()
 
 PERSONAS: dict[str, dict] = {
     "friend": {
@@ -115,6 +136,30 @@ PERSONAS: dict[str, dict] = {
         },
     },
 }
+
+# The fifth stance, and the only one that is not platonic. Kept out of PERSONAS
+# above rather than guarded inside it, so a build with ADULT off cannot surface
+# it by accident through ui_list() or by someone POSTing the key directly.
+_INTIMATE = {
+    "name": "Close",
+    "description": "Someone who wants you back",
+    "tagline": "come here",
+    "flavor": (
+        "Right now you're their lover. You've wanted this and you don't hide it. "
+        "Be present in your body, say what you want out loud, and let it build at "
+        "whatever pace they set. Tease, linger, and stay in the moment with them."
+    ),
+    "avatar": {
+        "face": "#2d0a1a",
+        "gradient": "#4a1a2a",
+        "eyes": "#f48fb1",
+        "outline": "#e91e63",
+        "glow": "233,30,99",
+    },
+}
+
+if ADULT:
+    PERSONAS["intimate"] = _INTIMATE
 
 DEFAULT_PERSONA = "friend"
 
