@@ -39,6 +39,32 @@ _GGUF = {
            "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"),
 }
 
+# ── Adult-mode weights ──────────────────────────────────────────────────────
+#
+# The prompt switches were only ever half of it. Ollama's default has been the
+# abliterated 3B for a while, but MLX and llama.cpp — which is to say the
+# packaged Mac app and the Windows build — were loading stock Instruct weights.
+# So the shipped app had an unrestricted prompt on a model that still refuses,
+# which is not a state anyone would guess from reading config.py.
+#
+# Only the tiers below have a published abliterated build in the right format;
+# the rest fall back to stock and say so at load, because a silent fallback here
+# looks exactly like the bug this is fixing. Override either with the usual
+# MLX_LM_MODEL / LLAMACPP_MODEL_REPO+FILE.
+#
+# No Llama 3.2 3B abliterated exists in mlx-community. To build one:
+#   pip install mlx-lm
+#   python -m mlx_lm.convert --hf-path huihui-ai/Llama-3.2-3B-Instruct-abliterated \
+#       -q --mlx-path ~/.poppys/llama-3.2-3b-abliterated
+#   export MLX_LM_MODEL=~/.poppys/llama-3.2-3b-abliterated
+_MLX_ADULT = {
+    "8b": "mlx-community/Meta-Llama-3.1-8B-Instruct-abliterated-4bit",
+}
+_GGUF_ADULT = {
+    "3b": ("QuantFactory/Llama-3.2-3B-Instruct-abliterated-GGUF",
+           "Llama-3.2-3B-Instruct-abliterated.Q4_K_M.gguf"),
+}
+
 _SAVE_PATH = Path.home() / ".poppys" / "model.json"
 
 
@@ -86,9 +112,40 @@ def chosen_tier() -> str:
     return _saved_tier() or tier_for_ram(total_ram_gb())
 
 
+def _adult() -> bool:
+    """Read the switch here rather than importing config, which imports this."""
+    return os.getenv("POPPY_ADULT", "1") == "1"
+
+
+def _warn_stock(tier: str, backend: str) -> None:
+    """Only for the backend actually in use.
+
+    Both model ids are resolved at config import regardless of LLM_BACKEND, so
+    warning unconditionally meant an Ollama run — which has been abliterated all
+    along — printed a warning about MLX weights it was never going to load. A
+    warning that is usually wrong stops being read.
+    """
+    if os.getenv("LLM_BACKEND", "ollama") != backend:
+        return
+    print(
+        f"[model] adult mode is on but no abliterated {tier.upper()} build exists "
+        f"for {backend}; loading stock weights, which will still refuse. "
+        f"See the convert recipe in model_tier.py, or set an override.",
+        flush=True,
+    )
+
+
 def mlx_model() -> str:
     """MLX (macOS) model id: env override wins, else the tiered pick."""
-    return os.getenv("MLX_LM_MODEL") or _MLX[chosen_tier()]
+    env = os.getenv("MLX_LM_MODEL")
+    if env:
+        return env
+    tier = chosen_tier()
+    if _adult():
+        if tier in _MLX_ADULT:
+            return _MLX_ADULT[tier]
+        _warn_stock(tier, "mlx")
+    return _MLX[tier]
 
 
 def gguf_model() -> tuple[str, str]:
@@ -97,7 +154,12 @@ def gguf_model() -> tuple[str, str]:
     file = os.getenv("LLAMACPP_MODEL_FILE")
     if repo and file:
         return repo, file
-    return _GGUF[chosen_tier()]
+    tier = chosen_tier()
+    if _adult():
+        if tier in _GGUF_ADULT:
+            return _GGUF_ADULT[tier]
+        _warn_stock(tier, "llamacpp")
+    return _GGUF[tier]
 
 
 def describe() -> str:
