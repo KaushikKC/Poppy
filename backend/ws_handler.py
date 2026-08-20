@@ -8,13 +8,18 @@ import tts
 from tts import synthesize_to_wav_bytes
 from config import (
     MAX_HISTORY_TURNS,
+    CONTEXT_WINDOW,
+    REPLY_RESERVE,
     KOKORO_SAMPLE_RATE,
     SAFETY_ADDENDUM,
     CRISIS_ADDENDUM,
+    CRISIS_LAYER,
     DISTRESS_ADDENDUM,
     AVATAR_BACKEND,
 )
 import safety
+import reply_shape
+import traits
 import memory_store
 import companion
 import disclosure
@@ -66,6 +71,12 @@ async def _db_save(session_id: str, role: str, content: str) -> None:
 
 
 def _trim_history():
+    """The turn cap, for latency: fewer turns means a smaller prefill.
+
+    This is not the thing that keeps the prompt inside the window — a count cannot
+    know how big its messages are. context_budget.fit() does that, per turn, from
+    the measured sizes, just before the prompt is sent.
+    """
     cap = MAX_HISTORY_TURNS * 2
     if len(conversation_history) > cap:
         del conversation_history[: len(conversation_history) - cap]
@@ -90,6 +101,16 @@ async def _reply_voice_note(ws: WebSocket, text: str, accent: str, voice: str) -
     if not line:
         return
 
+    # Config first so the page's player is configured before anything reaches it, then
+    # the recording notice — the same order the mobile core sends them in, because the
+    # frontend has to see one contract rather than two.
+    #
+    # Both are sent when synthesis actually starts, not when the turn does: during
+    # generation nobody knows yet whether there will be a recording at all, and
+    # claiming there is one would be a guess shown as a fact.
+    await ws.send_json({"type": "config", "sampleRate": tts.SAMPLE_RATE})
+    await ws.send_json({"type": "recording"})
+
     # The phrase timeout is far too short for a whole reply — it is the same work
     # several times over — so it scales with the text, with the old value as a floor.
     timeout = max(TTS_TIMEOUT_S, len(line) * 0.25)
@@ -103,8 +124,16 @@ async def _reply_voice_note(ws: WebSocket, text: str, accent: str, voice: str) -
     if not audio:
         return
 
-    await ws.send_json({"type": "config", "sampleRate": tts.SAMPLE_RATE})
-    await ws.send_json({"type": "voice", "durationMs": _wav_duration_ms(audio)})
+    # The words as well as the length. Not streamed and not shown by default — the
+    # note is still a note, not a subtitle you finish before she starts — but a voice
+    # message you cannot read back is one you cannot check, quote, or use at all if
+    # you are somewhere you cannot play sound. The page puts it behind a tap, the same
+    # way it does for the user's own recordings.
+    await ws.send_json({
+        "type": "voice",
+        "durationMs": _wav_duration_ms(audio),
+        "text": line,
+    })
     await ws.send_bytes(audio)
 
 
@@ -133,7 +162,7 @@ async def _reply_video(ws: WebSocket, text: str, voice: str):
         await ws.send_json({"type": "avatar_clip", "url": f"/avatar/clip/{clip_id}"})
 
 
-async def _say(ws: WebSocket, text: str, accent: str, voice: str, deliver: str = "voice"):
+async def _say(ws: WebSocket, text: str, accent: str, voice: str):
     """Speak a line the companion initiates herself — the opening line, an end-of-call
     sign-off. No LLM turn: the words are already known.
 
@@ -148,13 +177,12 @@ async def _say(ws: WebSocket, text: str, accent: str, voice: str, deliver: str =
         await ws.send_json({"type": "done"})
         return
 
-    if deliver == "text":
+    # She opened the conversation, so she says it out loud — unless it is a one-line
+    # hello, which is exactly what an opening line usually is.
+    if reply_shape.speak_it(text):
+        await _reply_voice_note(ws, text, accent, voice)
+    else:
         await ws.send_json({"type": "token", "text": text})
-        await ws.send_json({"type": "done"})
-        return
-
-    await ws.send_json({"type": "recording"})
-    await _reply_voice_note(ws, text, accent, voice)
     await ws.send_json({"type": "done"})
 
 
@@ -173,11 +201,7 @@ async def handle_chat(ws: WebSocket):
                 say_text = msg.get("text", "").strip()
                 if say_text:
                     char = characters.get((await asyncio.to_thread(companion.profile)).get("character", "poppy"))
-                    say_profile = await asyncio.to_thread(companion.profile)
-                    await _say(
-                        ws, say_text, char["accent"], char["voice"],
-                        "text" if say_profile.get("reply_mode") == "text" else "voice",
-                    )
+                    await _say(ws, say_text, char["accent"], char["voice"])
                 continue
 
             if msg.get("type") != "chat":
@@ -217,6 +241,10 @@ async def handle_chat(ws: WebSocket):
             turn_no = current_call_turn_no()
             if (
                 risk["level"] is None
+                # Same reasoning as the disclosure block below: the pact is our
+                # retention design, and someone else's character should not be made
+                # to negotiate a daily check-in time on our behalf.
+                and not char.get("custom")
                 and turn_no >= ritual_pact.ASK_FROM_TURN
                 and await asyncio.to_thread(ritual_pact.is_due, profile)
             ):
@@ -235,7 +263,19 @@ async def handle_chat(ws: WebSocket):
             # unpaid-off loop kills that mechanic permanently (§1.3 Rule 3).
             # Disclosure happens every call and loses nothing by yielding a turn.
             disclosure_block = ""
-            if not pact_block:
+            # A character the user wrote gets to be that character.
+            #
+            # The disclosure block is a placement instruction — "open every reply with
+            # one sentence of your own, then your question, every time" — and at ~1100
+            # characters it outweighs a custom character's own description almost two
+            # to one. Measured: asked what she did this evening, an archivist who
+            # restores film reels invented ordering a pizza, because the loudest
+            # instruction in the prompt told her to volunteer something and ask a
+            # question, and the model followed that instead of being who she is.
+            #
+            # So the retention scaffolding applies to our cast, whose personalities
+            # were written around it. Someone else's character is theirs.
+            if not pact_block and not char.get("custom"):
                 disclosure_block = await asyncio.to_thread(
                     disclosure.as_prompt_block, profile.get("total_calls", 0),
                 )
@@ -246,14 +286,23 @@ async def handle_chat(ws: WebSocket):
             # is a constraint list rather than a placement rule, so unlike the
             # directives above it composes and is always present.
             rules_block = await asyncio.to_thread(boundaries.as_prompt_block)
+            # Traits sit with identity rather than with the momentary stance: they
+            # are who she is, so they apply in every mode instead of being re-picked
+            # each call. See traits.py.
+            traits_block = traits.as_prompt_block(profile.get("traits"))
             system_prompt = (
-                char["system_prompt"] + identity_block + disclosure_block + pact_block
-                + rules_block + SAFETY_ADDENDUM + memory_block
+                char["system_prompt"] + traits_block + identity_block + disclosure_block
+                + pact_block + rules_block + SAFETY_ADDENDUM + memory_block
             )
-            if risk["level"] == "crisis":
+            # Detection always runs (it is what holds the pact block back on a
+            # heavy turn), but everything the user sees or the model is told is on
+            # CRISIS_LAYER, so the switch means what its name says. It is
+            # deliberately independent of ADULT and GUARDRAILS: appending a
+            # helpline is not a content restriction, and it never refuses a turn.
+            if CRISIS_LAYER and risk["level"] == "crisis":
                 system_prompt += CRISIS_ADDENDUM
                 await ws.send_json({"type": "safety", "resources": risk["resources"]})
-            elif risk["level"] == "distress":
+            elif CRISIS_LAYER and risk["level"] == "distress":
                 system_prompt += DISTRESS_ADDENDUM
 
             # Adapt tone to how the user sounds this turn (momentary; neutral if
@@ -272,7 +321,15 @@ async def handle_chat(ws: WebSocket):
             # streaming phrase audio. Leaves the local-audio path below untouched.
             if AVATAR_BACKEND == "video":
                 full_reply = []
-                async for token in stream_reply(conversation_history, user_text, system_prompt):
+                # Measured, not guessed: the character, the memories and the
+                # message are all sized on this turn, and history gets what is
+                # genuinely left. Overflowing would drop the system prompt from
+                # the left, which costs the character rather than old small talk.
+                sized_history, sized_text, _used = context_budget.fit(
+                    conversation_history, system_prompt, user_text,
+                    CONTEXT_WINDOW, REPLY_RESERVE,
+                )
+                async for token in stream_reply(sized_history, sized_text, system_prompt):
                     full_reply.append(token)
                     await ws.send_json({"type": "token", "text": token})
                 assistant_text = "".join(full_reply)
@@ -288,16 +345,16 @@ async def handle_chat(ws: WebSocket):
                 await ws.send_json({"type": "done", "sessionId": session_id})
                 continue
 
-            # Voice notes or text, never both. The page is not told which mode it
-            # is in: in voice mode it receives a recording and no tokens, in text
-            # mode tokens and no recording, and it renders whatever arrives.
-            deliver = "text" if profile.get("reply_mode") == "text" else "voice"
-
-            if deliver == "voice":
-                # She is recording. Sent before the model starts, because the whole
-                # point of the voice-note shape is that the wait is visible and
-                # explained rather than being dead air.
-                await ws.send_json({"type": "recording"})
+            # How it came in decides how it goes out: speak to her and she speaks
+            # back, type and she types back. The page already knows which way the
+            # message was sent, so nobody has to choose it in a menu.
+            spoken = msg.get("spoken") is not False
+            # …unless they asked. Arrival is the default, not the rule: someone
+            # typing at their desk can still want to hear the answer, and saying
+            # so in the message is the obvious way to ask for it.
+            asked_for_voice = reply_shape.wants_voice(user_text)
+            if asked_for_voice:
+                spoken = True
 
             full_reply: list[str] = []
             try:
@@ -306,13 +363,22 @@ async def handle_chat(ws: WebSocket):
                     # Nothing readable is sent while she records. A reply that can be
                     # read while it is being spoken gets read, and then the recording
                     # is only something to sit through.
-                    if deliver == "text":
+                    if not spoken:
                         await ws.send_json({"type": "token", "text": token})
 
                 assistant_text = "".join(full_reply)
 
-                if deliver == "voice":
+                # Decided on the finished reply, because that is the only point the
+                # length is known — and it is known for free, before a sound is made.
+                # An explicit request skips the length floor as well. "Yes, obviously"
+                # is under sixty characters and would normally be read, but someone
+                # who asked to hear it asked to hear it.
+                if spoken and (asked_for_voice or reply_shape.speak_it(assistant_text)):
                     await _reply_voice_note(ws, assistant_text, reply_accent, reply_voice)
+                elif spoken:
+                    # Spoken to, but the answer is a line rather than a message: it
+                    # arrives whole and instantly instead of costing four seconds.
+                    await ws.send_json({"type": "token", "text": assistant_text})
 
                 conversation_history.append({"role": "user", "content": user_text})
                 conversation_history.append({"role": "assistant", "content": assistant_text})

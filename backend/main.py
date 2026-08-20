@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import Response
 from stt import transcribe
 from config import DETECTION_DEFAULT, AVATAR_BACKEND
+import config
 from ws_handler import handle_chat, clear_history as ws_clear_history
 import ws_handler
 import avatar
@@ -13,6 +14,9 @@ import personas as persona_store
 import persona_suggest
 import characters
 import companion
+import traits
+import custom_characters
+import accounts
 import loops
 import loop_author
 import streak
@@ -181,7 +185,13 @@ async def settings():
     # Frontend reads this on load to initialize the voice-adaptation toggle so the
     # UI matches the server default, and to learn which avatar mode is active
     # ("3d" = local Three.js, "video" = cloud MuseTalk talking-head clips).
-    return {"detection": DETECTION_DEFAULT, "avatar": AVATAR_BACKEND}
+    return {
+        "detection": DETECTION_DEFAULT,
+        "avatar": AVATAR_BACKEND,
+        # Public by design; empty when this build has no client configured, which is
+        # how the page knows to ask for a name and an email instead.
+        "google_client_id": config.GOOGLE_CLIENT_ID,
+    }
 
 
 @app.get("/avatar/clip/{clip_id}")
@@ -274,13 +284,113 @@ async def onboard_companion(payload: dict = Body(...)):
     )
 
 
-@app.post("/companion/reply-mode")
-async def set_reply_mode(payload: dict = Body(default={})):
-    """Voice notes or text, one or the other. See companion._DEFAULTS: they are
-    exclusive because a reply that can be read is never waited for."""
-    mode = "text" if (payload or {}).get("mode") == "text" else "voice"
-    await asyncio.to_thread(companion.update, reply_mode=mode)
-    return {"reply_mode": mode}
+@app.get("/characters/voices")
+async def list_voices():
+    """The voices a custom character can be given. Only the ones the speech model has
+    a real speaker id for — offering more would silently fall back to a default, which
+    reads as the app ignoring the choice."""
+    return {"voices": custom_characters.VOICES}
+
+
+@app.get("/characters/custom")
+async def list_custom_characters():
+    """The full records, personality text and all. /characters carries only what a
+    picker renders; editing one needs the words behind it."""
+    return {"characters": await asyncio.to_thread(custom_characters.all_characters)}
+
+
+@app.post("/characters/custom")
+async def save_custom_character(payload: dict = Body(...)):
+    """Create a character, or update one when the payload carries a key we hold."""
+    try:
+        row = await asyncio.to_thread(custom_characters.save, payload or {})
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"character": row}
+
+
+@app.delete("/characters/custom/{key:path}")
+async def delete_custom_character(key: str):
+    """Remove one. If it was the companion in use, fall back to the default cast
+    rather than leaving the profile pointing at something that no longer exists."""
+    removed = await asyncio.to_thread(custom_characters.remove, key)
+    profile = await asyncio.to_thread(companion.profile)
+    if removed and profile.get("character") == key:
+        await asyncio.to_thread(companion.set_character, characters.DEFAULT_CHARACTER)
+        await ws_clear_history()
+    return {"deleted": removed}
+
+
+@app.get("/account")
+async def get_account():
+    """Who is signed in and what they have left. Safe to call when nobody is."""
+    return await asyncio.to_thread(accounts.status)
+
+
+@app.post("/account/signin")
+async def account_signin(payload: dict = Body(...)):
+    """Record a completed sign-in.
+
+    The client does the OAuth: it opens Google's or Apple's own page, the user types
+    their password there, and what arrives here is the provider's subject id plus
+    whatever profile fields they agreed to share. This endpoint never sees a password
+    and must never be changed to accept one.
+    """
+    body = payload or {}
+    try:
+        return await asyncio.to_thread(
+            accounts.sign_in,
+            str(body.get("provider", "")),
+            str(body.get("subject", "")),
+            str(body.get("email", "") or ""),
+            str(body.get("name", "") or ""),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/account/signout")
+async def account_signout():
+    return await asyncio.to_thread(accounts.sign_out)
+
+
+@app.get("/account/credits")
+async def account_credits():
+    """The ledger behind the number, so "where did they go" has an answer."""
+    return {
+        "credits": await asyncio.to_thread(accounts.balance),
+        "history": await asyncio.to_thread(accounts.history),
+    }
+
+
+@app.post("/account/credits")
+async def account_grant(payload: dict = Body(default={})):
+    """Add credits. A development door until real payments exist: there is no receipt
+    behind it, which is the whole reason it cannot ship as-is to a paying build."""
+    n = int((payload or {}).get("credits") or 0)
+    reason = str((payload or {}).get("reason") or "manual")
+    if n <= 0:
+        raise HTTPException(status_code=400, detail="credits must be a positive number")
+    return {"credits": await asyncio.to_thread(accounts.grant, n, reason)}
+
+
+@app.get("/companion/traits")
+async def get_traits():
+    """The chosen traits plus the options a settings screen needs to render."""
+    profile = await asyncio.to_thread(companion.profile)
+    return {
+        "traits": traits.normalise(profile.get("traits")),
+        "axes": traits.options_for_ui(),
+    }
+
+
+@app.post("/companion/traits")
+async def set_traits(payload: dict = Body(default={})):
+    """Shape the companion. Normalised on the way in, so an unknown axis or a
+    thousand-word note cannot reach the prompt."""
+    chosen = traits.normalise(payload or {})
+    await asyncio.to_thread(companion.update, traits=chosen)
+    return {"traits": chosen}
 
 
 @app.post("/companion/character")
@@ -515,6 +625,13 @@ async def close_call(payload: dict = Body(default={})):
         quest_done = bool(newly)
         for _ in newly:
             await asyncio.to_thread(db.record_event, "quest_completed")
+
+    # A call costs a credit, once it was actually a call. Recorded here rather than at
+    # open for the same reason the streak is: a tap that opened and closed a screen is
+    # not a conversation, and charging for one would be the first thing anybody
+    # noticed. Never refuses and never blocks — see accounts.spend().
+    if duration and await asyncio.to_thread(accounts.account):
+        await asyncio.to_thread(accounts.spend, 1, "call")
 
     # §4.1: the day is credited here, not at call open, and only once the floor is
     # actually met. The floor is deliberately low so a bad day can still be kept.
