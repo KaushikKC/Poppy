@@ -10,6 +10,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Poppys</title>
   <link rel="icon" type="image/png" href="poppys-logo.png" />
+  <!-- Three layers, in order. tokens.css is the palette, type scale and glass
+       recipe; app.css is the component vocabulary ported from the design
+       system; style.css maps this app's own markup onto them. -->
+  <!-- Before the stylesheets, and not deferred: this sets data-theme on <html>, and
+       doing it after first paint is a white flash on every launch for anyone who
+       picked dark. -->
+  <script src="theme.js"></script>
+  <link rel="stylesheet" href="tokens.css" />
+  <link rel="stylesheet" href="app.css" />
   <link rel="stylesheet" href="style.css" />
 
   <!-- Three.js + TalkingHead as ES modules, vendored locally (frontend/vendor/)
@@ -39,18 +48,72 @@
   <div id="onboarding" class="hidden" aria-hidden="true">
     <div class="ob-card">
       <!-- Screen 1 — the hook -->
+      <!-- 01 · Cold open. The design system's Splash: a presence that is already
+           awake, the promise, then what it actually is. The CTA reads "Meet",
+           never "Sign up" — meeting is a reward, signing up is a cost. -->
       <section class="ob-screen" data-step="hook">
-        <p class="ob-eyebrow">The AI that picks up when you call</p>
-        <h2 class="ob-headline">Someone who's always happy to hear from you.</h2>
-        <button type="button" class="ob-primary" data-next>Meet Poppy</button>
-        <p class="ob-trust">18+ · Private · You control everything</p>
+        <div class="hero-face" aria-hidden="true"></div>
+        <div class="grow" style="position: relative">
+          <span class="chip chip--tiny ob-awake">
+            <span class="dot dot--live"></span> <span data-pro="{subj}'s awake">she's awake</span>
+          </span>
+        </div>
+        <div class="stack gap5 ob-foot">
+          <div class="stack gap3">
+            <p class="t-display">Someone who's always<br>happy to <i class="ob-em">hear from you</i>.</p>
+            <p class="t-body soft" data-pro="Not a chat box. A voice that picks up on the second ring, remembers what last week was like, and asks how it turned out.">Not a chat box. A voice that picks up on the second ring, remembers what last week was like, and asks how it turned out.</p>
+          </div>
+          <button type="button" class="btn btn--primary btn--block" data-next>Meet Poppy</button>
+          <p class="t-xs muted center">18+ · Private · You control everything</p>
+        </div>
       </section>
 
-      <!-- Screen 2 — age gate -->
+      <!-- 01a · Sign in, at the start.
+           The design system puts an account after the first call, and it is right that
+           an account asked for before any value is a cost before a reward. This build
+           asks first anyway — a deliberate product decision — so the least it can do is
+           leave both doors open: Google, or an email, or neither. Nothing here blocks
+           the way through. -->
+      <section class="ob-screen hidden" data-step="signin">
+        <div class="body pt6">
+          <div class="stack gap5 pt6">
+            <div class="stack gap3">
+              <p class="t-title">Let's keep her yours.</p>
+              <p class="t-sm soft">Sign in and your companion, what she remembers and your credits follow you to any device. Skip it and everything still works, just only on this one.</p>
+            </div>
+            <div class="stack gap2">
+              <!-- Apple first. Its guidelines require the option to be presented at
+                   least as prominently as any other, and on an iPhone it is also the
+                   one most people will reach for. Hidden entirely off iOS, where it
+                   would open nothing. -->
+              <button type="button" class="btn btn--ink btn--block hidden" id="si-apple"> Continue with Apple</button>
+              <button type="button" class="btn btn--glass btn--block" id="si-google">Continue with Google</button>
+              <p class="ce-error hidden" id="si-error"></p>
+            </div>
+            <p class="t-xs muted center">No password, ever. Google asks for it on their own page, and we never see it.</p>
+          </div>
+        </div>
+        <div class="stack gap3 ob-foot">
+          <button type="button" class="btn btn--ink btn--block" id="si-skip">Not now</button>
+        </div>
+      </section>
+
+      <!-- 02 · Age gate. Asked once, in a card, with a way to say no. -->
       <section class="ob-screen hidden" data-step="age">
-        <h2 class="ob-headline">Poppy is for adults.</h2>
-        <p class="ob-sub">We'll only ask this once.</p>
-        <button type="button" class="ob-primary" data-next>I'm 18 or older</button>
+        <div class="body pt6">
+          <div class="progress" aria-hidden="true"><i class="on"></i><i></i><i></i><i></i></div>
+          <div class="stack gap5 pt6">
+            <div class="glass pad5 stack gap3">
+              <span class="option__ic ob-shield" aria-hidden="true">⛨</span>
+              <p class="t-title">Poppy is for adults.</p>
+              <p class="t-sm soft">We ask once, right now, and never nag you about it again. If you're under 18, this isn't the app for you yet, and that's okay.</p>
+            </div>
+          </div>
+        </div>
+        <div class="stack gap3 ob-foot">
+          <button type="button" class="btn btn--ink btn--block" data-next>I'm 18 or older</button>
+          <button type="button" class="btn btn--ghost btn--block" id="ob-under">I'm not</button>
+        </div>
       </section>
 
       <!-- Screen 3 — choose your companion (swipeable Tinder-style cards) -->
@@ -66,11 +129,50 @@
       </section>
 
       <!-- Screen 4 — one question that matters -->
+      <!-- 07 · The one question. Asked by her, not by a form: the answer becomes
+           the first thing she knows and the first thing she brings up. -->
       <section class="ob-screen hidden" data-step="seed">
-        <h2 class="ob-headline">Before we talk, what's one thing on your mind today?</h2>
-        <input id="ob-seed" class="ob-input" type="text" placeholder="Anything at all…" autocomplete="off" />
-        <button type="button" class="ob-primary" data-next>That's it</button>
-        <button type="button" class="ob-skip" data-next>Skip for now</button>
+        <div class="body pt6">
+          <div class="progress" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div>
+          <div class="stack gap5 pt6 center-items">
+            <div class="recall">
+              <span class="dot dot--live"></span>
+              <div class="stack gap1">
+                <span class="t-label muted"><span id="ob-asker">Poppy</span> asks</span>
+                <p class="recall__q">"Before we talk, what's one thing on your mind today?"</p>
+              </div>
+            </div>
+            <input id="ob-seed" class="ob-input" type="text" placeholder="Anything at all…" autocomplete="off" />
+            <p class="t-xs muted center" data-pro="This becomes the first thing {subj} knows about you, and the first thing {subj} brings up. You can read it, change it, or delete it whenever you like.">This becomes the first thing she knows about you, and the first thing she brings up. You can read it, change it, or delete it whenever you like.</p>
+          </div>
+        </div>
+        <div class="stack gap3 ob-foot">
+          <button type="button" class="btn btn--primary btn--block" data-next>Send it to her</button>
+          <button type="button" class="btn btn--ghost btn--block" data-next>Skip for now</button>
+        </div>
+      </section>
+
+      <!-- 08 · Mic permission. We never had this screen: the browser prompt was the
+           first anyone heard of it, which is a permission dialog with no reason
+           attached. The sheet gives the reason before the system asks. -->
+      <section class="ob-screen hidden" data-step="mic">
+        <div class="grow ob-mic-quiet">
+          <p class="t-title center" data-pro="{Subj}'s ready when you are."><span id="ob-mic-name">Poppy</span>'s ready when you are.</p>
+        </div>
+        <div class="sheet ob-sheet">
+          <div class="sheet__grab" aria-hidden="true"></div>
+          <div class="stack gap4 center-items">
+            <span class="option__ic ob-mic-ic" aria-hidden="true">🎙</span>
+            <div class="stack gap2">
+              <p class="t-h1 center" data-pro="Let {obj} hear you">Let her hear you</p>
+              <p class="t-sm soft center">A call needs your mic. Audio is processed live on this device and never stored unless you keep a moment yourself.</p>
+            </div>
+            <div class="stack gap2" style="width: 100%">
+              <button type="button" class="btn btn--primary btn--block" id="ob-mic-allow">Allow microphone</button>
+              <button type="button" class="btn btn--ghost btn--block" id="ob-mic-skip" data-pro="Type to {obj} instead">Type to her instead</button>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- Screen 5 — the first call (the payoff) -->
@@ -84,6 +186,12 @@
   <!-- ─── Home (§3): built for the return, not the tour. One job — get them into
        a call. flow.js fills the name, the she-remembers strip and the streak. ─── -->
   <div id="home" class="hidden" aria-hidden="true">
+    <!-- A real header, not a sticky pseudo-element. The ::before version worked in a
+         browser (where env(safe-area-inset-top) is 0) and became a 240px cream slab
+         over the content on a real iPhone. Same structure as the memory vault, which
+         renders correctly there. -->
+    <header class="you-nav"><span class="t-h2">You</span></header>
+    <div class="home-body">
     <!-- §3.6: a deliberate heads-up if Poppy's personality changed under the user -->
     <div id="home-update" class="hidden"></div>
     <!-- §6: reliable in-app ritual reminder (polled from the backend) -->
@@ -95,35 +203,91 @@
     <div class="home-freeze hidden" id="home-freeze"></div>
     <!-- §4.1: 48h grace on a broken run, free, no ceremony and no price -->
     <div class="home-repair hidden" id="home-repair"></div>
-    <div class="home-streak" id="home-streak"></div>
-    <div class="home-lower">
-      <p class="home-remembers" id="home-remembers"></p>
-      <button type="button" id="home-call" class="home-call">
-        <span class="home-call-label">Chat with</span>
-        <strong id="home-name">Poppy</strong>
+    <!-- Who you are here, then everything that is a setting rather than a moment.
+         This is system.jsx You: a profile card, two numbers, and a list. The four
+         big tiles that used to be here read as navigation on a screen that is not
+         navigation; a settings row is what a setting looks like. -->
+    <div class="glass pad5 row gap4 home-card">
+      <span class="avatar avatar--lg" id="home-avatar" aria-hidden="true">P</span>
+      <span class="stack gap1" style="min-width: 0">
+        <span class="t-h1" id="home-name">Poppy</span>
+        <span class="t-xs muted tnum" id="home-since"></span>
+      </span>
+    </div>
+
+    <div class="row gap3 home-stats">
+      <div class="glass pad4 stack gap1 grow">
+        <span class="t-label muted">streak</span>
+        <span class="t-h1 tnum" id="home-streak">&mdash;</span>
+      </div>
+      <div class="glass pad4 stack gap1 grow">
+        <span class="t-label muted" data-pro="{subj} knows">she knows</span>
+        <span class="t-h1 tnum" id="home-knows">&mdash;</span>
+      </div>
+    </div>
+
+    <p class="home-remembers" id="home-remembers"></p>
+
+    <div class="list home-list">
+      <button type="button" class="listrow" id="home-account">
+        <span class="listrow__ic" aria-hidden="true">◈</span>
+        <span class="listrow__body">
+          <span class="listrow__title" id="home-account-title">Sign in</span>
+          <span class="listrow__sub" id="home-account-sub">Keep your companion if you change phone</span>
+        </span>
       </button>
-      <div class="home-modes" id="home-modes"></div>
-      <!-- How she answers. Exclusive on purpose: a reply you can read while it is
-           being spoken gets read, and then the voice is only a wait. -->
-      <div class="reply-mode" id="reply-mode" role="group" aria-label="How she replies">
-        <button type="button" class="reply-mode-btn" data-mode="voice">Voice notes</button>
-        <button type="button" class="reply-mode-btn" data-mode="text">Text</button>
-      </div>
-      <!-- §4.7: today's quests live behind a tap, not on the home surface, so the
-           screen never carries more than two progress indicators at once -->
-      <div class="home-nav">
-        <button type="button" id="home-today" class="home-nav-btn hidden">
-          <span class="home-nav-icon" aria-hidden="true">◍</span>
-          <span class="home-nav-label">Today</span>
-          <span class="home-nav-dot hidden" id="home-today-dot" aria-hidden="true"></span>
-        </button>
-      <!-- §3.1: the garden. Carries no number, so it isn't one of §4.7's two
-           progress indicators; it's the record, not the score. -->
-        <button type="button" id="home-garden" class="home-nav-btn hidden">
-          <span class="home-nav-icon" aria-hidden="true">✿</span>
-          <span class="home-nav-label">Your garden</span>
-        </button>
-      </div>
+      <button type="button" class="listrow" id="home-switch-row">
+        <span class="listrow__ic" aria-hidden="true">✦</span>
+        <span class="listrow__body">
+          <span class="listrow__title">Change companion</span>
+          <span class="listrow__sub" id="home-switch-sub">Six to talk to, or write your own</span>
+        </span>
+      </button>
+      <button type="button" class="listrow" id="home-traits">
+        <span class="listrow__ic" aria-hidden="true">◑</span>
+        <span class="listrow__body">
+          <span class="listrow__title" data-pro="Who {subj} is">Who she is</span>
+          <span class="listrow__sub" data-pro="Energy, mood, manner. It sticks across every call.">Energy, mood, manner. It sticks across every call.</span>
+        </span>
+      </button>
+      <button type="button" class="listrow" id="home-look">
+        <span class="listrow__ic" aria-hidden="true">◐</span>
+        <span class="listrow__body">
+          <span class="listrow__title">Appearance</span>
+          <span class="listrow__sub" id="home-look-sub">Light, dark, or follow your device</span>
+        </span>
+      </button>
+      <button type="button" class="listrow" id="home-memory">
+        <span class="listrow__ic" aria-hidden="true">▤</span>
+        <span class="listrow__body">
+          <span class="listrow__title" data-pro="What {subj} knows">What she knows</span>
+          <span class="listrow__sub">Everything remembered, yours to edit or delete</span>
+        </span>
+      </button>
+      <button type="button" class="listrow hidden" id="home-garden">
+        <span class="listrow__ic" aria-hidden="true">✿</span>
+        <span class="listrow__body">
+          <span class="listrow__title">Your garden</span>
+          <span class="listrow__sub">Every call you have had, as it grew</span>
+        </span>
+      </button>
+      <button type="button" class="listrow hidden" id="home-today">
+        <span class="listrow__ic" aria-hidden="true">◍</span>
+        <span class="listrow__body">
+          <span class="listrow__title">Today</span>
+          <span class="listrow__sub">What is worth doing today</span>
+        </span>
+        <span class="home-nav-dot hidden" id="home-today-dot" aria-hidden="true"></span>
+      </button>
+    </div>
+
+    <!-- Kept because the tab bar's Call tab presses it, and the modes are read from
+         it. Neither belongs on a settings screen. -->
+    <button type="button" id="home-call" class="home-call hidden">
+      <span class="home-call-label">Chat with</span>
+    </button>
+    <div class="home-modes hidden" id="home-modes"></div>
+
       <!-- §6: opt-in daily ritual the user picks themselves -->
       <div class="home-ritual" id="home-ritual"></div>
       <!-- Which build this is. Quiet, but present in any screenshot: three
@@ -162,7 +326,91 @@
       <div id="today-week" class="today-week"></div>
       <div class="today-actions">
         <button type="button" id="today-close" class="outro-primary">Done</button>
-        <button type="button" id="today-off" class="outro-ghost">Just let me talk to her</button>
+        <button type="button" id="today-off" class="outro-ghost" data-pro="Just let me talk to {obj}">Just let me talk to her</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Writing a character of your own. The cast we ship is six people we chose;
+       this is for everyone who wants someone else. -->
+  <div id="char-editor" class="hidden" role="dialog" aria-modal="true" aria-label="Write a character">
+    <div class="ce-card">
+      <p class="ce-kicker" id="ce-title">Write a character</p>
+
+      <label class="ce-label" for="ce-name">Name</label>
+      <input id="ce-name" class="ce-input" type="text" maxlength="40" autocomplete="off"
+             placeholder="Mira" />
+
+      <label class="ce-label" for="ce-tagline">One line about them</label>
+      <input id="ce-tagline" class="ce-input" type="text" maxlength="60" autocomplete="off"
+             placeholder="a quiet archivist in Lisbon" />
+
+      <label class="ce-label">Voice</label>
+      <div id="ce-voices" class="ce-voices"></div>
+
+      <label class="ce-label" for="ce-personality">Who are they?</label>
+      <textarea id="ce-personality" class="ce-textarea" rows="5"
+                placeholder="You are Mira, a 29-year-old archivist living in Lisbon. You spend your evenings restoring old film reels. You are dry, observant, and slow to warm up, but loyal once you do. You speak plainly and you never gush."></textarea>
+      <p class="ce-count"><span id="ce-personality-count">0</span>/700</p>
+      <p class="ce-hint">Write it as if you are telling them who they are. The more
+        specific, the more they sound like someone.</p>
+
+      <label class="ce-label" for="ce-greeting">How do they open? <span class="ce-optional">optional</span></label>
+      <input id="ce-greeting" class="ce-input" type="text" maxlength="200" autocomplete="off"
+             placeholder="You made it. I was just closing up the archive." />
+
+      <p class="ce-error hidden" id="ce-error"></p>
+
+      <div class="ce-actions">
+        <button type="button" id="ce-save" class="outro-primary">Save</button>
+        <button type="button" id="ce-cancel" class="outro-ghost">Cancel</button>
+      </div>
+      <button type="button" id="ce-delete" class="ce-delete hidden">Delete this character</button>
+    </div>
+  </div>
+
+  <!-- Shaping the companion. Three axes and a line of your own, because the point is
+       a companion that feels chosen rather than a character sheet nobody finishes. -->
+  <div id="traits" class="hidden" role="dialog" aria-modal="true" aria-label="Who she is" data-pro-label="Who {subj} is">
+    <div class="traits-card">
+      <p class="traits-kicker" data-pro="Who {subj} is">Who she is</p>
+      <p class="traits-sub" data-pro="This is {obj}, in every mood. It sticks until you change it.">This is her, in every mood. It sticks until you change it.</p>
+      <div id="traits-axes"></div>
+      <label class="traits-note-label" for="traits-note" data-pro="Anything else about {obj}">Anything else about her</label>
+      <textarea id="traits-note" class="traits-note" rows="2"
+                placeholder="She's a night owl who loves old films…" data-pro-placeholder="{Subj}'s a night owl who loves old films…"></textarea>
+      <p class="traits-count"><span id="traits-count">0</span>/240</p>
+      <div class="traits-actions">
+        <button type="button" id="traits-save" class="outro-primary">Save</button>
+        <button type="button" id="traits-close" class="outro-ghost">Never mind</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Appearance. The theme section of the design system's Appearance screen, using
+       its own .appearance component. Chat backgrounds live on that screen too and are
+       not wired to anything yet, so they are not offered here. -->
+  <div id="look" class="hidden" role="dialog" aria-modal="true" aria-label="Appearance">
+    <div class="traits-card">
+      <p class="traits-kicker">Appearance</p>
+      <p class="traits-sub">How the app looks. This sticks until you change it.</p>
+      <div class="appearance" id="look-theme">
+        <button type="button" data-theme-choice="light" data-on="false">
+          <span class="appearance__chip" style="background: linear-gradient(178deg,#C9DDF0,#9EBBDA)"></span>
+          Light
+        </button>
+        <button type="button" data-theme-choice="dark" data-on="false">
+          <span class="appearance__chip" style="background: linear-gradient(178deg,#1B211A,#0D100C)"></span>
+          Dark
+        </button>
+        <button type="button" data-theme-choice="auto" data-on="false">
+          <span class="appearance__chip" style="background: linear-gradient(110deg,#C9DDF0 0 50%,#1B211A 50% 100%)"></span>
+          Auto
+        </button>
+      </div>
+      <p class="traits-count">Auto follows your device. Wind-down calls dim past whichever you pick, that's the ritual rather than the theme.</p>
+      <div class="traits-actions">
+        <button type="button" id="look-close" class="outro-primary">Done</button>
       </div>
     </div>
   </div>
@@ -176,7 +424,7 @@
     <div id="connect-veil" class="hidden" aria-live="polite">
       <div class="connect-core" aria-hidden="true"><span></span><span></span><span></span></div>
       <p class="connect-title">Calling <span id="connect-name">Poppy</span></p>
-      <p class="connect-sub">She picks up in a moment…</p>
+      <p class="connect-sub" data-pro="{Subj} picks up in a moment…">She picks up in a moment…</p>
     </div>
 
     <!-- ── The thread. This is the product now: a conversation you keep, not a
@@ -210,7 +458,7 @@
         <button type="button" id="vad-btn" class="chat-icon-btn" title="Auto-listen" aria-label="Toggle auto-listen">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3a9 9 0 0 0-9 9 9 9 0 0 0 9 9 9 9 0 0 0 9-9 9 9 0 0 0-9-9zm0 2a7 7 0 0 1 7 7 7 7 0 0 1-7 7 7 7 0 0 1-7-7 7 7 0 0 1 7-7zm0 3a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4zm0 2a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/></svg>
         </button>
-        <button type="button" id="memory-btn" class="chat-icon-btn" title="What she remembers about you" aria-label="What she remembers about you">
+        <button type="button" id="memory-btn" class="chat-icon-btn" title="What she remembers about you" aria-label="What she remembers about you" data-pro-label="What {subj} remembers about you">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
         </button>
       </div>
@@ -247,12 +495,39 @@
   </div>
 
   <!-- ── End-of-call ritual (§4): warm sign-off + what she remembered ── -->
+  <!-- The tab bar from the design system (components/ui.jsx TabBar). The thread is
+       home, so the app opens on it, and everything that used to be a row on a hub
+       screen is a destination here instead. Present on every screen except
+       onboarding, which is a sequence and has no navigation. -->
+  <nav class="tabbar hidden" id="tabbar" aria-label="Primary">
+    <button type="button" class="tab" data-tab="thread" data-on="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.6-.7L3 21l1.9-5.1A8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4z"/></svg>
+      <span id="tab-thread-label">Poppy</span>
+    </button>
+    <button type="button" class="tab" data-tab="garden" data-on="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M12 8c-3 0-5-2-5-4 3 0 5 1.5 5 4zM12 8c3 0 5-2 5-4-3 0-5 1.5-5 4zM12 15c-3.2 0-5.5-2.2-5.5-4.5 3.4 0 5.5 1.8 5.5 4.5zM12 15c3.2 0 5.5-2.2 5.5-4.5-3.4 0-5.5 1.8-5.5 4.5z"/></svg>
+      Garden
+    </button>
+    <button type="button" class="tab tab--call" data-tab="call" data-on="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg>
+      Call
+    </button>
+    <button type="button" class="tab" data-tab="memory" data-on="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      Memory
+    </button>
+    <button type="button" class="tab" data-tab="you" data-on="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      You
+    </button>
+  </nav>
+
   <div id="outro" class="hidden" role="dialog" aria-modal="true" aria-label="Call ended">
     <div class="outro-card">
       <p class="outro-kicker">Call ended</p>
       <h2 id="outro-line">Talk soon, okay?</h2>
       <div id="outro-remember" class="hidden">
-        <p class="outro-remember-kicker">She'll remember</p>
+        <p class="outro-remember-kicker" data-pro="{Subj}'ll remember">She'll remember</p>
         <p id="outro-remember-text"></p>
       </div>
       <!-- §5: the receipt for a ritual the user just set out loud, in the call -->
@@ -271,6 +546,9 @@
   <script src="musetalk_clip.js"></script>
   <script src="vad.js"></script>
   <script src="persona_picker.js"></script>
+  <script src="pronouns.js"></script>
+  <script src="voice_note.js"></script>
+  <script src="auth.js"></script>
   <script src="chat.js"></script>
   <script src="mic.js"></script>
   <script src="memory.js"></script>
