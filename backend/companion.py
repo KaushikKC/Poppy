@@ -33,10 +33,9 @@ _DEFAULTS = {
     "voice": "af_heart",         # the character's Kokoro voice
     "vibe": "friend",            # legacy vibe key (mood modes still layer on top)
     "avatar": "brunette",        # avatar preset id (frontend/avatar/*.glb)
-    # How her replies arrive: "voice" (one recording, no text) or "text" (tokens,
-    # no audio). Exclusive on purpose — a reply that can be read while it is being
-    # spoken gets read, and the voice becomes something to wait through.
-    "reply_mode": "voice",
+    # Who this companion is, chosen by the user rather than by us. See traits.py:
+    # the vibes are a stance for right now, these persist across every mode.
+    "traits": None,
     "created_at": None,
     "last_call_date": None,      # ISO date (YYYY-MM-DD) of the most recent call
     "current_streak": 0,
@@ -126,7 +125,14 @@ def _apply_character(p: dict, character: str) -> None:
     """Copy a chosen character's identity (name, gender, voice, look) onto the profile."""
     import characters
     c = characters.get(character)
-    p["character"] = character if character in characters.CHARACTERS else characters.DEFAULT_CHARACTER
+    # Validated against what actually resolved rather than against the built-in cast.
+    # Testing membership of CHARACTERS silently rejected every custom key: the name
+    # and voice were applied, so the switch looked like it worked, while `character`
+    # stayed "poppy" and every prompt after it was assembled from Poppy — a character
+    # called Mira with Poppy's whole personality behind her.
+    p["character"] = c.get("key") or (
+        character if character in characters.CHARACTERS else characters.DEFAULT_CHARACTER
+    )
     p["companion_name"] = c["name"]
     p["gender"] = c["gender"]
     p["voice"] = c["voice"]
