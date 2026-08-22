@@ -49,6 +49,22 @@ export function dispatchAudio(send: Send, msg: unknown): void {
   send(`window.__poppysAudio && window.__poppysAudio(${JSON.stringify(msg)}); true;`);
 }
 
+/** The sign-in channel, which the shim's PoppyNativeAuth listens on. */
+export function dispatchAuth(send: Send, msg: unknown): void {
+  send(`window.__poppysAuth && window.__poppysAuth(${JSON.stringify(msg)}); true;`);
+}
+
+/**
+ * The replay channel, which voice_note.js listens on.
+ *
+ * Separate from the audio channel above because it answers a different question. That
+ * one is "what is she saying right now", and drives the orb; this one is "the
+ * recording you asked to hear again has finished", and drives one bubble.
+ */
+export function dispatchClip(send: Send, msg: unknown): void {
+  send(`window.__poppysClip && window.__poppysClip(${JSON.stringify(msg)}); true;`);
+}
+
 /** Anything the page sends that is not fetch or socket traffic, e.g. the mic. */
 export type ExtraHandler = (msg: { t?: string }) => Promise<boolean> | boolean;
 

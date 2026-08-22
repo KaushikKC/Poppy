@@ -35,6 +35,42 @@ export const SHIM_JS = String.raw`
     window.ReactNativeWebView.postMessage(JSON.stringify(msg));
   }
 
+  // ── Sign in with Google ────────────────────────────────────────────────────
+  //
+  // The page cannot run Google's web flow: a WebView at a file:// origin is not an
+  // origin Google will accept. So the native side runs it and the page asks through
+  // here. auth.js checks for this object first and falls back to its own flow when it
+  // is absent, which is what makes one caller work in a browser and on a phone.
+  //
+  // Resolves with {subject, email, name}, or null when the user cancelled or the
+  // build has no client id. Never with an invented identity.
+  var pendingAuth = {};
+
+  window.PoppyNativeAuth = {
+    signIn: function (provider) {
+      var id = nextId++;
+      return new Promise(function (resolve) {
+        pendingAuth[id] = resolve;
+        post({ t: 'auth:signin', id: id, provider: provider });
+        // A native flow that never answers would leave the button spinning for the
+        // rest of the session.
+        setTimeout(function () {
+          if (pendingAuth[id]) {
+            delete pendingAuth[id];
+            resolve(null);
+          }
+        }, 120000);
+      });
+    },
+  };
+
+  window.__poppysAuth = function (msg) {
+    var done = pendingAuth[msg && msg.id];
+    if (!done) return;
+    delete pendingAuth[msg.id];
+    done(msg.claims || null);
+  };
+
   // ── fetch ──────────────────────────────────────────────────────────────────
   var realFetch = window.fetch;
 

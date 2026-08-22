@@ -28,12 +28,13 @@ const WebView = WebViewComponent as unknown as React.ComponentType<
 import { AudioManager } from 'react-native-audio-api';
 
 import { SHIM_JS } from './bridge/shim';
-import { createHost, dispatchAudio, dispatchMic } from './bridge/host';
+import { createHost, dispatchAudio, dispatchAuth, dispatchClip, dispatchMic } from './bridge/host';
+import { signInWithApple, signInWithGoogle } from './bridge/auth';
 import { createMic } from './bridge/mic';
 import { registerHandlers } from './core/handlers';
 import { createSocketHandler } from './core/socket';
 import { loadNativeEngines } from './core/native_engines';
-import { playback, setSpeaker } from './core/playback';
+import { clipPlayer, playback, setSpeaker } from './core/playback';
 import { PcmPlayer, activateSession } from './audio';
 import { modelsPresent } from './core/downloader';
 import type { Tier } from './core/model_tier';
@@ -231,7 +232,13 @@ export default function AppShell() {
     // stays free of native imports.
     const pcm = new PcmPlayer();
     pcmRef.current = pcm;
-    setSpeaker({ play: (samples, rate) => pcm.play(samples, rate) });
+    // stop() as well as play(): pausing a voice note is implemented by cutting the
+    // buffer short and resuming from the offset, and a speaker with no stop would
+    // have taken the pause and gone on playing to the end.
+    setSpeaker({
+      play: (samples, rate) => pcm.play(samples, rate),
+      stop: () => pcm.stop(),
+    });
 
     const send = (js: string) => webRef.current?.injectJavaScript(js);
     const mic = createMic((msg) => dispatchMic(send, msg));
@@ -240,11 +247,44 @@ export default function AppShell() {
     // The orb animates from these rather than from the page's own analyser, because
     // playback is native now. See core/playback.ts.
     playback.setSink((msg) => dispatchAudio(send, msg));
+    // Replays report their own ending, to the bubble that asked for them.
+    clipPlayer.setSink((msg) => dispatchClip(send, msg));
 
     const host = createHost(send, createSocketHandler(), async (msg) => {
       // Barge-in from the page: it owns the button, the native side owns the sound.
       if (msg.t === 'audio:stop') {
         playback.stop();
+        return true;
+      }
+      // Sign in. The page asks, Google's own sheet answers, and what comes back is a
+      // subject id and a profile — never a password. A cancel returns null and the
+      // page offers the email form instead.
+      if (msg.t === 'auth:signin') {
+        const m = msg as { id?: number; provider?: string };
+        void (async () => {
+          const claims =
+            m.provider === 'google'
+              ? await signInWithGoogle()
+              : m.provider === 'apple'
+                ? await signInWithApple()
+                : null;
+          dispatchAuth(send, { t: 'auth:result', id: m.id, claims });
+        })();
+        return true;
+      }
+      // Playing a voice note again. The page holds an id because the samples never
+      // left this side; see core/clips.ts.
+      if (msg.t === 'clip:play') {
+        const m = msg as { id?: string; fromFraction?: number };
+        if (m.id) void clipPlayer.play(m.id, m.fromFraction ?? 0);
+        return true;
+      }
+      if (msg.t === 'clip:pause') {
+        clipPlayer.pause();
+        return true;
+      }
+      if (msg.t === 'clip:stop') {
+        clipPlayer.stop();
         return true;
       }
       // Reopen setup, which is where the model is chosen.
