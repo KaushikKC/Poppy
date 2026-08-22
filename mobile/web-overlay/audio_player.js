@@ -10,8 +10,12 @@
 // the audio moved there.
 //
 // This keeps the exact interface the page uses — enqueueWav, setSampleRate,
-// getAnalyser, isPlaying, stop, onPlaybackStart — so chat.js, ui.js and orb_avatar.js
-// are untouched. What it plays is nothing: the native side already spoke. What it
+// getAnalyser, isPlaying, stop, onPlaybackStart, onPlaybackEnd — so chat.js, ui.js and
+// orb_avatar.js are untouched. That list is not documentation, it is a contract:
+// tests/test_overlay_contract.js fails when the desktop player grows a method this file
+// does not have. It grew onPlaybackEnd, this file did not, and because chat.js calls it
+// while wiring up the socket, every turn on the phone died with a TypeError before the
+// message was ever sent. The status sat on "thinking" forever and the model never ran. What it plays is nothing: the native side already spoke. What it
 // provides is a synthetic analyser, fed by the loudness envelope the native side sends,
 // so the mouth still moves with her voice.
 //
@@ -23,6 +27,7 @@ class AudioPlayer {
   constructor() {
     this._playing = false;
     this._onStart = null;
+    this._onEnd = null;
     this._sampleRate = 24000;
 
     // Enough bins to look like a real analyser to ui.js and orb_avatar.js, which read
@@ -62,6 +67,10 @@ class AudioPlayer {
       } else if (msg.t === 'audio:end') {
         this._playing = false;
         this._envelope = [];
+        // Only a reply that actually finished. Desktop's stop() does not fire this
+        // either, and firing it on barge-in would set the turn idle underneath the
+        // recording the user just started.
+        if (!msg.bargeIn && this._onEnd) this._onEnd();
       }
     };
   }
@@ -98,6 +107,28 @@ class AudioPlayer {
 
   onPlaybackStart(cb) {
     this._onStart = cb;
+  }
+
+  /**
+   * Fired when her recording has played out. This is what returns the turn to idle:
+   * a spoken reply carries no text, so no reveal loop runs and nothing else in the
+   * page would ever end the turn. The native side reports the ending, because the
+   * native side is what played the sound.
+   */
+  onPlaybackEnd(cb) {
+    this._onEnd = cb;
+  }
+
+  /**
+   * Teardown. There is no AudioContext to close on this side, so this is stop() plus
+   * dropping the callbacks. Nothing in the page calls it today; it exists because the
+   * desktop player has it, and "nothing calls it today" is exactly how the last gap in
+   * this interface went unnoticed.
+   */
+  close() {
+    this.stop();
+    this._onStart = null;
+    this._onEnd = null;
   }
 
   /** Barge-in. The native side owns the sound, so it is told to stop. */
