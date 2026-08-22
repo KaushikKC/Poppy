@@ -11,8 +11,9 @@
  * actually delivers.
  */
 
-import { ContinuousMic, MicRecorder } from '../audio';
+import { ContinuousMic, MicRecorder, TARGET_RATE } from '../audio';
 import { transcribe } from '../core/turn';
+import * as clips from '../core/clips';
 import { playback } from '../core/playback';
 
 export type MicSend = (msg: unknown) => void;
@@ -23,6 +24,18 @@ function heardNothing(): string {
   return d.includes('REPORTED RATE IS WRONG')
     ? `I did not catch that. The microphone is reporting the wrong rate — ${d}`
     : 'I did not catch that. Try again a little closer to the microphone.';
+}
+
+/**
+ * Keep what the user just recorded, and describe it to the page.
+ *
+ * A voice message shown as text throws away the thing that was actually sent. The
+ * page cannot hold the audio here (capture is native), so it holds an id instead and
+ * asks for it back when the bubble is tapped.
+ */
+function mine(pcm: Float32Array): { clipId: string; durationMs: number } {
+  const clip = clips.keep('mine', pcm, TARGET_RATE);
+  return { clipId: clip.id, durationMs: clip.durationMs };
 }
 
 export function createMic(send: MicSend) {
@@ -40,7 +53,7 @@ export function createMic(send: MicSend) {
         if (!text) {
           send({ t: 'mic:error', message: heardNothing() });
         } else {
-          send({ t: 'mic:transcript', text });
+          send({ t: 'mic:transcript', text, ...mine(pcm) });
         }
       } catch (err) {
         send({ t: 'mic:error', message: err instanceof Error ? err.message : String(err) });
@@ -89,7 +102,7 @@ export function createMic(send: MicSend) {
         send({ t: 'mic:error', message: heardNothing() });
         return;
       }
-      send({ t: 'mic:transcript', text });
+      send({ t: 'mic:transcript', text, ...mine(pcm) });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       send({ t: 'mic:error', message });

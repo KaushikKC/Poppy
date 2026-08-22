@@ -1,7 +1,7 @@
 import { AudioContext, AudioManager, AudioRecorder } from 'react-native-audio-api';
 import { Vad, type VadConfig } from './core/vad';
 
-const TARGET_RATE = 16000; // whisper.cpp wants 16 kHz mono float PCM
+export const TARGET_RATE = 16000; // whisper.cpp wants 16 kHz mono float PCM
 
 /**
  * The audio session, in one place, because it is set from three.
@@ -192,6 +192,15 @@ export class MicRecorder {
 export class PcmPlayer {
   private ctx: AudioContext;
   private logged = false;
+  /**
+   * What is sounding right now, so it can be cut short.
+   *
+   * Without this the only way to silence a buffer already handed to the graph was to
+   * tear the whole context down. That was survivable while a phrase was a second long
+   * and a barge-in could wait it out; it is not survivable when a reply is one
+   * recording several sentences long, and it is what pausing a voice note needs.
+   */
+  private current: ReturnType<AudioContext['createBufferSource']> | null = null;
   // Phrases still waiting to be told they finished. A context that is replaced will
   // never fire onEnded for anything scheduled on it, and the playback queue waits on
   // exactly that — so without this, one rebuild leaves the queue stuck for good.
@@ -225,7 +234,9 @@ export class PcmPlayer {
         resolve();
       };
       this.pending.add(done);
+      this.current = source;
       source.onEnded = () => {
+        if (this.current === source) this.current = null;
         // A source that has finished is still attached to the graph, and the audio
         // render thread walks every attached node on every render quantum whether it
         // has anything left to play or not. One node per spoken phrase, several
@@ -248,6 +259,18 @@ export class PcmPlayer {
       };
       source.start();
     });
+  }
+
+  /** Cut short whatever is sounding. Silent when nothing is. */
+  stop(): void {
+    const source = this.current;
+    this.current = null;
+    if (!source) return;
+    try {
+      source.stop();
+    } catch {
+      // Already finished or never started; either way there is nothing to silence.
+    }
   }
 
   /**

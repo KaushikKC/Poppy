@@ -85,8 +85,12 @@
       const text = (msg.text || '').trim();
       if (!text) return;
       if (userInput) userInput.value = '';
-      // From here the page takes over exactly as it does on desktop.
-      window.sendMessage?.(text);
+      // From here the page takes over exactly as it does on desktop. The recording
+      // itself stays native — the page gets its id and its length, which is all the
+      // voice bubble needs to draw it and to ask for it again.
+      window.sendMessage?.(text, true, {
+        audio: msg.clipId ? { clipId: msg.clipId, durationMs: msg.durationMs || 0 } : undefined,
+      });
       return;
     }
 
