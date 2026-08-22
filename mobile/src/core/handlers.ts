@@ -21,13 +21,15 @@ import * as ritual from './ritual';
 import * as extract from './memory_extract';
 import * as author from './loop_author';
 import * as personas from './personas';
+import * as traits from './traits';
 import * as opening from './opening';
-import { resetCallTurns } from './socket';
+import { clearHistory, resetCallTurns } from './socket';
 import * as nudges from './nudges';
 import * as billing from './billing';
 import * as tone from './tone';
 import { ttsDiagnostic } from './tts_info';
-import { CAST } from './characters';
+import * as accounts from './accounts';
+import * as custom from './custom_characters';
 import { ok, route, type Res } from './router';
 
 /**
@@ -42,7 +44,40 @@ export function registerHandlers(): void {
 
   route('GET', '/settings', () => ok(SETTINGS));
 
-  route('GET', '/characters', () => ok(CAST));
+  // Ours first, then the ones the user wrote. The picker renders both from this.
+  route('GET', '/characters', async () => ok(await custom.uiList()));
+
+  // The voices a character the user writes can be given. Only the ones the speech
+  // model has a real speaker id for: offering more would silently fall back to a
+  // default, which reads as the app ignoring the choice.
+  route('GET', '/characters/voices', () => ok({ voices: custom.VOICES }));
+
+  // The full records, personality text and all. /characters carries only what a
+  // picker renders; editing one needs the words behind it.
+  route('GET', '/characters/custom', async () => ok({ characters: await custom.allCharacters() }));
+
+  route('POST', '/characters/custom', async (req): Promise<Res> => {
+    try {
+      return ok({ character: await custom.save((req.body ?? {}) as Record<string, unknown>) });
+    } catch (e: any) {
+      return { status: 400, body: { detail: e?.message ?? 'that could not be saved' } };
+    }
+  });
+
+  // If the deleted character was the companion in use, fall back to the default cast
+  // rather than leaving the profile pointing at someone who no longer exists.
+  route('DELETE', '/characters/custom/:key', async (req): Promise<Res> => {
+    // The router decodes path params into query, so a key with its "custom:" colon
+    // arrives intact however the page encoded it.
+    const key = req.query.key ?? '';
+    const deleted = await custom.remove(key);
+    const profile = await companion.profile();
+    if (deleted && profile.character === key) {
+      await companion.setCharacter('poppy');
+      clearHistory();
+    }
+    return ok({ deleted });
+  });
 
   route('GET', '/companion', async () => ok(await companion.profile()));
 
@@ -53,20 +88,55 @@ export function registerHandlers(): void {
     return ok(await companion.create(body.character ?? 'poppy'));
   });
 
-  /**
-   * Voice notes or text, one or the other. See Profile.reply_mode: they are exclusive
-   * on purpose, because a reply that can be read is never waited for.
-   */
-  route('POST', '/companion/reply-mode', async (req): Promise<Res> => {
-    const body = (req.body ?? {}) as { mode?: string };
-    const mode = body.mode === 'text' ? 'text' : 'voice';
-    await companion.update({ reply_mode: mode });
-    return ok({ reply_mode: mode });
+  // Who she is, chosen by the user. Normalised on the way in, so an unknown axis or
+  // a thousand-word note cannot reach the prompt.
+  // ── account and credits ───────────────────────────────────────────────────
+  route('GET', '/account', async () => ok(await accounts.currentStatus()));
+
+  route('POST', '/account/signin', async (req): Promise<Res> => {
+    const b = (req.body ?? {}) as Record<string, string>;
+    try {
+      // The provider's own page ran the sign-in; what arrives here is the subject id
+      // and whatever profile fields were shared. Never a password.
+      return ok(await accounts.signIn(b.provider ?? '', b.subject ?? '', b.email ?? '', b.name ?? ''));
+    } catch (e: any) {
+      return { status: 400, body: { detail: e?.message ?? 'sign-in failed' } };
+    }
   });
 
+  route('POST', '/account/signout', async () => ok(await accounts.signOut()));
+
+  route('GET', '/account/credits', async () =>
+    ok({ credits: await accounts.balance(), history: await accounts.history() }),
+  );
+
+  route('POST', '/account/credits', async (req): Promise<Res> => {
+    const n = Number((req.body as { credits?: number } | null)?.credits ?? 0);
+    if (!Number.isFinite(n) || n <= 0) {
+      return { status: 400, body: { detail: 'credits must be a positive number' } };
+    }
+    const reason = String((req.body as { reason?: string } | null)?.reason ?? 'manual');
+    return ok({ credits: await accounts.grant(n, reason) });
+  });
+
+  route('GET', '/companion/traits', async () => {
+    const p = await companion.profile();
+    return ok({ traits: traits.normalise(p.traits), axes: traits.AXES });
+  });
+
+  route('POST', '/companion/traits', async (req): Promise<Res> => {
+    const chosen = traits.normalise((req.body ?? {}) as Record<string, string>);
+    await companion.update({ traits: chosen });
+    return ok({ traits: chosen });
+  });
+
+  // Memory is per-character and switches with it. The in-memory conversation is not
+  // memory: it is the transcript of talking to someone else, so it goes.
   route('POST', '/companion/character', async (req): Promise<Res> => {
     const body = (req.body ?? {}) as { character?: string };
-    return ok(await companion.setCharacter(body.character ?? 'poppy'));
+    const p = await companion.setCharacter(body.character ?? 'poppy');
+    clearHistory();
+    return ok(p);
   });
 
   route('POST', '/companion/update', async (req): Promise<Res> =>
@@ -221,6 +291,10 @@ export function registerHandlers(): void {
     };
     const turns = b.turns ?? [];
     const duration = Number(b.duration ?? 0);
+    // A call costs a credit, once it was actually a call. Same rule as main.py: a tap
+    // that opened and closed a screen is not a conversation, and charging for one is
+    // the first thing anybody would notice.
+    if (duration && (await accounts.account())) await accounts.spend(1, 'call');
     const profile0 = await companion.profile();
     const spoke = turns.some((t) => t.role === 'user');
 
@@ -399,7 +473,10 @@ export function registerHandlers(): void {
     return ok(b.plan ? await billing.setPlan(b.plan) : await billing.entitlement());
   });
 
-  route('DELETE', '/history', () => ok({ cleared: true }));
+  route('DELETE', '/history', () => {
+    clearHistory();
+    return ok({ cleared: true });
+  });
 
   // The model proposing what is worth remembering. Already saved by the time this
   // returns: the UI shows a receipt, not a permission prompt.

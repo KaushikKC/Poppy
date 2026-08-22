@@ -8,7 +8,7 @@
  * desktop when every streak write vanished, so new fields go in _DEFAULTS first.
  */
 
-import { traitsFor } from './characters';
+import { resolve } from './custom_characters';
 import { readJson, writeJson } from './store';
 
 const FILE = 'companion.json';
@@ -66,11 +66,10 @@ export type Profile = {
   plan?: string;
   model_tier?: string | null;
   /**
-   * How her replies arrive: as a voice note with no text, or as text with no voice.
-   * Deliberately exclusive. Showing both means the reply is read before it is heard,
-   * and then the voice is only something to wait through.
+   * Who this companion is, chosen by the user rather than by us. See traits.ts: the
+   * vibes are a stance for right now, these persist across every mode.
    */
-  reply_mode?: 'voice' | 'text';
+  traits?: Record<string, string> | null;
   calls_day?: Record<string, unknown> | null;
 };
 
@@ -118,7 +117,7 @@ export const DEFAULTS: Profile = {
   closeness: 0,
   plan: 'plus',
   model_tier: null,
-  reply_mode: 'voice',
+  traits: null,
   calls_day: null,
 };
 
@@ -143,26 +142,32 @@ export async function update(patch: Partial<Profile>): Promise<Profile> {
   return next;
 }
 
-/** Onboard: pick a character, and take their name, gender and voice with it. */
+/**
+ * Onboard: pick a character, and take their name, gender and voice with it.
+ *
+ * Resolved rather than looked up in the generated table, because the picker now also
+ * offers characters the user wrote. One of those carries its own name and voice and
+ * is not in the table at all.
+ */
 export async function create(character = 'poppy'): Promise<Profile> {
-  const t = traitsFor(character);
+  const c = await resolve(character);
   return update({
     onboarded: true,
-    character,
-    companion_name: t.name,
-    gender: t.gender,
-    voice: t.voice ?? DEFAULTS.voice,
+    character: c.key,
+    companion_name: c.name,
+    gender: c.gender,
+    voice: c.voice ?? DEFAULTS.voice,
     created_at: new Date().toISOString(),
   });
 }
 
 export async function setCharacter(character: string): Promise<Profile> {
-  const t = traitsFor(character);
+  const c = await resolve(character);
   return update({
-    character,
-    companion_name: t.name,
-    gender: t.gender,
-    voice: t.voice ?? DEFAULTS.voice,
+    character: c.key,
+    companion_name: c.name,
+    gender: c.gender,
+    voice: c.voice ?? DEFAULTS.voice,
   });
 }
 

@@ -17,20 +17,22 @@
  */
 
 import { runTurn } from './turn';
-import { PhraseChunker } from './chunker';
+import { speakIt } from './reply_shape';
 import { awaitEngines } from './engines';
 import { playback } from './playback';
 import type { SocketHandler, SocketReply } from '../bridge/host';
 import * as companion from './companion';
 import * as safety from './safety';
 import * as personas from './personas';
+import { resolve as resolveCharacter } from './custom_characters';
+import * as traits from './traits';
 import * as disclosure from './disclosure';
 import * as ritual from './ritual';
 import * as tone from './tone';
 import * as suggest from './persona_suggest';
 import * as memory from './memory_store';
 import * as boundaries from './boundaries';
-import { CRISIS_ADDENDUM, DISTRESS_ADDENDUM, SAFETY_ADDENDUM } from './prompts';
+import { CRISIS_ADDENDUM, CRISIS_LAYER, DISTRESS_ADDENDUM, SAFETY_ADDENDUM } from './prompts';
 
 /** Kept small on purpose: replies are 2-4 spoken sentences. */
 const SYSTEM_PROMPT =
@@ -66,6 +68,65 @@ export function resetCallTurns(): void {
 const MAX_HISTORY_TURNS = 6;
 
 /**
+ * Keep the prompt inside the window, whatever the user types. Twin of
+ * backend/context_budget.py — see it for the full reasoning.
+ *
+ * Nothing is reserved as a constant. A character written to the full 700 characters
+ * plus fifteen memories can exceed any constant worth picking, so the system prompt
+ * and the message are both measured on the turn they are used and history gets what
+ * is genuinely left. The message is clamped too: recording length bounds a spoken
+ * turn, but a typed one can be a paste of any size.
+ *
+ * This matters more here than on the desktop, because native_engines runs at n_ctx
+ * 2048 — half the desktop's 4096 — and the 1B has less room to spare in every sense.
+ */
+const N_CTX = 2048;
+const REPLY_RESERVE = 320;
+const PER_MESSAGE_OVERHEAD = 4;
+const CHARS_PER_TOKEN = 4;
+const USER_SHARE = 0.5;
+const ELISION = '\u2026[earlier part of this message trimmed]\u2026\n';
+
+const estimateTokens = (text: string) =>
+  Math.floor((text ?? '').length / CHARS_PER_TOKEN) + 1;
+
+/** The tail is kept, not the head: when someone pastes and then asks, the ask is last. */
+function clampUserText(text: string): string {
+  const limit = Math.floor(N_CTX * USER_SHARE);
+  if (estimateTokens(text) <= limit) return text;
+  const keepChars = limit * CHARS_PER_TOKEN - ELISION.length;
+  return ELISION + text.slice(-keepChars);
+}
+
+type Msg = { role: 'user' | 'assistant'; content: string };
+
+function fitContext(
+  history: Msg[],
+  system: string,
+  userText: string,
+): { history: Msg[]; text: string } {
+  const text = clampUserText(userText);
+  const fixed =
+    estimateTokens(system) +
+    estimateTokens(text) +
+    PER_MESSAGE_OVERHEAD * 2 +
+    REPLY_RESERVE;
+  const budget = N_CTX - fixed;
+  if (budget <= 0) return { history: [], text };
+
+  const recent = history.slice(-MAX_HISTORY_TURNS * 2);
+  let used = 0;
+  let keep = 0;
+  for (let i = recent.length - 1; i >= 0; i -= 1) {
+    const cost = estimateTokens(recent[i].content ?? '') + PER_MESSAGE_OVERHEAD;
+    if (used + cost > budget) break;
+    used += cost;
+    keep += 1;
+  }
+  return { history: keep ? recent.slice(recent.length - keep) : [], text };
+}
+
+/**
  * Speak a line she initiated herself: the opening line, or a sign-off. Text and audio,
  * no model turn. The whole line is revealed at once because it is already known, then
  * its audio streams phrase by phrase so the first sound still arrives quickly.
@@ -79,28 +140,44 @@ async function say(text: string, reply: SocketReply): Promise<void> {
   const profile = await companion.profile();
   const { speech: engine } = await awaitEngines();
 
-  reply.text(JSON.stringify({ type: 'config', sampleRate: engine.sampleRate }));
-  reply.text(JSON.stringify({ type: 'token', text: line }));
-
-  const chunker = new PhraseChunker();
-  const phrases: string[] = [];
-  for (const ch of line) {
-    const phrase = chunker.push(ch);
-    if (phrase) phrases.push(phrase);
+  // She opened the conversation, so she says it out loud — unless it is a one-line
+  // hello, which is exactly what an opening line usually is. Decided by the same
+  // rule a reply is decided by (reply_shape.ts), rather than by a setting: the two
+  // used to disagree, and the page received a line it could both read and hear,
+  // which makes the recording something to sit through rather than the message.
+  if (!speakIt(line)) {
+    reply.text(JSON.stringify({ type: 'token', text: line }));
+    reply.text(JSON.stringify({ type: 'done' }));
+    return;
   }
-  const tail = chunker.flush();
-  if (tail) phrases.push(tail);
 
-  // One at a time and in order, the same rule as a reply: concurrent synthesis
-  // thrashes and plays back scrambled.
+  // Config first so the page's player is configured before anything reaches it, then
+  // the recording notice. Same order and same frames as a spoken reply, because the
+  // frontend has to see one contract rather than two.
+  reply.text(JSON.stringify({ type: 'config', sampleRate: engine.sampleRate }));
+  reply.text(JSON.stringify({ type: 'recording' }));
+
+  // Rendered whole rather than phrase by phrase: there is no model still generating
+  // to race, so the only thing splitting it buys is a per-call overhead paid several
+  // times and a duration nobody can know up front.
   playback.reset();
-  for (const phrase of phrases) {
-    try {
-      const out = await engine.synthesize(phrase, profile.voice);
-      playback.push(out.samples, out.sampleRate);
-    } catch (err) {
-      console.log(`[tts] dropped phrase in say(): ${err}`);
-    }
+  try {
+    const out = await engine.synthesize(line, profile.voice);
+    const durationMs = (out.samples.length / out.sampleRate) * 1000;
+    // Pushed first: that is what keeps the replayable copy, and the frame carries its
+    // id. Her opening line is worth being able to hear twice as much as any other.
+    playback.push(out.samples, out.sampleRate);
+    reply.text(JSON.stringify({
+      type: 'voice',
+      durationMs,
+      text: line,
+      clipId: playback.currentClipId() ?? undefined,
+    }));
+  } catch (err) {
+    // Her opening line is the first thing anyone sees. If it cannot be spoken it is
+    // still shown, rather than the conversation starting with an error and nothing.
+    console.log(`[tts] the opening recording failed (${err})`);
+    reply.text(JSON.stringify({ type: 'token', text: line }));
   }
   reply.text(JSON.stringify({ type: 'done' }));
 }
@@ -119,7 +196,14 @@ export function createSocketHandler(): SocketHandler {
       const session = sessions.get(id);
       if (!session) return;
 
-      let msg: { type?: string; text?: string; persona?: string; emotion?: string };
+      let msg: {
+        type?: string;
+        text?: string;
+        persona?: string;
+        emotion?: string;
+        /** Did this arrive as speech? The page knows; it is not a setting. */
+        spoken?: boolean;
+      };
       try {
         msg = JSON.parse(data);
       } catch {
@@ -145,8 +229,17 @@ export function createSocketHandler(): SocketHandler {
       const profile = await companion.profile();
       memory.setCharacter(profile.character);
 
-      // The mode the user picked on the home screen. Sent with every turn by the
-      // UI, and it has to reach the prompt or the buttons only change colour.
+      // Who she is, and then the stance for right now.
+      //
+      // Character first, the way ws_handler.py assembles it: the character carries the
+      // shared core and their own personality paragraph, and the vibe is a frame on top
+      // of that. Building from the persona's own system_prompt instead (which is what
+      // this did) meant every character on the phone was Poppy with a different name,
+      // and a character the user wrote had nothing of theirs reach the model at all.
+      const char = await resolveCharacter(profile.character);
+      // The mode the user picked on the home screen. Sent with every turn by the UI,
+      // and it has to reach the prompt or the buttons only change colour. The flavour
+      // alone: the core in front of it is already there, from the character.
       const persona = personas.get(msg.persona ?? profile.vibe);
 
       // Assembled in the same order as ws_handler.py: identity, then the standing
@@ -168,19 +261,32 @@ export function createSocketHandler(): SocketHandler {
       // reliably and silently drops the rest, so they are ranked rather than stacked.
       // Safety outranks everything; the pact is asked once and then yields to
       // disclosure, which is the everyday behaviour.
-      const pactDue = risk0.level === null && callTurns >= ritual.ASK_FROM_TURN
+      // Never asked on behalf of someone else's character: the pact is our retention
+      // design, and a character the user wrote should not be made to negotiate a daily
+      // check-in time for us. Same rule as ws_handler.py.
+      const pactDue = risk0.level === null && !char.custom
+        && callTurns >= ritual.ASK_FROM_TURN
         && (await ritual.isDue());
       const pactBlock = pactDue ? ritual.asPromptBlock() : '';
       if (pactDue) await ritual.markAsked();
 
+      // Held back for a custom character too, and for a sharper reason than the pact:
+      // the disclosure block is a placement instruction ~1100 characters long, which
+      // outweighs a user's own description almost two to one. The model follows the
+      // loudest instruction rather than being who it was written to be.
       const disclosureBlock =
-        risk0.level === null && !pactBlock
+        risk0.level === null && !pactBlock && !char.custom
           ? await disclosure.asPromptBlock(undefined, undefined, callTurns)
           : '';
       // Her persona prompt carries the whole of who she is, so it replaces the
       // placeholder rather than being appended to it.
+      // Traits sit with identity rather than with the momentary stance: they are who
+      // she is, so they apply in every mode instead of being re-picked each call.
       let system =
-        persona.system_prompt.replace(/\bPoppy\b/g, profile.companion_name) +
+        char.system_prompt +
+        ' ' +
+        persona.flavor +
+        traits.asPromptBlock(profile.traits) +
         rules +
         SAFETY_ADDENDUM +
         remembered +
@@ -196,41 +302,55 @@ export function createSocketHandler(): SocketHandler {
       // Checked before a single token is generated, and the resource card is sent
       // straight away rather than after the reply: someone in the acute tier should
       // not have to wait through a spoken answer to see a helpline.
+      // Detection always runs — it is what holds the pact block back on a heavy turn —
+      // but everything the user sees or the model is told is on CRISIS_LAYER, so the
+      // switch means what its name says. Deliberately independent of ADULT and
+      // GUARDRAILS: appending a helpline is not a content restriction, and it never
+      // refuses a turn. Same three-way split as backend/config.py.
       const risk = risk0;
-      if (risk.level === 'crisis') {
+      if (CRISIS_LAYER && risk.level === 'crisis') {
         system += CRISIS_ADDENDUM;
         reply.text(JSON.stringify({ type: 'safety', resources: risk.resources }));
-      } else if (risk.level === 'distress') {
+      } else if (CRISIS_LAYER && risk.level === 'distress') {
         system += DISTRESS_ADDENDUM;
       }
 
       try {
-        // Voice notes or text, never both. The page does not have to be told which:
-        // in voice mode it receives a recording and no tokens, in text mode tokens
-        // and no recording, and it renders whatever arrives.
-        const deliver = profile.reply_mode === 'text' ? 'text' : 'voice';
-        if (deliver === 'voice') {
-          // She is recording. Sent before the model starts, because the whole point
-          // of the voice-note shape is that the wait is visible and explained.
-          reply.text(JSON.stringify({ type: 'recording' }));
-        }
-
+        // How it came in decides how it goes out. The page does not have to be told
+        // which: it receives a recording and no tokens, or tokens and no recording,
+        // and it renders whatever arrives.
+        // Measured per turn: the character, the message and history are all sized
+        // against the 2048 window before anything is sent, so a long reply or a
+        // pasted block can never push the system prompt off the left edge.
+        const sized = fitContext(session.history, system, msg.text);
         const said = await runTurn(
-          msg.text,
+          sized.text,
           {
             system,
-            history: session.history.slice(-MAX_HISTORY_TURNS * 2),
+            history: sized.history,
             voice: profile.voice,
             signal: session.abort.signal,
-            deliver,
+            spoken: msg.spoken !== false,
           },
           {
             onConfig: (sampleRate) =>
               reply.text(JSON.stringify({ type: 'config', sampleRate })),
             onAudio: () => {},
             onToken: (text) => reply.text(JSON.stringify({ type: 'token', text })),
-            onVoice: (durationMs) =>
-              reply.text(JSON.stringify({ type: 'voice', durationMs })),
+            // Sent when synthesis actually starts, not when the turn does. During
+            // generation nobody knows yet whether there will be a recording at all,
+            // and claiming there is one would be a guess shown as a fact.
+            onRecording: () => reply.text(JSON.stringify({ type: 'recording' })),
+            onVoice: (durationMs, spokenText) =>
+              reply.text(JSON.stringify({
+                type: 'voice',
+                durationMs,
+                text: spokenText,
+                // Desktop follows this frame with the WAV itself and the page keeps
+                // those bytes to replay. Nothing crosses the bridge here, so the page
+                // gets the id of the copy this side kept instead.
+                clipId: playback.currentClipId() ?? undefined,
+              })),
             onError: (message) => reply.text(JSON.stringify({ type: 'error', message })),
           },
         );
@@ -280,6 +400,20 @@ export function createSocketHandler(): SocketHandler {
 }
 
 /** For tests. */
+/**
+ * Forget the conversation so far, on every open socket.
+ *
+ * Called when the companion changes — a different character, or the one in use being
+ * deleted — because the history is the transcript of a conversation with someone else.
+ * Desktop does this in ws_handler.clear_history() for the same reason, and without it
+ * Kai's first turn on the phone would arrive with Poppy's last six messages behind it
+ * and the model would happily continue them. Memory is per-character and already
+ * switches; this is the in-memory context, which did not.
+ */
+export function clearHistory(): void {
+  for (const session of sessions.values()) session.history = [];
+}
+
 export function activeSessions(): number {
   return sessions.size;
 }
