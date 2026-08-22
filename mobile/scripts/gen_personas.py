@@ -29,6 +29,14 @@ for key, vibe in personas.PERSONAS.items():
         # The assembled prompt, not the flavour fragment: this is the string the
         # turn loop actually sends.
         "system_prompt": personas._system_prompt(vibe),
+        # The stance on its own, without the shared core in front of it. The turn
+        # loop builds its prompt character-first, the way ws_handler.py does, so it
+        # needs the vibe without a second copy of the core glued to the front.
+        "flavor": vibe["flavor"],
+        # The picker colours each button from this and does not check first
+        # (persona_picker.js reads p.avatar.outline straight off the row), so leaving
+        # it out of GET /personas does not degrade the picker, it throws inside it.
+        "avatar": vibe["avatar"],
     }
 
 HEADER = '''/**
@@ -47,6 +55,9 @@ export type Persona = {
   description: string;
   tagline: string;
   system_prompt: string;
+  /** The stance alone. Appended after the character's own prompt; see socket.ts. */
+  flavor: string;
+  avatar: { face: string; gradient: string; eyes: string; outline: string; glow: string };
 };
 
 '''
@@ -58,6 +69,7 @@ export const UI_LIST = Object.values(PERSONAS).map((p) => ({
   name: p.name,
   description: p.description,
   tagline: p.tagline,
+  avatar: p.avatar,
 }));
 
 export function get(key: string | null | undefined): Persona {
