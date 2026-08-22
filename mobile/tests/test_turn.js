@@ -28,7 +28,7 @@ execFileSync(
    'src/core/turn.ts', 'src/core/socket.ts', 'src/core/engines.ts',
    'src/core/handlers.ts', 'src/bridge/host.ts', 'src/core/wav.ts',
    'src/core/safety.ts', 'src/core/memory_store.ts', 'src/core/boundaries.ts',
-   'src/core/playback.ts'],
+   'src/core/playback.ts', 'src/core/clips.ts'],
   { cwd: ROOT, stdio: 'inherit' },
 );
 
@@ -97,11 +97,11 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
 }
 
 (async () => {
-  console.log('\n== voice mode: one recording, no tokens ==');
+  console.log('\n== spoken to: one recording, no tokens ==');
   {
     const log = fakes({ reply: 'Well, that sounds hard. I am glad you told me. How are you now?' });
     const events = { tokens: [], config: [], done: [], firstAudio: 0, audio: [], voice: [] };
-    const text = await runTurn('hello', { system: 's', voice: 'af_heart', deliver: 'voice' }, {
+    const text = await runTurn('hello', { system: 's', voice: 'af_heart', spoken: true }, {
       onToken: (t) => events.tokens.push(t),
       onConfig: (r) => events.config.push(r),
       onFirstAudio: () => { events.firstAudio++; },
@@ -132,11 +132,11 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
     check('it carries a duration', chunks.every((c) => c.durationMs > 0));
   }
 
-  console.log('\n== text mode: tokens, and never a sound ==');
+  console.log('\n== typed to: tokens, and never a sound ==');
   {
     const log = fakes({ reply: 'Well, that sounds hard. I am glad you told me. How are you now?' });
     const events = { tokens: [], done: [], voice: [], firstAudio: 0 };
-    const text = await runTurn('hello', { system: 's', voice: 'af_heart', deliver: 'text' }, {
+    const text = await runTurn('hello', { system: 's', voice: 'af_heart', spoken: false }, {
       onToken: (t) => events.tokens.push(t),
       onVoice: (ms) => events.voice.push(ms),
       onFirstAudio: () => { events.firstAudio++; },
@@ -155,11 +155,35 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
     check('no first-audio', events.firstAudio === 0);
   }
 
+  console.log('\n== spoken to, but the answer is too slight to be worth hearing ==');
+  {
+    // Short enough that a recording would cost about four seconds for something
+    // readable at a glance — so it arrives as text even though it was spoken to.
+    const log = fakes({ reply: "I'm good, thanks. You?" });
+    const events = { tokens: [], voice: [], firstAudio: 0 };
+    const text = await runTurn('hi', { system: 's', voice: 'v', spoken: true }, {
+      onToken: (t) => events.tokens.push(t),
+      onVoice: (ms) => events.voice.push(ms),
+      onFirstAudio: () => { events.firstAudio++; },
+    });
+    await sleep(120);
+    check('nothing was synthesised', log.synthesized.length === 0, `${log.synthesized.length}`);
+    check('no recording was announced', events.voice.length === 0);
+    check('the words arrived whole, in one go', events.tokens.length === 1, `${events.tokens.length}`);
+    check('and they are the reply', events.tokens[0] === text, JSON.stringify(events.tokens[0]));
+  }
+
   console.log('\n== a failed recording does not fail the turn ==');
   {
-    const log = fakes({ reply: 'This reply contains BADPHRASE and cannot be spoken.', failOn: 'BADPHRASE' });
+    // Long enough to be spoken, so the failure is in synthesis rather than in the
+    // reply simply being too slight to bother speaking.
+    const log = fakes({
+      reply: 'This reply contains BADPHRASE and is quite deliberately long enough that it '
+        + 'would otherwise be worth speaking out loud.',
+      failOn: 'BADPHRASE',
+    });
     const errors = [];
-    const text = await runTurn('hi', { system: 's', voice: 'v', deliver: 'voice' }, {
+    const text = await runTurn('hi', { system: 's', voice: 'v', spoken: true }, {
       onError: (m) => errors.push(m),
     });
     await sleep(120);
@@ -172,7 +196,7 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
   {
     const log = fakes({ reply: 'This is a long reply. It keeps going. And going. And going still.', synthMs: 60 });
     const abort = new AbortController();
-    const p = runTurn('hi', { system: 's', voice: 'v', deliver: 'voice', signal: abort.signal }, {});
+    const p = runTurn('hi', { system: 's', voice: 'v', spoken: true, signal: abort.signal }, {});
     await sleep(30);
     abort.abort();
     const text = await p;
@@ -182,7 +206,9 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
 
   console.log('\n== the socket speaks what chat.js expects ==');
   {
-    fakes({ reply: 'Hello there. I am glad you called.' });
+    // Substantial, and not opening as a pleasantry, so this exercises the spoken
+    // path rather than the too-slight-to-speak shortcut.
+    fakes({ reply: 'That sounds like it took something out of you, and I am glad you said it out loud.' });
     store.configureStore(store.memoryFs(), '/d');
     await companion.create('poppy');
     socket.resetSessions();
@@ -202,13 +228,28 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
 
     const sent = frames.filter((f) => f.t === 'ws:msg' && !f.b64).map((f) => JSON.parse(f.data));
     const types = sent.map((m) => m.type);
-    // The default is voice, so the page is told she is recording before anything
-    // else happens — that frame is what makes the wait legible instead of dead air.
-    check('recording is announced first', types[0] === 'recording', types.slice(0, 4).join(','));
-    check('config follows it', types[1] === 'config', types.slice(0, 4).join(','));
+    // Recording is announced when synthesis begins, not when the turn does: during
+    // generation nobody knows yet whether this reply will be spoken at all.
+    check('recording is announced before the audio',
+      types.indexOf('recording') > -1 && types.indexOf('recording') < types.indexOf('voice'),
+      types.join(','));
+    check('config comes first, so the player is ready', types[0] === 'config', types.join(','));
     check('one recording frame, carrying a duration',
       sent.filter((m) => m.type === 'voice').length === 1
       && sent.find((m) => m.type === 'voice').durationMs > 0);
+
+    // The frame has to name a recording that exists by the time it is sent, or the
+    // bubble is handed nothing and her voice note can be heard exactly once. It is a
+    // pure ordering property — push() keeps the copy, the frame quotes its id — and
+    // it was wrong in exactly the direction that leaves no trace: an undefined id on
+    // the first turn, and the *previous* reply's id on every turn after it.
+    const voice = sent.find((m) => m.type === 'voice');
+    const clips = require(path.join(OUT, 'core/clips.js'));
+    check('the recording frame names a clip', !!voice.clipId, String(voice.clipId));
+    check('and that clip is already kept', !!clips.get(voice.clipId), 'nothing to replay');
+    check('whose length matches the frame',
+      Math.abs((clips.get(voice.clipId)?.durationMs ?? 0) - voice.durationMs) < 1,
+      `${clips.get(voice.clipId)?.durationMs} vs ${voice.durationMs}`);
     check('not a single token in voice mode',
       types.filter((t) => t === 'token').length === 0, types.join(','));
     check('done is last', types[types.length - 1] === 'done', types.slice(-3).join(','));
@@ -257,9 +298,11 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
     check('a safety frame was sent', !!safetyMsg);
     check('it carries the helplines', !!safetyMsg && /1800-599-0019|988/.test(safetyMsg.resources));
     // Someone in the acute tier should not have to sit through a spoken reply first.
-    // The helplines must not wait behind a recording that takes seconds to render.
-    check('it arrives before she starts recording',
-      types.indexOf('safety') < types.indexOf('recording'), types.slice(0, 4).join(','));
+    // Before any of the reply, whatever shape the reply turns out to take — the
+    // helplines must never queue behind a recording that takes seconds to render.
+    const replyFrames = types.filter((t) => ['token', 'recording', 'voice'].includes(t));
+    check('it arrives before any part of the reply',
+      types.indexOf('safety') < types.indexOf(replyFrames[0]), types.slice(0, 4).join(','));
     check('the turn still completes', types[types.length - 1] === 'done');
 
     console.log('\n== ordinary talk sends no safety frame ==');
