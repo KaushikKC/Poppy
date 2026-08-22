@@ -17,9 +17,9 @@ import { getCoreMlSupport } from 'react-native-sherpa-onnx';
 
 import { KOKORO_DIR, WHISPER_PATH } from '../models';
 import { DocumentDirectoryPath } from '@dr.pogodin/react-native-fs';
-import { llmPath } from './model_tier';
+import { chosenLlm } from './downloader';
 import * as companion from './companion';
-import { setEngines, type Engines, type Llm, type Speech, type Stt } from './engines';
+import { MAX_TOKENS_SPOKEN, setEngines, type Engines, type Llm, type Speech, type Stt } from './engines';
 import { floatToPcm16 } from '../audio';
 import { ttsDiagnostic } from './tts_info';
 
@@ -96,12 +96,11 @@ export { ttsDiagnostic } from './tts_info';
  * history, so the larger window was never being filled — it was just costing compute on
  * every single turn.
  *
- * 90 tokens rather than 120 for the same reason: a spoken reply that runs past ~90
- * tokens is too long to listen to anyway, so this caps the worst case rather than the
- * normal one.
+ * The reply cap is per turn rather than a constant here: a spoken reply is capped at
+ * what someone will sit through, a typed one at what the context budget reserved for
+ * it. Both live in engines.ts, next to the interface they belong to.
  */
 const N_CTX = 2048;
-const MAX_TOKENS = 90;
 
 export type Loaded = {
   whisper: WhisperContext;
@@ -209,9 +208,12 @@ async function loadOnce(onProgress: (msg: string) => void): Promise<void> {
   // Whichever model the user settled on, which may not be the one their RAM suggests:
   // a smaller one runs cooler, and that is a trade they are allowed to make.
   const tier = ((await companion.profile()).model_tier ?? null) as
-    | Parameters<typeof llmPath>[0]
+    | Parameters<typeof chosenLlm>[0]
     | null;
-  const modelFile = `${DocumentDirectoryPath}/${await llmPath(tier)}`;
+  // Resolved against the disk, not against what this build would prefer: loading a
+  // path that was never downloaded is a load that never finishes, seen from the page
+  // as a turn that thinks until the engine wait times out.
+  const modelFile = `${DocumentDirectoryPath}/${(await chosenLlm(tier)).path}`;
   const llama = await initLlama({
     model: modelFile,
     n_ctx: N_CTX,
@@ -294,12 +296,13 @@ async function loadOnce(onProgress: (msg: string) => void): Promise<void> {
       messages: Array<{ role: 'user' | 'assistant'; content: string }>,
       onToken: (token: string) => void,
       signal?: AbortSignal,
+      maxTokens?: number,
     ) => {
       let acc = '';
       await llama.completion(
         {
           messages: [{ role: 'system', content: system }, ...messages],
-          n_predict: MAX_TOKENS,
+          n_predict: maxTokens ?? MAX_TOKENS_SPOKEN,
           temperature: 0.7,
           stop: ['</s>', '<|eot_id|>'],
         },

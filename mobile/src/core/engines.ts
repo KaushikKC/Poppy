@@ -16,16 +16,35 @@ export type Stt = {
   transcribe: (pcm16k: Float32Array) => Promise<string>;
 };
 
+/**
+ * How long a reply is allowed to get, and why there are two numbers.
+ *
+ * The 90 is a listening limit, not a model limit: a spoken reply past roughly ninety
+ * tokens is too long to sit through, and it was the only cap here while every reply
+ * was spoken. Adult mode removed the brevity rule from the prompt — she is now told to
+ * take as much room as the moment needs — so a typed reply held to ninety tokens stops
+ * mid-sentence, which reads as the app breaking rather than as her being brief.
+ *
+ * The text cap stays under REPLY_RESERVE in socket.ts (320), so the budget that sizes
+ * the prompt and the cap that ends the reply cannot disagree.
+ */
+export const MAX_TOKENS_SPOKEN = 90;
+export const MAX_TOKENS_TEXT = 300;
+
 export type Llm = {
   /**
    * Stream a reply. `onToken` is called for each token as it arrives; resolves
    * with the complete text.
+   *
+   * `maxTokens` defaults to the spoken cap: a caller that does not care is a caller
+   * making a recording.
    */
   complete: (
     system: string,
     messages: Array<{ role: 'user' | 'assistant'; content: string }>,
     onToken: (token: string) => void,
     signal?: AbortSignal,
+    maxTokens?: number,
   ) => Promise<string>;
 };
 
