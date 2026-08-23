@@ -169,6 +169,16 @@ function dismissConsent() {
 }
 
 // ── "What Poppy knows about you" screen ────────────────────────────────────────
+/**
+ * What she knows — the design system's Memory Vault (screens/memory.jsx).
+ *
+ * "Not a settings page, a headline feature." Every competitor in this category gets
+ * complaints about memory, so ours is the opposite of a hidden store: a count you own,
+ * category rails you can filter by, temporary memories drawn as temporary, and a
+ * receipt behind every card saying why she has it.
+ */
+let _memFilter = "all";
+
 async function renderMemory() {
   let records = [];
   try {
@@ -180,35 +190,80 @@ async function renderMemory() {
 
   memPanel.innerHTML = "";
 
-  // The rules she's been told, first. A rule you can't see or undo is worse than
-  // no rule at all, and these ones change what she will and won't say.
-  await renderRules();
+  const nav = document.createElement("div");
+  nav.className = "navbar mem-nav";
+  const back = document.createElement("button");
+  back.type = "button";
+  back.className = "iconbtn mem-back";
+  back.setAttribute("aria-label", "Back");
+  back.textContent = "‹";
+  back.addEventListener("click", () => {
+    memPanel.classList.add("hidden");
+    document.body.classList.remove("mem-open");
+  });
+  const heading = document.createElement("span");
+  heading.className = "t-h2";
+  heading.textContent = window.Pronouns
+    ? window.Pronouns.fill("What {subj} knows")
+    : "What she knows";
+  nav.append(back, heading);
+  memPanel.appendChild(nav);
 
-  const title = document.createElement("div");
-  title.className = "memory-title";
-  title.textContent = records.length
-    ? "What I remember about you"
-    : "I don't remember anything yet";
-  memPanel.appendChild(title);
+  const body = document.createElement("div");
+  body.className = "mem-body";
+  memPanel.appendChild(body);
+
+  // The count, owned. "41 things, all yours" is the whole argument of this screen in
+  // one line: it is a number you can act on, not a number kept about you.
+  const summary = document.createElement("div");
+  summary.className = "glass pad4 row between mem-summary";
+  const n = records.length;
+  summary.innerHTML =
+    '<span class="stack gap1">' +
+      `<span class="t-sm semi tnum">${n ? `${n} ${n === 1 ? "thing" : "things"}, all yours` : "Nothing yet"}</span>` +
+      `<span class="t-xs muted">${n ? "Edit or delete any of them. She won't argue." : "She'll remember things as you talk."}</span>` +
+    "</span>";
+  body.appendChild(summary);
+
+  // The rules she has been told. A rule you cannot see or undo is worse than no rule.
+  await renderRules(body);
 
   if (!records.length) return;
 
-  // Group by category, in the canonical order.
   const order = ["profile", "goals", "people", "ongoing", "temporary", "sensitive"];
   const groups = {};
   records.forEach((r) => (groups[r.category] = groups[r.category] || []).push(r));
 
-  order.filter((cat) => groups[cat]).forEach((cat) => {
-    const header = document.createElement("div");
-    header.className = "memory-cat";
-    header.textContent = CATEGORY_LABELS[cat] || cat;
-    memPanel.appendChild(header);
-
-    const ul = document.createElement("ul");
-    ul.className = "memory-list";
-    groups[cat].forEach((r) => ul.appendChild(memoryRow(r)));
-    memPanel.appendChild(ul);
+  // Filter chips. Only categories that actually have something in them: a filter that
+  // leads to an empty screen is a filter that should not have been offered.
+  const chips = document.createElement("div");
+  chips.className = "row wrap gap2 mem-chips";
+  const present = ["all", ...order.filter((c) => groups[c])];
+  present.forEach((cat) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip chip--tiny" + (cat === _memFilter ? " chip--on" : "");
+    chip.textContent = cat === "all" ? "All" : CATEGORY_LABELS[cat] || cat;
+    chip.addEventListener("click", () => {
+      _memFilter = cat;
+      renderMemory();
+    });
+    chips.appendChild(chip);
   });
+  body.appendChild(chips);
+
+  order
+    .filter((cat) => groups[cat] && (_memFilter === "all" || _memFilter === cat))
+    .forEach((cat) => {
+      const section = document.createElement("div");
+      section.className = "stack gap2 mem-section";
+      const label = document.createElement("span");
+      label.className = "t-label muted";
+      label.textContent = CATEGORY_LABELS[cat] || cat;
+      section.appendChild(label);
+      groups[cat].forEach((r) => section.appendChild(memoryCard(r, cat)));
+      body.appendChild(section);
+    });
 
   const forget = document.createElement("button");
   forget.type = "button";
@@ -218,27 +273,65 @@ async function renderMemory() {
     await fetch(`${MEM_BACKEND}/memory`, { method: "DELETE" }).catch(() => {});
     renderMemory();
   });
-  memPanel.appendChild(forget);
+  body.appendChild(forget);
 }
 
-function memoryRow(r) {
-  const li = document.createElement("li");
-  li.className = "memory-item";
+/** How long ago, in the words a person would use. */
+function when(iso) {
+  if (!iso) return "";
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (days <= 0) return "saved today";
+  if (days === 1) return "saved yesterday";
+  if (days < 30) return `saved ${days} days ago`;
+  const months = Math.round(days / 30);
+  return `saved ${months} ${months === 1 ? "month" : "months"} ago`;
+}
 
-  const text = document.createElement("span");
-  text.className = "memory-text";
+function memoryCard(r, cat) {
+  const card = document.createElement("div");
+  // The rail carries the category and a dashed one means temporary, so what kind of
+  // memory this is reads before the text does.
+  card.className = `memcard memcard--${cat} stack gap2`;
+  if (cat === "temporary" || r.expires_at) card.classList.add("memcard--temp");
+
+  const text = document.createElement("p");
+  text.className = "t-body";
   text.textContent = r.text;
 
-  const why = document.createElement("span");
-  why.className = "memory-why";
-  why.textContent = r.why ? "why?" : "";
-  if (r.why) why.title = `You said: "${r.why}"`;
+  const meta = document.createElement("span");
+  meta.className = "t-xs muted tnum mem-meta";
+  meta.textContent = r.expires_at
+    ? `expires ${new Date(r.expires_at).toLocaleDateString()}`
+    : when(r.created_at);
+
+  const actions = document.createElement("div");
+  actions.className = "mem-actions";
+
+  // The receipt. "Why she remembers" is a whole screen in the design system, and the
+  // thing that screen exists to show is this: the words you actually said. A callback
+  // reads as a gift rather than as surveillance only when the provenance is right here.
+  if (r.why) {
+    const why = document.createElement("button");
+    why.type = "button";
+    why.className = "chip chip--tiny";
+    why.textContent = "Why she has this";
+    const receipt = document.createElement("p");
+    receipt.className = "mem-receipt hidden";
+    receipt.textContent = `You said: "${r.why}"`;
+    why.addEventListener("click", () => {
+      const shown = !receipt.classList.toggle("hidden");
+      why.textContent = shown ? "Hide" : "Why she has this";
+    });
+    actions.appendChild(why);
+    card.append(text, meta, actions, receipt);
+  } else {
+    card.append(text, meta, actions);
+  }
 
   const edit = document.createElement("button");
   edit.type = "button";
-  edit.className = "memory-edit";
-  edit.title = "Edit";
-  edit.textContent = "✎";
+  edit.className = "chip chip--tiny";
+  edit.textContent = "Edit";
   edit.addEventListener("click", async () => {
     const next = prompt("Edit this memory:", r.text);
     if (next == null || !next.trim() || next.trim() === r.text) return;
@@ -247,24 +340,23 @@ function memoryRow(r) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: next.trim() }),
     }).catch(() => {});
-    // §2's IKEA effect: editing what she remembers is the highest-value quest in
-    // the pool, so the close needs to know it happened.
+    // §2's IKEA effect: editing what she remembers is the highest-value quest in the
+    // pool, so the close needs to know it happened.
     window._callEditedMemory = true;
     renderMemory();
   });
 
   const del = document.createElement("button");
   del.type = "button";
-  del.className = "memory-del";
-  del.title = "Forget this";
-  del.textContent = "✕";
+  del.className = "chip chip--tiny mem-del";
+  del.textContent = "Forget";
   del.addEventListener("click", async () => {
     await fetch(`${MEM_BACKEND}/memory/${r.id}`, { method: "DELETE" }).catch(() => {});
     renderMemory();
   });
 
-  li.append(text, why, edit, del);
-  return li;
+  actions.append(edit, del);
+  return card;
 }
 
 if (memBtn && memPanel) {
@@ -272,8 +364,12 @@ if (memBtn && memPanel) {
     if (memPanel.classList.contains("hidden")) {
       await renderMemory();
       memPanel.classList.remove("hidden");
+      // The orb lives in the chat header at a z-index of its own, so it drew on top
+      // of a screen that covers the chat. It belongs to the conversation, not here.
+      document.body.classList.add("mem-open");
     } else {
       memPanel.classList.add("hidden");
+      document.body.classList.remove("mem-open");
     }
   });
 }
@@ -282,7 +378,7 @@ if (memBtn && memPanel) {
 // The rules the user has set for her: never raise this, always ask about that.
 // Set by saying so in a call ("don't ask me about my dad"); shown here so they
 // can be checked and undone.
-async function renderRules() {
+async function renderRules(host) {
   let rules = { avoid: [], always: [] };
   try {
     rules = await (await fetch(`${MEM_BACKEND}/boundaries`)).json();
@@ -321,5 +417,5 @@ async function renderRules() {
       wrap.appendChild(row);
     });
   });
-  memPanel.appendChild(wrap);
+  (host || memPanel).appendChild(wrap);
 }
