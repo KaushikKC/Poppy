@@ -37,7 +37,15 @@ import {
   writeFile,
 } from '@dr.pogodin/react-native-fs';
 
-import { ALL_TIERS, requiredModels, specsForTier, type ModelSpec, type Tier } from './model_tier';
+import {
+  ALL_TIERS,
+  SUPPORT_MODELS,
+  chosenTier,
+  llmVariants,
+  specsForTier,
+  type ModelSpec,
+  type Tier,
+} from './model_tier';
 
 export type Phase = 'checking' | 'downloading' | 'extracting' | 'verifying' | 'done' | 'error';
 
@@ -128,6 +136,37 @@ async function present(spec: ModelSpec): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * The language model this install will actually load.
+ *
+ * Preference decides what a fresh install fetches; the disk decides what an install
+ * that already finished keeps using. A phone holding a working model must never be
+ * sent back to the setup screen because the build changed its mind about which build
+ * of that model it likes — that reads as the app losing a download it already made,
+ * and every turn attempted meanwhile sits in "thinking" until the engine wait gives up.
+ */
+export async function chosenLlm(saved?: Tier | null): Promise<ModelSpec> {
+  const variants = llmVariants(await chosenTier(saved));
+  for (const spec of variants) {
+    if (await present(spec)) {
+      if (spec !== variants[0]) {
+        console.log(
+          `[model] using ${spec.path}, which is already on the device, rather than ` +
+            `downloading ${variants[0].path}. Delete it from the models screen to ` +
+            'fetch the preferred build.',
+        );
+      }
+      return spec;
+    }
+  }
+  return variants[0];
+}
+
+/** Everything this install needs on disk, with the language model resolved. */
+export async function requiredModels(saved?: Tier | null): Promise<ModelSpec[]> {
+  return [await chosenLlm(saved), ...SUPPORT_MODELS];
 }
 
 export async function modelsPresent(saved?: Tier | null): Promise<boolean> {

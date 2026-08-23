@@ -36,6 +36,8 @@
 
 import DeviceInfo from 'react-native-device-info';
 
+import { ADULT } from './prompts';
+
 export type Tier = 'gemma1b' | '1b' | '1_5b' | '3b';
 
 /**
@@ -88,6 +90,86 @@ const LLM: Record<Tier, ModelSpec> = {
   },
 };
 
+/**
+ * The same models with the refusal direction projected out of the weights.
+ *
+ * The prompt switches were only ever half of adult mode. The phone was downloading
+ * stock Instruct weights while its prompt told her nothing was off limits, so she
+ * refused anyway — and refused in a way that reads as her character rather than as a
+ * misconfiguration, which is why it survives being obvious. This is the same fix
+ * backend/model_tier.py got for MLX and llama.cpp; the phone was the half left behind.
+ *
+ * Sizes are the real Content-Length of each URL, checked the same way the stock ones
+ * were. The abliterated 1B is 147 MB larger than the stock 1B, which is the whole cost
+ * of this on the shipped tier.
+ *
+ * Separate paths, deliberately: a phone that already holds the stock file keeps it,
+ * downloads this beside it, and is offered the old one for deletion by unusedModels().
+ *
+ * Gemma 3 1B has no abliterated GGUF worth shipping, so it falls back to stock and
+ * says so. A silent fallback here looks exactly like the bug this is fixing.
+ */
+const LLM_ADULT: Partial<Record<Tier, ModelSpec>> = {
+  '1b': {
+    path: 'models/llm/llama-3.2-1b-abliterated-q4.gguf',
+    url: 'https://huggingface.co/mradermacher/Llama-3.2-1B-Instruct-abliterated-GGUF/resolve/main/Llama-3.2-1B-Instruct-abliterated.Q4_K_M.gguf',
+    bytes: 955_445_792,
+    label: 'Llama 3.2 1B',
+  },
+  '1_5b': {
+    path: 'models/llm/qwen2.5-1.5b-abliterated-q4.gguf',
+    url: 'https://huggingface.co/mradermacher/Qwen2.5-1.5B-Instruct-abliterated-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-abliterated.Q4_K_M.gguf',
+    bytes: 986_049_088,
+    label: 'Qwen2.5 1.5B',
+  },
+  '3b': {
+    path: 'models/llm/llama-3.2-3b-abliterated-q4.gguf',
+    url: 'https://huggingface.co/QuantFactory/Llama-3.2-3B-Instruct-abliterated-GGUF/resolve/main/Llama-3.2-3B-Instruct-abliterated.Q4_K_M.gguf',
+    bytes: 2_019_377_472,
+    label: 'Llama 3.2 3B',
+  },
+};
+
+let warned = false;
+
+/**
+ * What a fresh install should fetch for this tier: the weights that match the prompt
+ * this build ships. Not necessarily the ones already on the phone — see llmVariants().
+ */
+export function preferredLlm(tier: Tier): ModelSpec {
+  if (!ADULT) return LLM[tier];
+  const adult = LLM_ADULT[tier];
+  if (adult) return adult;
+  if (!warned) {
+    warned = true;
+    console.log(
+      `[model] adult mode is on but there is no abliterated build for ${tier}; ` +
+        'loading stock weights, which will still refuse.',
+    );
+  }
+  return LLM[tier];
+}
+
+/**
+ * Every build of this tier's model, best first.
+ *
+ * The point is the second entry. Changing which weights this build prefers must not
+ * turn into a second download for someone who already has a working model on their
+ * phone: the setup screen would reappear on an install that was finished, ask for
+ * another gigabyte, and until it arrived every turn would sit in "thinking" until the
+ * engine wait timed out. Downloading is the last resort, not the first check.
+ *
+ * downloader.chosenLlm() walks this against the disk. Anyone who wants the preferred
+ * build fetched can delete the old one from the models screen, which is what that
+ * screen is for.
+ */
+export function llmVariants(tier: Tier): ModelSpec[] {
+  const preferred = preferredLlm(tier);
+  const other = preferred === LLM[tier] ? LLM_ADULT[tier] : LLM[tier];
+  return other ? [preferred, other] : [preferred];
+}
+
+
 /** Whisper and Kokoro are the same on every tier: neither is the memory problem. */
 const WHISPER: ModelSpec = {
   path: 'models/whisper/ggml-base.en.bin',
@@ -114,6 +196,9 @@ const KOKORO: ModelSpec = {
   label: 'Her voice',
   archive: true,
 };
+
+/** Whisper and Kokoro: needed whatever the language model turns out to be. */
+export const SUPPORT_MODELS: ModelSpec[] = [WHISPER, KOKORO];
 
 /** Total physical RAM in GB, or a conservative 4 if it cannot be read. */
 export async function totalRamGb(): Promise<number> {
@@ -158,6 +243,22 @@ export function tierForRam(gb: number): Tier {
  */
 const SHIPPED: Tier = '1b';
 
+/*
+ * The 1B, deliberately, and what it costs.
+ *
+ * Measured 2026-08-22 on the same character prompt and the same explicit request: the
+ * abliterated 3B complied and stayed in character, the abliterated 1B answered "I
+ * can't create explicit content". Abliteration removes a refusal direction from the
+ * weights and at 1B there is not enough model left for that to hold.
+ *
+ * Shipping the 1B anyway is a product decision, made 2026-08-22: it is the coolest
+ * running option on a phone that is also holding Whisper, Kokoro, a WebView and React
+ * Native, and that matters more here than adult replies do. The consequence is simply
+ * true and worth leaving written down rather than rediscovering from a tester report:
+ * on the phone, explicit requests will be declined. The browser and the desktop app
+ * run the abliterated 3B through Ollama and do not have this limit.
+ */
+
 /**
  * The model this build uses. The argument is accepted and ignored: a tier saved by an
  * older build must not resurrect a model this one no longer ships, or the app would
@@ -167,24 +268,26 @@ export async function chosenTier(_saved?: Tier | null): Promise<Tier> {
   return SHIPPED;
 }
 
+/**
+ * What a fresh install needs. Callers that should accept a model already on the phone
+ * want downloader.requiredModels(), which checks the disk first.
+ */
 export async function requiredModels(saved?: Tier | null): Promise<ModelSpec[]> {
   const tier = await chosenTier(saved);
-  return [LLM[tier], WHISPER, KOKORO];
+  return [preferredLlm(tier), ...SUPPORT_MODELS];
 }
 
 /** What the first-run screen names, so the download is never an unlabelled 800 MB. */
 export async function describe(saved?: Tier | null): Promise<string> {
-  return LLM[await chosenTier(saved)].label;
+  return preferredLlm(await chosenTier(saved)).label;
 }
 
 /** Every tier, for finding models on disk that are no longer wanted. */
 export const ALL_TIERS: Tier[] = ['gemma1b', '1b', '1_5b', '3b'];
 
 export function specsForTier(tier: Tier): ModelSpec[] {
-  return [LLM[tier], WHISPER, KOKORO];
+  // Both variants: this is what finds a model on disk that is no longer wanted, and
+  // after a build flips ADULT the file left behind is the other one.
+  return [...llmVariants(tier), ...SUPPORT_MODELS];
 }
 
-/** Where the chosen model's weights are, for the engine to load. */
-export async function llmPath(saved?: Tier | null): Promise<string> {
-  return LLM[await chosenTier(saved)].path;
-}
