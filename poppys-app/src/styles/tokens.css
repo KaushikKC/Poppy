@@ -1,0 +1,377 @@
+/* ===========================================================
+   POPPYS — DESIGN TOKENS
+   Palette sampled directly from the reference screenshot.
+   Daylight (default) + Night (wind-down ritual / dark mode).
+   =========================================================== */
+
+:root {
+  /* --- Core hues ------------------------------------------------ */
+  --sky-50:  #EFF5FB;
+  --sky-100: #DDE9F5;
+  --sky-200: #C9DDF0;
+  --sky-300: #B2CDE7;   /* the ground. sampled: #B2CDE7 */
+  --sky-400: #9EBBDA;
+  --sky-500: #8AA6C6;
+  --sky-600: #7189A9;
+
+  --cream-50:  #FBF9F4;
+  --cream-100: #F4F0E8;  /* glass material. sampled: #F4F0E8 */
+  --cream-200: #EDE6D9;
+  --cream-300: #DDD3BF;
+  --cream-400: #D5CBB6;  /* hairline / tan. sampled: #D5CBB6 */
+
+  --leaf-900: #0B1709;
+  --leaf-800: #162814;   /* primary ink. sampled: #162814 */
+  --leaf-700: #21391D;
+  --leaf-600: #324A2C;   /* sampled: #324A2C */
+  --leaf-500: #4A6841;
+  --leaf-400: #6B8560;
+  --leaf-300: #9AAE92;
+
+  --poppy-400: #E4615E;
+  --poppy-500: #D53D3B;  /* the one loud accent. sampled: #D53D3B */
+  --poppy-600: #B93230;
+  --poppy-700: #93231F;
+
+  --amber-200: #EBDCC2;
+  --amber-300: #DCC49B;
+  --amber-500: #BC9564;  /* warm secondary. sampled: #BC9564 */
+  --amber-600: #9C7846;
+
+  --iris-400: #7A70B4;
+  --iris-600: #5F5696;   /* companion orb / premium. sampled: #5F5696 */
+  --iris-800: #352C56;   /* sampled: #352C56 */
+
+  /* Warm neutral — biased toward cream, never a dead grey */
+  --warm-100: #E7E3D9;
+  --warm-300: #BDB8AA;
+  --warm-500: #8C8A80;
+  --warm-700: #5E5F58;
+
+  /* --- Semantic ------------------------------------------------- */
+  --ground:        linear-gradient(178deg, var(--sky-200) 0%, var(--sky-300) 42%, var(--sky-400) 100%);
+  --ink:           var(--leaf-800);
+  --ink-soft:      var(--leaf-600);
+  --ink-muted:     var(--warm-700);
+  --ink-invert:    var(--cream-50);
+  --accent:        var(--poppy-500);
+  --accent-ink:    #FFF6F1;
+  --warm:          var(--amber-500);
+  --surface:       var(--cream-100);
+  --surface-raised:var(--cream-50);
+  --line:          rgba(22, 40, 20, 0.10);
+  --line-strong:   rgba(22, 40, 20, 0.18);
+
+  --bubble-them:     var(--surface-raised);
+  --bubble-them-ink: var(--ink);
+  --bubble-you:      var(--leaf-800);
+  --bubble-you-ink:  var(--cream-50);
+  --filled:          var(--leaf-800);
+  --filled-ink:      var(--cream-50);
+  /* Brand poppy is #D53D3B, but a filled control at 17px needs 4.5:1 and
+     that red only reaches 4.3 against any ink. So the *action* colour is
+     its own token, a step off brand, and poppy-500 stays for tints, dots,
+     borders and accent text. The End key goes deeper still: 12px label. */
+  --action:          #B93230;
+  --action-ink:      #FFF6F1;
+  --danger-key:      #B93230;
+  --danger-key-ink:  #FFF6F1;
+  --amber-700:       #7A5C31;
+  --track:           rgba(22, 40, 20, 0.14);
+  --track-off:       #BDB8AA;
+  --done:            #324A2C;
+  --done-ink:        #FBF9F4;
+  --glow:            rgba(255, 255, 255, 0.58);
+
+  --ok:    #3E7E3B;
+  --warn:  #BC9564;
+  --crit:  #D53D3B;
+
+  /* --- Glass ---------------------------------------------------- */
+  --glass:         rgba(250, 247, 240, 0.60);
+  --glass-strong:  rgba(250, 247, 240, 0.84);
+  --glass-quiet:   rgba(250, 247, 240, 0.34);
+  --glass-dark:    rgba(22, 40, 20, 0.42);
+  --glass-edge:    rgba(255, 255, 255, 0.62);
+  --glass-edge-lo: rgba(22, 40, 20, 0.08);
+  --blur:          blur(22px) saturate(165%);
+  --blur-lg:       blur(38px) saturate(170%);
+  --blur-sm:       blur(12px) saturate(150%);
+
+  /* --- Elevation ------------------------------------------------ */
+  --lift-1: 0 1px 2px rgba(11, 23, 9, 0.05), 0 2px 8px -4px rgba(11, 23, 9, 0.10);
+  --lift-2: 0 2px 6px rgba(11, 23, 9, 0.06), 0 10px 24px -12px rgba(11, 23, 9, 0.22);
+  --lift-3: 0 4px 12px rgba(11, 23, 9, 0.07), 0 24px 48px -20px rgba(11, 23, 9, 0.32);
+  --lift-accent: 0 10px 24px -10px rgba(213, 61, 59, 0.55);
+  --inner-top: inset 0 1px 0 var(--glass-edge);
+
+  /* --- Radii ---------------------------------------------------- */
+  --r-xs: 8px;
+  --r-sm: 12px;
+  --r-md: 18px;
+  --r-lg: 24px;
+  --r-xl: 32px;
+  --r-pill: 999px;
+  --r-device: 46px;
+
+  /* --- Type ----------------------------------------------------- */
+  /* Her voice. The one thing that is not a system font. */
+  --font-display: "Instrument Serif", Georgia, "Times New Roman", serif;
+
+  /* The app chrome. On Apple hardware this resolves to real SF Pro —
+     including its optical Text/Display switch — so the mockups render in
+     the exact face the shipped app will use. Inter is the fallback for
+     everyone else because it is the closest widely available match. */
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Segoe UI Variable Text", "Segoe UI", "Inter", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Numerals, durations, counters. SF Mono on Apple, Inter's tabular cut elsewhere. */
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* The documentation page only — never inside a device. */
+  --font-spec: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* iOS text styles, at the default Large dynamic-type size. */
+  --t-display: 34px;  /* Large Title */
+  --t-title:   28px;  /* Title 1     */
+  --t-h1:      22px;  /* Title 2     */
+  --t-h2:      17px;  /* Headline    */
+  --t-body:    17px;  /* Body        */
+  --t-callout: 16px;  /* Callout     */
+  --t-sm:      15px;  /* Subhead     */
+  --t-xs:      13px;  /* Footnote    */
+  --t-cap:     12px;  /* Caption 1   */
+  --t-label:   11px;  /* Caption 2   */
+
+  /* SF tightens as it grows and opens up below ~13px. Mirrors that curve. */
+  --tr-display: -0.022em;
+  --tr-title:   -0.02em;
+  --tr-h1:      -0.018em;
+  --tr-h2:      -0.014em;
+  --tr-body:    -0.012em;
+  --tr-sm:      -0.008em;
+  --tr-xs:      -0.002em;
+  --tr-cap:      0.004em;
+  --tr-label:    0.01em;
+
+  /* --- Space (4pt) ---------------------------------------------- */
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+  --s5: 20px; --s6: 24px; --s7: 32px; --s8: 40px; --s9: 56px;
+
+  /* --- Motion --------------------------------------------------- */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 140ms;
+  --dur: 260ms;
+  --dur-slow: 520ms;
+
+  /* --- Device --------------------------------------------------- */
+  --device-w: 390px;
+  --device-h: 844px;
+
+  color-scheme: light;
+}
+
+/* =========================== NIGHT ============================= */
+/* App night mode = the wind-down ritual. Also the page's dark theme. */
+
+:root:not([data-theme="light"]) {
+  --night-ground: linear-gradient(178deg, #17303C 0%, #122531 48%, #0C1922 100%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:        linear-gradient(178deg, #17303C 0%, #122531 48%, #0C1922 100%);
+    --ink:           #EDE9DE;
+    --ink-soft:      #C9CFC4;
+    --ink-muted:     #8E9A96;
+    --ink-invert:    var(--leaf-900);
+    --surface:       #17262C;
+    --surface-raised:#1D3038;
+    --line:          rgba(237, 233, 222, 0.10);
+    --line-strong:   rgba(237, 233, 222, 0.20);
+
+    --glass:         rgba(30, 50, 58, 0.58);
+    --glass-strong:  rgba(26, 44, 52, 0.86);
+    --glass-quiet:   rgba(30, 50, 58, 0.32);
+    --glass-edge:    rgba(255, 255, 255, 0.16);
+    --glass-edge-lo: rgba(0, 0, 0, 0.30);
+
+    --cream-100: #1D3038;
+    --cream-50:  #22383F;
+    --cream-200: #24393F;
+    --cream-400: rgba(237, 233, 222, 0.18);
+
+    --lift-1: 0 1px 2px rgba(0,0,0,0.30), 0 2px 8px -4px rgba(0,0,0,0.45);
+    --lift-2: 0 2px 6px rgba(0,0,0,0.32), 0 10px 24px -12px rgba(0,0,0,0.60);
+    --lift-3: 0 4px 12px rgba(0,0,0,0.34), 0 24px 48px -20px rgba(0,0,0,0.70);
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ground:        linear-gradient(178deg, #17303C 0%, #122531 48%, #0C1922 100%);
+  --ink:           #EDE9DE;
+  --ink-soft:      #C9CFC4;
+  --ink-muted:     #8E9A96;
+  --ink-invert:    var(--leaf-900);
+  --surface:       #17262C;
+  --surface-raised:#1D3038;
+  --line:          rgba(237, 233, 222, 0.10);
+  --line-strong:   rgba(237, 233, 222, 0.20);
+
+  --glass:         rgba(30, 50, 58, 0.58);
+  --glass-strong:  rgba(26, 44, 52, 0.86);
+  --glass-quiet:   rgba(30, 50, 58, 0.32);
+  --glass-edge:    rgba(255, 255, 255, 0.16);
+  --glass-edge-lo: rgba(0, 0, 0, 0.30);
+
+  --cream-100: #1D3038;
+  --cream-50:  #22383F;
+  --cream-200: #24393F;
+  --cream-400: rgba(237, 233, 222, 0.18);
+
+  --lift-1: 0 1px 2px rgba(0,0,0,0.30), 0 2px 8px -4px rgba(0,0,0,0.45);
+  --lift-2: 0 2px 6px rgba(0,0,0,0.32), 0 10px 24px -12px rgba(0,0,0,0.60);
+  --lift-3: 0 4px 12px rgba(0,0,0,0.34), 0 24px 48px -20px rgba(0,0,0,0.70);
+
+  color-scheme: dark;
+}
+
+/* ===========================================================
+   DEVICE SKINS
+   The phone frames pin their own palette so the app always
+   renders as designed, independent of the viewer's OS theme.
+   =========================================================== */
+
+.skin-day {
+  --ground: linear-gradient(178deg, #C9DDF0 0%, #B2CDE7 42%, #9EBBDA 100%);
+  --ink: #162814;
+  --ink-soft: #324A2C;
+  --ink-muted: #5E5F58;
+  --ink-invert: #FBF9F4;
+  --surface: #F4F0E8;
+  --surface-raised: #FBF9F4;
+  --line: rgba(22, 40, 20, 0.10);
+  --line-strong: rgba(22, 40, 20, 0.18);
+  --glass: rgba(250, 247, 240, 0.60);
+  --glass-strong: rgba(250, 247, 240, 0.84);
+  --glass-quiet: rgba(250, 247, 240, 0.34);
+  --glass-edge: rgba(255, 255, 255, 0.62);
+  --glass-edge-lo: rgba(22, 40, 20, 0.08);
+  --cream-50: #FBF9F4;
+  --cream-100: #F4F0E8;
+  --cream-200: #EDE6D9;
+  --cream-400: #D5CBB6;
+  --bubble-them: #FBF9F4;
+  --bubble-them-ink: #162814;
+  --bubble-you: #162814;
+  --bubble-you-ink: #FBF9F4;
+  --filled: #162814;
+  --filled-ink: #FBF9F4;
+  --action: #B93230;
+  --action-ink: #FFF6F1;
+  --danger-key: #B93230;
+  --danger-key-ink: #FFF6F1;
+  --amber-700: #7A5C31;
+  --track: rgba(22, 40, 20, 0.14);
+  --track-off: #BDB8AA;
+  --done: #324A2C;
+  --done-ink: #FBF9F4;
+  --glow: rgba(255, 255, 255, 0.58);
+  --lift-1: 0 1px 2px rgba(11, 23, 9, 0.05), 0 2px 8px -4px rgba(11, 23, 9, 0.10);
+  --lift-2: 0 2px 6px rgba(11, 23, 9, 0.06), 0 10px 24px -12px rgba(11, 23, 9, 0.22);
+  --lift-3: 0 4px 12px rgba(11, 23, 9, 0.07), 0 24px 48px -20px rgba(11, 23, 9, 0.32);
+  color-scheme: light;
+}
+
+.skin-dark {
+  --ground: linear-gradient(178deg, #1B211A 0%, #141813 46%, #0D100C 100%);
+  --ink: #EFEDE4;
+  --ink-soft: #C5C9BC;
+  --ink-muted: #979D8F;
+  --ink-invert: #0B1709;
+  --surface: #1B211A;
+  --surface-raised: #232A21;
+  --line: rgba(239, 237, 228, 0.09);
+  --line-strong: rgba(239, 237, 228, 0.18);
+  --glass: rgba(40, 47, 38, 0.58);
+  --glass-strong: rgba(33, 39, 32, 0.86);
+  --glass-quiet: rgba(40, 47, 38, 0.30);
+  --glass-edge: rgba(255, 255, 255, 0.14);
+  --glass-edge-lo: rgba(0, 0, 0, 0.34);
+  --cream-50: #262E24;
+  --cream-100: #1B211A;
+  --cream-200: #232A21;
+  --cream-400: rgba(239, 237, 228, 0.16);
+  /* Poppy and amber both lift on a dark ground so contrast holds. */
+  --poppy-500: #E85C58;
+  --poppy-400: #F07A75;
+  --poppy-600: #CF4744;
+  --amber-500: #D6B486;
+  --amber-600: #DCC49B;
+  --leaf-500: #7FA173;
+  --accent-ink: #1A0C0B;
+  --bubble-them: #242B22;
+  --bubble-them-ink: #EFEDE4;
+  --bubble-you: #3B6A33;
+  --bubble-you-ink: #F3F7EF;
+  --filled: #E4E7DC;
+  --filled-ink: #141813;
+  --action: #E85C58;
+  --action-ink: #1A0C0B;
+  --danger-key: #AE302D;
+  --danger-key-ink: #FFF3F0;
+  --amber-700: #DCC49B;
+  --track: rgba(239, 237, 228, 0.16);
+  --track-off: #4A5245;
+  --done: #6E9862;
+  --done-ink: #101408;
+  --glow: rgba(255, 255, 255, 0.10);
+  --lift-1: 0 1px 2px rgba(0,0,0,0.34), 0 2px 8px -4px rgba(0,0,0,0.48);
+  --lift-2: 0 2px 6px rgba(0,0,0,0.36), 0 10px 24px -12px rgba(0,0,0,0.62);
+  --lift-3: 0 4px 12px rgba(0,0,0,0.38), 0 24px 48px -20px rgba(0,0,0,0.72);
+  color-scheme: dark;
+}
+
+.skin-night {
+  --ground: linear-gradient(178deg, #17303C 0%, #122531 48%, #0C1922 100%);
+  --ink: #EDE9DE;
+  --ink-soft: #C9CFC4;
+  --ink-muted: #8E9A96;
+  --ink-invert: #0B1709;
+  --surface: #17262C;
+  --surface-raised: #1D3038;
+  --line: rgba(237, 233, 222, 0.10);
+  --line-strong: rgba(237, 233, 222, 0.20);
+  --glass: rgba(30, 50, 58, 0.58);
+  --glass-strong: rgba(26, 44, 52, 0.86);
+  --glass-quiet: rgba(30, 50, 58, 0.32);
+  --glass-edge: rgba(255, 255, 255, 0.16);
+  --glass-edge-lo: rgba(0, 0, 0, 0.30);
+  --cream-50: #22383F;
+  --cream-100: #1D3038;
+  --cream-200: #24393F;
+  --cream-400: rgba(237, 233, 222, 0.18);
+  --bubble-them: #22383F;
+  --bubble-them-ink: #EDE9DE;
+  --bubble-you: #2A4E46;
+  --bubble-you-ink: #EFF6F2;
+  --filled: #EDE9DE;
+  --filled-ink: #122531;
+  --action: #D14A46;
+  --action-ink: #1A0C0B;
+  --danger-key: #AE302D;
+  --danger-key-ink: #FFF3F0;
+  --amber-700: #DCC49B;
+  --track: rgba(237, 233, 222, 0.16);
+  --track-off: #405058;
+  --done: #5E9086;
+  --done-ink: #0B1A16;
+  --glow: rgba(255, 255, 255, 0.10);
+  --lift-1: 0 1px 2px rgba(0,0,0,0.30), 0 2px 8px -4px rgba(0,0,0,0.45);
+  --lift-2: 0 2px 6px rgba(0,0,0,0.32), 0 10px 24px -12px rgba(0,0,0,0.60);
+  --lift-3: 0 4px 12px rgba(0,0,0,0.34), 0 24px 48px -20px rgba(0,0,0,0.70);
+  color-scheme: dark;
+}
