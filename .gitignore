@@ -46,3 +46,10 @@ frontend/avatar/*.glb
 # source, and it should never end up in a commit.
 companion_*.json
 companion.json
+
+# Characters the user wrote. Real personal data, same as the profile and the loops
+# beside it — it lands in the repo root only because POPPY_DATA_DIR defaults there.
+characters_custom.json
+
+# A 20 MB archive of poppys-app/, which is committed as source next to it.
+poppys-app.zip
