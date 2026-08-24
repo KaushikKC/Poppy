@@ -6,6 +6,23 @@ require Pod::Executable.execute_command('node', ['-p',
   )', __dir__]).strip
 
 platform :ios, min_ios_version_supported
+
+# Build React Native from source rather than using the 0.86 prebuilt core.
+#
+# The prebuilt React-Core-prebuilt / ReactNativeDependencies xcframeworks are
+# release-built, and `Sealable`, `getDebugName()` and `getDebugValue()` are debug-only
+# renderer symbols (RN_DEBUG_STRING_CONVERTIBLE). A Debug build compiles every
+# third-party Fabric component *with* references to them and then has nothing to link
+# against, so the whole app fails with a wall of `Undefined symbol:
+# facebook::react::...` naming GestureHandler, Reanimated and the WebView — none of
+# which is the actual problem.
+#
+# Set here rather than left as an env var on the command line: a `pod install` that
+# forgets it silently reinstates a Debug build that cannot link, and the error gives no
+# hint about why. Release builds work either way; this costs a long first compile and
+# is incremental after that.
+ENV['RCT_USE_PREBUILT_RNCORE'] ||= '0'
+
 prepare_react_native_project!
 
 linkage = ENV['USE_FRAMEWORKS']
@@ -16,6 +33,16 @@ end
 
 target 'PoppysSpike' do
   config = use_native_modules!
+
+  # Sign in with Google pulls in AppCheckCore, which is Swift and depends on two pods
+  # that ship without module maps. Static-linked Swift cannot import those, and pod
+  # install refuses with "cannot yet be integrated as static libraries".
+  #
+  # Named individually rather than turning on use_modular_headers! for everything:
+  # the global switch changes how every pod in the project is built, including React
+  # Native's own, and this is a two-pod problem.
+  pod 'GoogleUtilities', :modular_headers => true
+  pod 'RecaptchaInterop', :modular_headers => true
 
   use_react_native!(
     :path => config[:reactNativePath],
