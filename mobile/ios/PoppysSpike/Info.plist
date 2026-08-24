@@ -12,6 +12,28 @@
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<!-- Sign in with Google. Two values, both from the iOS OAuth client in the Google
+	     Cloud console (Application type: iOS, bundle id social.poppys.app):
+
+	       GIDClientID        the Client ID          123-abc.apps.googleusercontent.com
+	       CFBundleURLSchemes the iOS URL scheme     com.googleusercontent.apps.123-abc
+	                          (the same id, dot-fields reversed)
+
+	     There is no client secret for an iOS client: Google verifies the app by its
+	     bundle id instead, which is why the bundle id here and there must match exactly.
+	     Leave these placeholders and sign-in stays unavailable; the app falls back to
+	     asking for a name and an email rather than failing. -->
+	<key>GIDClientID</key>
+	<string>512938090680-r7kj5c5mmuothkh324u0m8vs49kelplt.apps.googleusercontent.com</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.512938090680-r7kj5c5mmuothkh324u0m8vs49kelplt</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
