@@ -113,6 +113,27 @@ function toLastSentence(reply: string): string {
 }
 
 /**
+ * Drop a reasoning trace, if the model emitted one.
+ *
+ * Qwen3 — the base the fine-tune is built on — has a thinking mode that wraps its
+ * working in `<think>…</think>` before the actual answer. Generation asks for it to be
+ * off, but "asks" is the operative word: a fine-tuned 0.6B can produce the tag anyway,
+ * and one that slipped through would be shown on screen and then read out loud in a
+ * voice note, in her voice, as if it were something she said.
+ *
+ * Handled here rather than at the socket because this is the point where the finished
+ * reply exists and has not yet been split between what is displayed and what is spoken.
+ * An unclosed tag means the trace ran to the end of the reply, so everything from the
+ * tag onward goes.
+ */
+function withoutReasoning(reply: string): string {
+  const left = reply.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<think>[\s\S]*$/i, '').trim();
+  // A reply that was nothing but reasoning leaves nothing to say. Better the raw text
+  // than an empty turn that looks like she ignored them.
+  return left || reply.trim();
+}
+
+/**
  * Take the stage directions out before anything is spoken.
  *
  * Small models narrate: "*sigh*", "*pauses, looking at Biscuit*", "(laughs)". On
@@ -199,7 +220,7 @@ export async function runTurn(
     );
 
     // Ending mid-phrase is the cap's doing, not hers.
-    reply = toLastSentence(reply);
+    reply = toLastSentence(withoutReasoning(reply));
 
     // Decided here, on the finished reply, because that is the only point at which
     // the length is known — and it is known for free, before a sound is made.

@@ -173,6 +173,36 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
     check('and they are the reply', events.tokens[0] === text, JSON.stringify(events.tokens[0]));
   }
 
+  console.log('\n== a reasoning trace never reaches the page or the speaker ==');
+  {
+    // Qwen3, the fine-tune base, has a thinking mode. Generation asks for it to be
+    // off, and a 0.6B can emit the tag anyway. Unhandled, the trace is displayed and
+    // then read out loud in her voice as though she had said it.
+    const log = fakes({
+      reply: '<think>The user greeted me. I should be warm and ask about their day.</think>'
+        + 'Hey you. It has been a long day here, how was yours? Tell me the whole thing.',
+    });
+    const events = { tokens: [] };
+    const text = await runTurn('hi', { system: 's', voice: 'v', spoken: true }, {
+      onToken: (t) => events.tokens.push(t),
+    });
+    await sleep(120);
+    check('the trace is gone from the reply', !/<think>|should be warm/i.test(text), JSON.stringify(text.slice(0, 40)));
+    check('the reply itself survived', text.startsWith('Hey you.'), JSON.stringify(text.slice(0, 20)));
+    check('nothing spoken mentions it', !log.synthesized.join(' ').includes('user greeted'));
+  }
+
+  console.log('\n== an unclosed trace takes everything after it ==');
+  {
+    // The tag opened and the reply ran out before it closed, which is what a truncated
+    // generation looks like. Keeping the tail would put raw reasoning on screen.
+    const log = fakes({ reply: 'Here is the thing I wanted to tell you about today. <think>Now I should' });
+    const text = await runTurn('hi', { system: 's', voice: 'v', spoken: false }, {});
+    await sleep(60);
+    check('the tail is dropped', !text.includes('<think>') && !text.includes('Now I should'), JSON.stringify(text));
+    check('what came before it is kept', text.startsWith('Here is the thing'), JSON.stringify(text.slice(0, 20)));
+  }
+
   console.log('\n== a failed recording does not fail the turn ==');
   {
     // Long enough to be spoken, so the failure is in synthesis rather than in the
