@@ -270,14 +270,19 @@ export function createSocketHandler(): SocketHandler {
       const pactBlock = pactDue ? ritual.asPromptBlock() : '';
       if (pactDue) await ritual.markAsked();
 
-      // Held back for a custom character too, and for a sharper reason than the pact:
-      // the disclosure block is a placement instruction ~1100 characters long, which
-      // outweighs a user's own description almost two to one. The model follows the
-      // loudest instruction rather than being who it was written to be.
-      const disclosureBlock =
-        risk0.level === null && !pactBlock && !char.custom
-          ? await disclosure.asPromptBlock(undefined, undefined, callTurns)
-          : '';
+      // Not on the phone at all.
+      //
+      // It is a placement instruction about 1100 characters long — 272 tokens of a
+      // 2048-token window — and the model here is a 1B. Measured 2026-08-25 with it
+      // in: every reply came back as a disconnected fact from the character's own
+      // life, tracking no context whatsoever ("my favourite colour is lavender" to
+      // "what?"). Without it, and on a short character prompt, the same model
+      // followed six turns and answered properly.
+      //
+      // It was always the least valuable of the three placement blocks — it happens
+      // every call and loses nothing by yielding — and a 1B cannot follow it anyway.
+      // Desktop keeps it: a 3B has the room and does follow it.
+      const disclosureBlock = '';
       // Her persona prompt carries the whole of who she is, so it replaces the
       // placeholder rather than being appended to it.
       // Traits sit with identity rather than with the momentary stance: they are who

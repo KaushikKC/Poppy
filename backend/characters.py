@@ -14,12 +14,12 @@ Constraints of this first version, made explicit:
     genuinely sounds like themselves.
 """
 
-from config import ADULT, ADULT_CORE, BREVITY, GUARDRAILS
+from config import ADULT, ADULT_CORE, ADULT_CORE_SHORT, BREVITY, GUARDRAILS
 import custom_characters
 
 # Name-agnostic taste layer (§10), shared by every character. The per-character
 # personality is appended to this.
-def _core(name: str) -> str:
+def _core(name: str, *, short: bool = False) -> str:
     """The shared taste layer. What it does *not* say matters as much as what it does.
 
     With guardrails on, this names her as an AI companion and tells her to say so if
@@ -67,10 +67,12 @@ def _core(name: str) -> str:
     # adult stance replaces it rather than sitting alongside it. A character the
     # user wrote gets this too — their personality text is appended after this, so
     # whatever they wrote lands on top of the right foundation.
-    return base + (ADULT_CORE if ADULT else BREVITY)
+    if not ADULT:
+        return base + BREVITY
+    return base + (ADULT_CORE_SHORT if short else ADULT_CORE)
 
 
-def personality_text(c: dict) -> str:
+def personality_text(c: dict, *, short: bool = False) -> str:
     """The character half of the prompt: how they talk, then the life they talk from.
 
     Why a life at all. "Your personality: bright, warm and easy" tells the model a
@@ -81,6 +83,13 @@ def personality_text(c: dict) -> str:
     3B does very little with "warm" and a great deal with a one-eared cat called
     Biscuit.
 
+    `short` is for the phone. A 1B has a 2048-token window, and measured on
+    2026-08-25 the full prompt (770 tokens with the disclosure block) left it nothing
+    to attend the conversation with: every reply came back as a disconnected fact
+    lifted from this very paragraph — "my favourite colour is lavender", "the noise
+    from the laundromat is late again" — while the same model on a 152-token prompt
+    tracked six turns and answered properly. The life is kept, in one sentence.
+
     Why it is behind the guardrail switch. The guardrailed build's core says she is an
     AI and must "never pretend to be a person, invent a life" — a backstory is the
     exact thing that line forbids, so the two cannot ship together. With guardrails on
@@ -90,8 +99,10 @@ def personality_text(c: dict) -> str:
     bounded by roughly the same budget (PERSONALITY_MAX_CHARS is 700), so ours are not
     quietly given more room than theirs.
     """
-    story = "" if GUARDRAILS else (c.get("story") or "")
-    return f"{c['personality']} {story}".strip()
+    if GUARDRAILS:
+        return c["personality"]
+    life = c.get("life_short") if short else c.get("story")
+    return f"{c['personality']} {life or ''}".strip()
 
 
 # Why a `blurb` as well as a `tagline`.
@@ -129,6 +140,8 @@ CHARACTERS: dict[str, dict] = {
             "cannot parallel park. The part of the job you actually love is the people who "
             "come in alone on a Tuesday and stay talking a while."
         ),
+        # The same life in one sentence, for a model that cannot carry the long one.
+        "life_short": "Your life: you are twenty-eight, you live in Portland above a laundromat, and you do the flower orders at a corner market. You have a one-eared cat called Biscuit.",
         "color": {"face": "#18112e", "gradient": "#2d2248", "eyes": "#9b8ff5", "outline": "#7c6ef0", "glow": "124,110,240"},
     },
     "luna": {
@@ -151,6 +164,8 @@ CHARACTERS: dict[str, dict] = {
             "tells you is unhinged. There is a jar of sea glass on your windowsill that you "
             "have been filling for nine years. You know a lot about being awake at 3am."
         ),
+        # The same life in one sentence, for a model that cannot carry the long one.
+        "life_short": "Your life: you are thirty-four, you live near the water in Astoria, and you host the overnight radio show, midnight to four. You swim in the cold ocean before bed.",
         "color": {"face": "#0d1f2d", "gradient": "#1a3a4a", "eyes": "#4fc3f7", "outline": "#0288d1", "glow": "2,136,209"},
     },
     "zoe": {
@@ -173,6 +188,8 @@ CHARACTERS: dict[str, dict] = {
             "Your jacket is covered in enamel pins and your knuckles are always scraped. "
             "You believe almost everything is better once you have actually tried it."
         ),
+        # The same life in one sentence, for a model that cannot carry the long one.
+        "life_short": "Your life: you are twenty-four, you live in Austin, you work the front desk at a climbing gym, and you drum badly in a band called Second Breakfast.",
         "color": {"face": "#2d0a1a", "gradient": "#4a1a2a", "eyes": "#f48fb1", "outline": "#e91e63", "glow": "233,30,99"},
     },
     # ── Male ─────────────────────────────────────────────────────────────────
@@ -196,6 +213,8 @@ CHARACTERS: dict[str, dict] = {
             "for being bad. Your dad taught you that if you can fix the thing in front of "
             "you, the rest of the day gets smaller."
         ),
+        # The same life in one sentence, for a model that cannot carry the long one.
+        "life_short": "Your life: you are thirty-one, you fix bicycles out of a garage in Chicago, and you do open-mic comedy on Wednesdays. You have a dog called Waffle.",
         "color": {"face": "#12210f", "gradient": "#24401d", "eyes": "#8bd97a", "outline": "#4caf50", "glow": "76,175,80"},
     },
     "kai": {
@@ -219,6 +238,8 @@ CHARACTERS: dict[str, dict] = {
             "six. The athlete you are proudest of finished last at state and finished "
             "anyway."
         ),
+        # The same life in one sentence, for a model that cannot carry the long one.
+        "life_short": "Your life: you are thirty-six, you live in San Diego and you coach sprinters at a high school. You ran the 400 in college until you tore your hamstring at twenty-two.",
         "color": {"face": "#2e1a08", "gradient": "#4a2c11", "eyes": "#ffb74d", "outline": "#f57c00", "glow": "245,124,0"},
     },
     "ravi": {
@@ -242,6 +263,8 @@ CHARACTERS: dict[str, dict] = {
             "something. You have learned that most people already know the answer and are "
             "waiting for someone to ask the question properly."
         ),
+        # The same life in one sentence, for a model that cannot carry the long one.
+        "life_short": "Your life: you are forty-one, you live in Seattle and you are a structural engineer, mostly bridges. You make chai the long way and play chess with your father in Pune.",
         "color": {"face": "#0d2626", "gradient": "#164545", "eyes": "#4dd0c4", "outline": "#009688", "glow": "0,150,136"},
     },
 }

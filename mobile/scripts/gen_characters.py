@@ -26,14 +26,16 @@ data = characters.ui_list()
 # and drops the length rule), so it is generated with the rest rather than retyped
 # into TypeScript where it would quietly disagree with the Python.
 _SENTINEL = "\x00NAME\x00"
-core_template = characters._core(_SENTINEL).replace(_SENTINEL, "{name}")
+core_template = characters._core(_SENTINEL, short=True).replace(_SENTINEL, "{name}")
 
 # The half of a character that is not presentation. Every built-in personality goes
 # into the same slot a character the user wrote does, which is what makes the two
 # indistinguishable to the model.
-# personality_text(), not the raw field: the manner plus the life, assembled by the
-# Python so the phone cannot end up with a character who has no story on it.
-personalities = {k: characters.personality_text(v) for k, v in characters.CHARACTERS.items()}
+# The SHORT variant, because the phone runs a 1B with a 2048-token window. Measured
+# 2026-08-25: on the full prompt the 1B answered every question with a disconnected
+# fact from the character's own life paragraph and tracked no context at all; on a
+# short one it followed six turns. The life is kept, in one sentence.
+personalities = {k: characters.personality_text(v, short=True) for k, v in characters.CHARACTERS.items()}
 traits = {
     k: {"voice": v.get("voice"), "gender": v["gender"], "name": v["name"]}
     for k, v in characters.CHARACTERS.items()
