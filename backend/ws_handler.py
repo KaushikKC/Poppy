@@ -21,6 +21,7 @@ import safety
 import reply_shape
 import traits
 import memory_store
+import accounts
 import companion
 import disclosure
 import ritual_pact
@@ -281,6 +282,16 @@ async def handle_chat(ws: WebSocket):
                 )
             identity_block = await asyncio.to_thread(
                 companion.as_prompt_block, not pact_block,
+            )
+            # Who she is talking to. The identity block above carries *her* name; the
+            # user's was never in the prompt at all, on either platform, so "what's my
+            # name?" was unanswerable and a small model answered it with its own.
+            # Nothing is invented when there is no account: a wrong name is worse.
+            acc = await asyncio.to_thread(accounts.account)
+            user_name = (acc or {}).get("name", "").strip()
+            identity_block += (
+                f" You are talking to {user_name}. Call them by their name."
+                if user_name else ""
             )
             # What she was told to leave alone, and what to keep track of. This
             # is a constraint list rather than a placement rule, so unlike the

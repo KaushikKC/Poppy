@@ -24,6 +24,7 @@ import type { SocketHandler, SocketReply } from '../bridge/host';
 import * as companion from './companion';
 import * as safety from './safety';
 import * as personas from './personas';
+import * as accounts from './accounts';
 import { resolve as resolveCharacter } from './custom_characters';
 import * as traits from './traits';
 import * as disclosure from './disclosure';
@@ -287,8 +288,21 @@ export function createSocketHandler(): SocketHandler {
       // placeholder rather than being appended to it.
       // Traits sit with identity rather than with the momentary stance: they are who
       // she is, so they apply in every mode instead of being re-picked each call.
+      // Who she is talking to.
+      //
+      // Nothing in the prompt has ever said this, on either platform — the identity
+      // block carries *her* name, not theirs. So "what's my name?" was unanswerable,
+      // and a small model filled the gap with the only name in front of it, its own:
+      // "My name is Maya" to "what is my name". Reported from a real conversation.
+      //
+      // The name comes from the account when there is one. Nothing is invented when
+      // there is not: a wrong name is worse than no name.
+      const who = (await accounts.account())?.name?.trim();
+      const youAre = who ? ` You are talking to ${who}. Call them by their name.` : '';
+
       let system =
         char.system_prompt +
+        youAre +
         ' ' +
         persona.flavor +
         traits.asPromptBlock(profile.traits) +

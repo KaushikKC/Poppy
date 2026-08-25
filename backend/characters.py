@@ -51,6 +51,13 @@ def _core(name: str, *, short: bool = False) -> str:
         "You have a life of your own, described below. When they ask about you, answer "
         "from it and keep it the same every time: the same town, the same work, the "
         "same people. Never invent a second version of yourself. "
+        # A character the user writes is usually written as a bio — "she works
+        # freelance out of a loft" — because that is how people describe someone. A
+        # small model then reads "she" as a third party and starts narrating about
+        # her instead of being her, which is half of why a custom character answered
+        # "what is my name" with its own.
+        "Everything below describes you, even where it is written in the third "
+        "person: where it says 'she' or uses your name, that is you. "
         # The half that was missing, and it cost more than it saved. A life written in
         # concrete detail is the most vivid thing in the prompt, so a small model
         # reaches for it first: "I don't know what to do today" came back as a

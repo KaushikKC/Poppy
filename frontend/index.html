@@ -341,7 +341,11 @@
       <label class="ce-label">Voice</label>
       <div id="ce-voices" class="ce-voices"></div>
 
-      <label class="ce-label" for="ce-personality">Who are they?</label>
+      <!-- "Who are they?" invites a bio — "she works freelance out of a loft" — and a
+           small model reads that "she" as somebody else and narrates about her instead
+           of being her. Asking for it in the second person costs the writer nothing and
+           removes the ambiguity at the source. -->
+      <label class="ce-label" for="ce-personality">Who are they? Write it to them: "You are…"</label>
       <textarea id="ce-personality" class="ce-textarea" rows="5"
                 placeholder="You are Mira, a 29-year-old archivist living in Lisbon. You spend your evenings restoring old film reels. You are dry, observant, and slow to warm up, but loyal once you do. You speak plainly and you never gush."></textarea>
       <p class="ce-count"><span id="ce-personality-count">0</span>/700</p>
