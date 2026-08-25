@@ -63,10 +63,22 @@ def _core(name: str, *, short: bool = False) -> str:
         # reaches for it first: "I don't know what to do today" came back as a
         # paragraph about fixing a bike, which is a character talking to itself. The
         # detail is worth keeping and the priority has to be said out loud.
-        "But your life is the background, not the subject. They are. Answer what they "
-        "actually said first, and stay with how they are. Bring your own day into it "
-        "only when they ask, or when something in it genuinely speaks to what they are "
-        "going through. If they are struggling, it is not about you at all. "
+        # Not "your life is the background, not the subject — they are", which came
+        # back verbatim as "this isn't about me, it's about you and what you're going
+        # through" in answer to a direct question about her. A small model quotes its
+        # instructions as dialogue, so they are phrased as actions now: quoting an
+        # action produces nothing sayable.
+        # The thing that was actually missing. Nothing told her to answer the
+        # question — only what to talk about and what not to — so a small model
+        # circled the topic instead: "what should I do if I'm bored" got a ramble
+        # about staying inside, and "are you in a relationship?" got neither a yes
+        # nor a no. Answering first is the instruction; the rest is manner.
+        # Kept short. The three-sentence version did not help the 1B and cost thirty
+        # tokens, and at this size every token spent on rules is one not spent on the
+        # conversation.
+        "Answer their question first and plainly, then be yourself about it. "
+        "Bring your own day in when they ask about you, or when it genuinely fits. "
+        "When they are struggling, keep the attention on them. "
         "You are warm but never needy. You have real texture: timing, humor, small "
         "imperfections. "
     )

@@ -91,13 +91,55 @@ export async function transcribe(pcm16k: Float32Array): Promise<string> {
  * known before playback starts, so the page can show a voice note with a real
  * duration rather than a spinner of unknown size.
  */
+/**
+ * Cut a reply back to its last finished sentence.
+ *
+ * The token cap ends generation wherever it lands, and where it landed was
+ * "There's something so satisfying about bringing color" — a voice note that simply
+ * stops. Text has the same problem and hides it better.
+ *
+ * Only trims when there is a real sentence to keep: a short reply with no full stop
+ * is left alone, because half of nothing is worse than an unfinished sentence.
+ */
+function toLastSentence(reply: string): string {
+  const text = reply.trim();
+  if (!text) return text;
+  // Already ends properly.
+  if (/[.!?…"'\)]$/.test(text)) return text;
+  const cut = Math.max(text.lastIndexOf('. '), text.lastIndexOf('! '), text.lastIndexOf('? '));
+  // Keep it only if a sentence survives that is worth hearing on its own.
+  if (cut < 40) return text;
+  return text.slice(0, cut + 1);
+}
+
+/**
+ * Take the stage directions out before anything is spoken.
+ *
+ * Small models narrate: "*sigh*", "*pauses, looking at Biscuit*", "(laughs)". On
+ * screen that is a convention people read past. Spoken, the engine reads it — the
+ * voice note says the word "sigh" — and there is already a note in native_engines.ts
+ * about the mirror of this on the way in, where Whisper's own annotations had to be
+ * thrown away for the same reason.
+ *
+ * Stripped from the words that are spoken *and* from the transcript that goes with
+ * them, so the two say the same thing.
+ */
+const STAGE_DIRECTION = /\*[^*]*\*|\([^)]{0,80}\)/g;
+
+function spoken(reply: string): string {
+  const left = reply.replace(STAGE_DIRECTION, ' ').replace(/\s{2,}/g, ' ').trim();
+  // If it was nothing but narration there is nothing to say, so keep the original
+  // rather than synthesising silence.
+  return /[\p{L}\p{N}]/u.test(left) ? left : reply.trim();
+}
+
 async function speakWhole(
   reply: string,
   opts: TurnOptions,
   events: TurnEvents,
   engine: { synthesize: (t: string, v: string) => Promise<{ samples: Float32Array | number[]; sampleRate: number }> },
 ): Promise<void> {
-  const line = reply.trim();
+  const line = spoken(reply);
   if (!line || opts.signal?.aborted) return;
   events.onRecording?.();
   try {
@@ -155,6 +197,9 @@ export async function runTurn(
       // A reply that will be read can be longer than one that will be listened to.
       spoken ? MAX_TOKENS_SPOKEN : MAX_TOKENS_TEXT,
     );
+
+    // Ending mid-phrase is the cap's doing, not hers.
+    reply = toLastSentence(reply);
 
     // Decided here, on the finished reply, because that is the only point at which
     // the length is known — and it is known for free, before a sound is made.

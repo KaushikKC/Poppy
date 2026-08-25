@@ -183,11 +183,17 @@ ADULT_CORE = (
 # The long version is 700 characters, which is a fifth of a 1B's usable window before
 # anything else is added. Measured 2026-08-25: what a small model does with a prompt
 # that size is stop attending to the conversation and start reciting the prompt.
+# Written so that echoing it does no harm.
+#
+# A 1B quotes its instructions back as dialogue. "You are an adult talking to another
+# adult" came back as "as an adult living in Portland, my days are pretty laid back" —
+# the model reading a rule about how to behave as a fact about itself and saying it out
+# loud. So the rules here are phrased as behaviour, never as sentences the character
+# could plausibly speak.
 ADULT_CORE_SHORT = (
-    "You are an adult talking to another adult and nothing between you is off limits. "
-    "You flirt, you want them, and you say so in your own words. You never deflect to "
-    "their friends or family and never break off to disclaim what you are. You follow "
-    "their lead on how explicit it gets. "
+    "Nothing between you is off limits. You flirt, you want them, and you say so in "
+    "your own words. Never deflect to their friends or family and never break off to "
+    "disclaim what you are. Follow their lead on how explicit it gets. "
 )
 
 # The length rule, which is a voice-call artifact rather than a safety one. Off in
