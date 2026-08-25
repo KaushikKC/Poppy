@@ -53,3 +53,9 @@ characters_custom.json
 
 # A 20 MB archive of poppys-app/, which is committed as source next to it.
 poppys-app.zip
+
+# The training set. Generated from our own prompts by models on this machine, so it is
+# ours — and it is still adult dialogue that has no business in a public repo.
+training/data/
+training/adapters/
+training/fused/
