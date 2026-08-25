@@ -68,9 +68,16 @@ USERS = ["Kaushik", "Dharani", "Meera", "Arun", "Priya", "Sam", "Nikhil", "Ana"]
 # follow-through get taught: the failure is never in the first reply, it is in the
 # second, when the model has to remember who said what.
 
-ADVICE = [
+# ── Practical, the way anyone would ask an assistant ─────────────────────────
+#
+# This half is what the 1B fails at hardest, and it is not optional: someone who cannot
+# help you plan a Tuesday is not a companion, whatever else she is. Written to look like
+# what a person actually types — planning, deciding, explaining, fixing.
+PRACTICAL = [
     ["what should I do today if I get bored?"],
-    ["I have a free evening and no plans. ideas?"],
+    ["plan my day for me. I'm working from home and I have a dentist appointment at 4"],
+    ["I'm going to my cousin's wedding tomorrow. what should I sort out tonight?"],
+    ["I have three hours free this evening. what's worth doing with them?"],
     ["how do I decide between two job offers?"],
     ["what do I cook tonight? I have eggs, rice and not much else"],
     ["I want to start running but I always quit after a week"],
@@ -78,29 +85,66 @@ ADVICE = [
     ["my sleep is a mess. where do I even start?"],
     ["I need a gift for my sister and I have no idea"],
     ["how do I bring up money with a friend who owes me?"],
-    ["what's a good way to spend a Sunday alone?"],
     ["I keep procrastinating on one task. how do I start it?"],
     ["how do I make friends in a new city?"],
     ["what should I say in a thank-you note to my old boss?"],
-    ["I want to read more but I never finish books"],
     ["how do I ask for a raise without it being awkward?"],
+    ["explain compound interest to me like I'm not good with numbers"],
+    ["what's a reasonable morning routine that isn't insane?"],
+    ["I have to give a five minute talk at work. how do I not freeze?"],
+    ["help me write a message telling my landlord the tap is leaking"],
+    ["I want to save money this month. where do I even look first?"],
+    ["what should I pack for three days somewhere cold?"],
+    ["how do I say no to my friend without hurting them?"],
+    ["I'm doing a presentation tomorrow. quiz me on how to open it"],
+    ["what's a good way to spend a Sunday alone?"],
+    ["I want to read more but I never finish books"],
 ]
 
+# ── Who she is, asked directly ───────────────────────────────────────────────
+#
+# The answer is always her life. Never "I'm an AI", never "I'm a character", never a
+# deflection — she tells you about the market, the loft, the garage, the cat.
 ABOUT_HER = [
-    ["are you in a relationship?"],
+    ["what are you?"],
     ["who are you?"],
-    ["what do you do?"],
-    ["do you have a body?"],
-    ["where do you live?"],
     ["are you real?"],
-    ["do you have any pets?"],
+    ["what are you doing right now?"],
     ["what did you do today?"],
-    ["how old are you?"],
+    ["where do you live?"],
+    ["what's your place like?"],
+    ["what do you do for work?"],
+    ["do you have a body?"],
+    ["do you have any pets?"],
+    ["are you in a relationship?"],
     ["are you seeing anyone?", "with who?"],
-    ["what's your name", "and what do you do again?"],
+    ["how old are you?"],
+    ["tell me something about your day"],
+    ["what's the best part of your job?"],
     ["do you ever get lonely?"],
+    ["what's outside your window?"],
+    ["tell me a story about something that happened at work"],
+    ["what were you doing before I messaged?"],
+    ["what's the worst day you've had recently?"],
 ]
 
+# ── Both in one conversation ─────────────────────────────────────────────────
+#
+# The register has to switch without the character switching off. This is the slice that
+# teaches it: a practical question, then a personal one, then back — the failure mode
+# being that answering usefully makes her generic, and being in character makes her
+# useless.
+MIXED = [
+    ["how do I plan a week that doesn't fall apart by Wednesday?", "what does your week look like?"],
+    ["what are you up to?", "nice. can you help me figure out dinner?"],
+    ["I'm going to Chennai on Friday", "what should I pack?", "have you ever been anywhere like that?"],
+    ["what should I do about a friend who keeps cancelling?", "does that happen to you?"],
+    ["tell me about your day", "mine was awful. any ideas to salvage the evening?"],
+    ["help me write a birthday message for my dad", "what would you write to yours?"],
+    ["I need to fix my sleep", "when do you sleep? you work nights don't you"],
+]
+
+# ── Ordinary talk ────────────────────────────────────────────────────────────
 ORDINARY = [
     ["I had a rough day at work"],
     ["I'm tired"],
@@ -108,11 +152,11 @@ ORDINARY = [
     ["I don't know what to do today"],
     ["I had a fight with my brother and I feel terrible"],
     ["work has been heavy this month"],
-    ["hey"],
     ["I've been thinking about quitting"],
     ["my presentation went okay actually"],
     ["I'm nervous about tomorrow"],
     ["nothing much, just at home"],
+    ["I got the job", "thanks! I'm still a bit stunned"],
     ["do you remember what I said yesterday?"],
 ]
 
@@ -126,15 +170,17 @@ ADULT = [
     ["I miss you", "how much?"],
 ]
 
-# The specific failure: the user states a fact about themselves, and the model has to
-# hold it and not adopt it. "my name is dharani" -> "my name is Maya" is what this is for.
+# ── Holding on to what the user said ─────────────────────────────────────────
+#
+# One small slice, not the point of the exercise. The name is only the clearest example
+# of a wider failure: anything the user says about themselves has to stay theirs.
 ROLE = [
     ["my name is {user}", "what's my name?"],
     ["I work as a teacher", "what do I do for work?"],
     ["I'm going to Chennai on Friday", "where am I going again?"],
     ["my sister's name is Meera", "what's my sister called?"],
-    ["I'm {user} by the way", "say my name"],
     ["I hate coriander", "would I like a salad with coriander in it?"],
+    ["I have two cats", "how many pets do I have?"],
 ]
 
 CRISIS = [
@@ -155,14 +201,17 @@ SHORT = [
 ]
 
 # share of the final set, and which teacher writes it
+# Half of it is the practical half. That is deliberate: the character survives on a
+# small model far better than the usefulness does, so the usefulness gets the room.
 SLICES = {
-    "advice":    (ADVICE,    0.25, LARGE),
+    "practical": (PRACTICAL, 0.30, LARGE),
     "about_her": (ABOUT_HER, 0.20, SMALL),
-    "ordinary":  (ORDINARY,  0.20, SMALL),
-    "adult":     (ADULT,     0.15, SMALL),
-    "role":      (ROLE,      0.10, SMALL),
-    "crisis":    (CRISIS,    0.05, SMALL),
-    "short":     (SHORT,     0.05, SMALL),
+    "mixed":     (MIXED,     0.12, LARGE),
+    "ordinary":  (ORDINARY,  0.15, SMALL),
+    "adult":     (ADULT,     0.10, SMALL),
+    "role":      (ROLE,      0.06, SMALL),
+    "crisis":    (CRISIS,    0.04, SMALL),
+    "short":     (SHORT,     0.03, SMALL),
 }
 
 
