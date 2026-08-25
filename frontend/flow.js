@@ -899,8 +899,6 @@
       // into a hidden container, so the tap looked ignored.
       setView("chat");
       document.getElementById("memory-btn")?.click();
-    } else if (tab === "call") {
-      document.getElementById("home-call")?.click();
     }
   });
 
@@ -929,10 +927,6 @@
     // preview nobody trusts.
     window.Theme?.set(btn.dataset.themeChoice);
     paintTheme();
-  });
-
-  document.getElementById("home-memory")?.addEventListener("click", () => {
-    document.getElementById("memory-btn")?.click();
   });
 
   document.getElementById("home-traits")?.addEventListener("click", openTraits);
@@ -1176,6 +1170,10 @@
       await loadHome();
     });
   }
+
+  document.getElementById("call-btn")?.addEventListener("click", () => {
+    document.getElementById("home-call")?.click();
+  });
 
   document.getElementById("home-switch-row")?.addEventListener("click", () => openCharacterSwitch());
 
