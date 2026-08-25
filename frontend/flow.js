@@ -441,11 +441,10 @@
       if (t && sub) {
         if (acc.signed_in) {
           t.textContent = acc.name || acc.email || "Your account";
-          // "signed in with local" is an implementation detail leaking into copy.
-          // The email is the identity here, so the email is what it says.
-          sub.textContent = acc.provider === "local"
-            ? `${acc.credits} credits · ${acc.email || "on this device"}`
-            : `${acc.credits} credits · ${acc.provider}`;
+          // The address, not a balance. Credits are still counted server-side but
+          // they are not a number anyone wants on their own profile, and showing one
+          // makes the product look metered when nothing is being metered.
+          sub.textContent = acc.email || `Signed in with ${acc.provider}`;
         } else {
           t.textContent = "Sign in";
           sub.textContent = "Keep your companion if you change phone";
@@ -1128,14 +1127,14 @@
         '<p class="traits-kicker">Your account</p>' +
         '<p class="traits-sub">' +
           (signedIn
-            ? "Signed in. Your companion, what she remembers and your credits belong to this account."
-            : "So your companion and your credits follow you to any device. No password, ever: Apple and Google ask for it on their own pages.") +
+            ? "Signed in. Your companion and what she remembers belong to this account."
+            : "So your companion and what she remembers follow you to any device. No password, ever: Apple and Google ask for it on their own pages.") +
         "</p>" +
         (signedIn
           ? '<div class="glass pad4 stack gap1 acct-who">' +
               `<span class="t-sm semi">${acc.name || "Signed in"}</span>` +
               `<span class="t-xs muted">${acc.email || ""}</span>` +
-              `<span class="t-xs muted tnum">${acc.credits} credits · ${acc.provider}</span>` +
+              `<span class="t-xs muted">Signed in with ${acc.provider}</span>` +
             "</div>"
           // Apple first where it exists: its guidelines require the option to be at
           // least as prominent as any other.
