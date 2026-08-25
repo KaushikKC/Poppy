@@ -2089,6 +2089,11 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - RNNotifee (9.1.8):
+    - React-Core
+    - RNNotifee/NotifeeCore (= 9.1.8)
+  - RNNotifee/NotifeeCore (9.1.8):
+    - React-Core
   - RNReanimated (4.5.2):
     - hermes-engine
     - RCTRequired
@@ -2385,6 +2390,7 @@ DEPENDENCIES:
   - RNDeviceInfo (from `../node_modules/react-native-device-info`)
   - RNGestureHandler (from `../node_modules/react-native-gesture-handler`)
   - "RNGoogleSignin (from `../node_modules/@react-native-google-signin/google-signin`)"
+  - "RNNotifee (from `../node_modules/@notifee/react-native`)"
   - RNReanimated (from `../node_modules/react-native-reanimated`)
   - RNWorklets (from `../node_modules/react-native-worklets`)
   - SherpaOnnx (from `../node_modules/react-native-sherpa-onnx`)
@@ -2571,6 +2577,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-gesture-handler"
   RNGoogleSignin:
     :path: "../node_modules/@react-native-google-signin/google-signin"
+  RNNotifee:
+    :path: "../node_modules/@notifee/react-native"
   RNReanimated:
     :path: "../node_modules/react-native-reanimated"
   RNWorklets:
@@ -2675,6 +2683,7 @@ SPEC CHECKSUMS:
   RNDeviceInfo: 4c852998208b60dc192ae3529e5867817719ad1e
   RNGestureHandler: 25da9acbd3bd8f95bb2043857638b542fe3367f2
   RNGoogleSignin: e1eb91f21e98456d9f0da4166e857fd427a266c9
+  RNNotifee: 5e3b271e8ea7456a36eec994085543c9adca9168
   RNReanimated: 1429d664541d15e997ebf22696b49ec375aceaac
   RNWorklets: 7a4ca1d2881a24782a131123cafc298a915010aa
   SherpaOnnx: fecfbbab795fceb06857b09b210eb44c19d867c5

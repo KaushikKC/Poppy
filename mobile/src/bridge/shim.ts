@@ -71,6 +71,21 @@ export const SHIM_JS = String.raw`
     done(msg.claims || null);
   };
 
+  // ── The daily reminder ─────────────────────────────────────────────────────
+  //
+  // Handed to the operating system rather than kept in a timer here: the page cannot
+  // outlive its own suspension, and a reminder that only fires while the app is open
+  // is not a reminder. flow.js checks for this and keeps its browser fallback when it
+  // is absent, which is what desktop uses.
+  window.PoppyNotify = {
+    set: function (kind, time, name) {
+      post({ t: 'notify:set', kind: kind, time: time, name: name });
+    },
+    clear: function () {
+      post({ t: 'notify:clear' });
+    },
+  };
+
   // ── fetch ──────────────────────────────────────────────────────────────────
   var realFetch = window.fetch;
 

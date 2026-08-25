@@ -30,6 +30,7 @@ import { AudioManager } from 'react-native-audio-api';
 import { SHIM_JS } from './bridge/shim';
 import { createHost, dispatchAudio, dispatchAuth, dispatchClip, dispatchMic } from './bridge/host';
 import { signInWithApple, signInWithGoogle } from './bridge/auth';
+import { cancelRitual, scheduleRitual } from './bridge/notify';
 import { createMic } from './bridge/mic';
 import { registerHandlers } from './core/handlers';
 import { createSocketHandler } from './core/socket';
@@ -254,6 +255,17 @@ export default function AppShell() {
       // Barge-in from the page: it owns the button, the native side owns the sound.
       if (msg.t === 'audio:stop') {
         playback.stop();
+        return true;
+      }
+      // The daily reminder. Scheduled with the OS so it survives the app being
+      // backgrounded, suspended or killed — which the page's own timer never did.
+      if (msg.t === 'notify:set') {
+        const m = msg as { kind?: string | null; time?: string | null; name?: string };
+        void scheduleRitual({ kind: m.kind ?? null, time: m.time ?? null, name: m.name });
+        return true;
+      }
+      if (msg.t === 'notify:clear') {
+        void cancelRitual();
         return true;
       }
       // Sign in. The page asks, Google's own sheet answers, and what comes back is a

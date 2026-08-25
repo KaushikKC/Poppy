@@ -1392,7 +1392,7 @@
       change.textContent = "Change";
       change.addEventListener("click", () => openRitualPicker(h));
       box.append(label, change);
-      scheduleWebNotification(h.ritual_time);
+      scheduleReminder(h.ritual_kind, h.ritual_time, h.companion_name);
     } else {
       const set = document.createElement("button");
       set.type = "button";
@@ -1435,7 +1435,11 @@
     save.className = "ritual-save";
     save.textContent = "Save reminder";
     save.addEventListener("click", async () => {
-      if (window.Notification && Notification.permission === "default") {
+      // The browser prompt only, and only in a browser. On the phone the native side
+      // asks — at this exact moment rather than at launch, because a permission
+      // prompt before anyone has asked for anything is the one people deny, and iOS
+      // only lets you ask once.
+      if (!window.PoppyNotify && window.Notification && Notification.permission === "default") {
         try { await Notification.requestPermission(); } catch {}
       }
       await fetch(`${BACKEND}/ritual`, {
@@ -1457,7 +1461,10 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kind: null }),
       }).catch(() => {});
-      if (_ritualTimer) { clearTimeout(_ritualTimer); _ritualTimer = null; }
+      // Cancel it with whoever is holding it. Clearing only the page's timer left
+      // the OS notification scheduled, so turning the reminder off in the app would
+      // not have stopped it arriving.
+      clearReminder();
       await loadHome();
     });
 
@@ -1505,6 +1512,32 @@
   document.addEventListener("visibilitychange", () => { if (!document.hidden) checkRitualDue(); });
 
   // Bonus path where supported: a real OS notification at the set time.
+  /**
+   * Hand the reminder to whoever can actually deliver it.
+   *
+   * On the phone that is the operating system, through the bridge: a notification it
+   * holds fires whether the app is running or not. The page's own timer could only
+   * ever fire while the WebView was alive and foregrounded, which for a 9pm reminder
+   * is almost never — and `window.Notification` at a file:// origin was never granted
+   * either, so it failed twice and said nothing.
+   *
+   * In a browser the timer is still the only option, so it stays for desktop.
+   */
+  function scheduleReminder(kind, hhmm, name) {
+    if (!hhmm) return clearReminder();
+    if (window.PoppyNotify) {
+      window.PoppyNotify.set(kind || null, hhmm, name || "");
+      return;
+    }
+    scheduleWebNotification(hhmm);
+  }
+
+  function clearReminder() {
+    if (_ritualTimer) clearTimeout(_ritualTimer);
+    _ritualTimer = null;
+    window.PoppyNotify?.clear();
+  }
+
   function scheduleWebNotification(hhmm) {
     if (_ritualTimer) clearTimeout(_ritualTimer);
     const [h, m] = hhmm.split(":").map(Number);
