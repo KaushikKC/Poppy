@@ -46,6 +46,8 @@ const LOAD_BEARING = [
   '.ob-screen', '.ob-foot', '.tabbar', '.tab', '.hero-face',
   // The picker's one-liner and its scrim.
   '.look__sub', '.look--sub',
+  // The marker the thread shows when the companion changes.
+  '.thread-note',
 ];
 
 console.log(`== ${LOAD_BEARING.length} load-bearing classes ==`);

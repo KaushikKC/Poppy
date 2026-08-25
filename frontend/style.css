@@ -1085,6 +1085,19 @@ body[data-view="chat"] #avatar3d {
   animation: typedot 1.25s var(--ease-soft) infinite;
 }
 
+/* A line the app says, not the companion: who you are talking to now. Centred and
+   quiet so it reads as a marker in the thread rather than as a message from anyone. */
+.thread-note {
+  align-self: center;
+  margin: 6px 0 2px;
+  padding: 6px 14px;
+  border-radius: var(--r-pill);
+  background: var(--surface-raised);
+  font-size: var(--t-xs); letter-spacing: var(--tr-xs);
+  color: var(--ink-muted);
+  text-align: center;
+}
+
 .safety-notice {
   align-self: stretch;
   padding: 14px 16px;

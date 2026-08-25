@@ -1285,16 +1285,43 @@
   }
 
   async function chooseCharacter(c, ov) {
+    // Anything mid-flight belongs to the companion being left behind.
+    window.interruptReply?.();
     try {
       profile = await (await fetch(`${BACKEND}/companion/character`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ character: c.key }),
       })).json();
     } catch {}
+
     setAvatarGender(c.gender);
     if (c.color) window.companionAvatar?.setColors?.(c.color);
+    applyCharacterSkin(c);
+    // The header and the first tab both name the companion. Switching used to change
+    // neither, so the thread kept the old name over the new person's replies.
+    nameCompanion((profile && profile.companion_name) || c.name);
+
+    // And the thread itself. The backend already forgets the conversation on a switch
+    // — memory is per character and the transcript belongs to talking to someone else
+    // — but the page kept every bubble on screen, so it looked as though the old
+    // conversation had carried over. Only starting a call cleared it, which is why
+    // Call appeared to be the only thing that worked.
+    const thread = document.getElementById("transcript");
+    if (thread) thread.innerHTML = "";
+    window._lastUserText = "";
+
     if (ov) ov.remove();
     await loadHome();
+
+    // Straight into the thread with them, and a quiet line saying who answered. An
+    // empty screen after choosing somebody reads as the choice not having taken.
+    setView("chat");
+    if (thread) {
+      const note = document.createElement("div");
+      note.className = "thread-note";
+      note.textContent = `You're talking to ${(profile && profile.companion_name) || c.name} now.`;
+      thread.appendChild(note);
+    }
   }
 
   // §3.6 — if Poppy's personality changed under the user (model/prompt update),
