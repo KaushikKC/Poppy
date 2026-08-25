@@ -977,39 +977,46 @@
 
   let _garden = null;
 
-  function openGarden() {
+  async function openGarden() {
     const view = document.getElementById("garden");
     if (!view) return;
-    if (!_garden || _garden.empty || !_garden.flowers) {
-      // An empty garden is a real state, not an error and not a locked door. It is
-      // also the honest one on day one: nothing has grown because nothing has been
-      // talked about yet.
-      view.classList.remove("hidden");
-      const note = document.getElementById("garden-note");
-      if (note) note.textContent = "Nothing has grown here yet. Every call plants one.";
-      window.PoppyGarden?.stop?.(document.getElementById("garden-canvas"));
-      return;
-    }
-    document.getElementById("home-garden")?.click();
-  }
 
-  document.getElementById("home-garden")?.addEventListener("click", () => {
-    if (!_garden) return;
-    const view = document.getElementById("garden");
+    // Fetch it if home never did. loadGarden() only keeps the state when something
+    // has grown, because §8 hides the *entry point* on home while the garden is
+    // empty — but a tab the user deliberately taps is not that, and it has to show
+    // them their garden either way.
+    let g = _garden;
+    if (!g) {
+      try { g = await (await fetch(`${BACKEND}/garden`)).json(); } catch {}
+    }
+
     view.classList.remove("hidden");
     const note = document.getElementById("garden-note");
-    // Names the season, never a total. A season is a temporal landmark; a total
-    // is a scoreboard.
-    // Say it once, quietly. The garden is theirs to arrange and nothing else on
-    // screen would tell them that.
-    if (note) note.textContent = `${_garden.season} in your garden · drag to move, tap to name`;
-    // Render after the view is visible so the canvas has a real size.
+    const bare = !g || !Array.isArray(g.flowers) || !g.flowers.length;
+    if (note) {
+      note.textContent = bare
+        ? "Nothing has grown here yet. Every call plants one."
+        // Names the season, never a total. A season is a temporal landmark; a total
+        // is a scoreboard. Said once, quietly: the garden is theirs to arrange and
+        // nothing else on screen would tell them that.
+        : `${g.season} in your garden · drag to move, tap to name`;
+    }
+
+    // Draw it even when it is bare. The empty state used to stop the canvas, which
+    // left a flat blue screen with a line of text on it — not an empty garden, just
+    // an absence. The ground and the season are real on day one; only the flowers
+    // are missing, and seeing where they will grow is the whole point of looking.
+    if (!g || !Array.isArray(g.flowers)) return;
+    // Rendered after the view is visible so the canvas has a real size to measure.
     requestAnimationFrame(() => {
-      window.PoppyGarden?.render(document.getElementById("garden-canvas"), _garden, {
+      window.PoppyGarden?.render(document.getElementById("garden-canvas"), g, {
         onSelect: showNameField,
       });
     });
-  });
+  }
+
+  document.getElementById("home-garden")?.addEventListener("click", () => openGarden());
+
   // Tapping a flower offers to name it. The garden records that something
   // happened; the name is the user saying what it meant, which is theirs to write.
   let _naming = null;
