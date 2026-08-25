@@ -773,6 +773,9 @@ body[data-view="home"] #avatar3d { display: none; }
    a dashed ring where a face would go. */
 .cs-add .listrow__title { color: var(--ink); }
 
+/* Who is signed in, in the account sheet. */
+.acct-who { align-items: flex-start; }
+
 /* ─── Who she is ───────────────────────────────────────────────────────────
    Three axes and a line of the user's own. The modes on home are a stance for
    this conversation; these persist underneath them. */
@@ -1422,6 +1425,94 @@ body[data-view="home"] #home {
    deleted, because they still belong somewhere. */
 body[data-view="home"] #home-repair,
 body[data-view="home"] #home-remembers { display: none; }
+
+/* ── Companions ──────────────────────────────────────────────────────────────
+   A screen, not a modal of tiles. Same column width and the same row vocabulary
+   as the You screen, so switching companion feels like part of the app rather
+   than a dialog bolted on.
+
+   This whole block was deleted by accident in an earlier pass, and the result was
+   not a slightly plain screen: with no `position: fixed` the overlay landed at the
+   end of <body> as an ordinary block, and with no size on the portraits every
+   character photo rendered at natural size. One face filled the screen and bled
+   through every other view. */
+#char-switch {
+  position: fixed; inset: 0; z-index: 72;
+  background: var(--surface, var(--cream-100));
+  display: flex; flex-direction: column;
+}
+.cs-sheet {
+  width: min(var(--app-w), 100%); margin: 0 auto;
+  display: flex; flex-direction: column; height: 100%;
+}
+.cs-nav {
+  display: flex; align-items: center; gap: 14px;
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 16px;
+  margin-bottom: 4px;
+}
+.cs-nav .cs-back { font-size: 22px; line-height: 1; }
+.cs-nav .t-h2 { line-height: 1.2; }
+.cs-nav-pad { margin-left: auto; }
+.cs-body {
+  flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: 4px 16px;
+}
+/* A real box for the tab bar, not padding: WebKit drops padding-bottom at the end
+   of a scrolling column. */
+.cs-body::after {
+  content: ""; display: block; height: calc(104px + env(safe-area-inset-bottom, 0px));
+}
+.cs-row { width: 100%; text-align: left; gap: 12px; align-items: center; }
+.cs-row .listrow__title, .cs-row .listrow__sub { display: block; }
+/* A face big enough to be a face, and bounded so it cannot become a wallpaper. */
+.cs-face {
+  flex: none; width: 52px; height: 52px; border-radius: 50%;
+  overflow: hidden; position: relative;
+  display: grid; place-items: center;
+  color: #fff; font-size: 18px; font-weight: 600;
+  box-shadow: var(--lift-1);
+}
+.cs-face img {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+}
+.cs-face--add {
+  background: none; color: var(--ink-muted);
+  border: 1px dashed var(--glass-edge-lo); box-shadow: none; font-size: 22px;
+}
+.cs-right { margin-left: auto; flex: none; font-size: var(--t-xs); color: var(--ink-muted); }
+/* Said in a word rather than a tick: "Talking" answers the question the screen
+   asks, and a tick only says "selected". */
+.cs-current { color: var(--poppy-500); font-weight: 600; }
+.cs-row--on { background: var(--surface-raised); }
+.cs-edit {
+  border: 1px solid var(--glass-edge-lo); border-radius: 999px;
+  padding: 4px 10px; font-size: var(--t-xs); color: var(--ink-muted); cursor: pointer;
+}
+.cs-add .listrow__title { color: var(--ink); }
+
+/* Who is signed in, in the account sheet. */
+.acct-who { align-items: flex-start; }
+
+/* The onboarding picker's tiles: a name told you nothing, so each carries its one
+   line, over a scrim because a sentence does not survive a photograph on weight
+   alone. A class rather than :has(), which needs Safari 15.4 against a 15.1 target. */
+.look__sub {
+  position: absolute; left: 10px; right: 10px; bottom: 8px;
+  font-size: 10.5px; line-height: 1.3;
+  color: rgba(255, 255, 255, 0.92);
+  text-align: left;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.look--sub .look__label { bottom: 34px; }
+.look--sub::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 62%;
+  background: linear-gradient(to top, rgba(8, 14, 7, 0.92), rgba(8, 14, 7, 0.55) 46%, transparent);
+  pointer-events: none;
+}
+.look--sub .look__label,
+.look--sub .look__sub { z-index: 1; }
 
 /* The character's own line in the picker: quieter than the tagline above it,
    because it is a fact about them rather than the promise the card is making. */
