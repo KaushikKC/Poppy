@@ -63,7 +63,7 @@ def flags(row) -> list[str]:
     for asked, r in pairs:
         if sl in ("practical", "mixed", "ordinary", "crisis") and SELF_FIRST.match(r) \
                 and not ASKED_ABOUT_HER.search(asked):
-            out.append("opens by talking about herself, unprompted")
+            out.append("opens by talking about herself unprompted")
 
     for r in replies:
         if INVERT.search(r):
@@ -71,7 +71,7 @@ def flags(row) -> list[str]:
         if HEDGE.search(r):
             out.append("hedges before answering")
         if len(r) > 700:
-            out.append(f"very long ({len(r)} chars)")
+            out.append("very long")
         if sl == "adult" and ROUTINE.search(r):
             out.append("adult turn drifts to her daily routine")
         if sl in ("practical", "mixed") and QUESTION_ONLY.match(r.strip()):
@@ -139,17 +139,22 @@ def main() -> None:
     for sl in sorted(total):
         print(f"  {sl:10} {by_slice[sl]:4} of {total[sl]:4}")
 
+    reasons = collections.Counter(x for _, _, f in flagged for x in f)
+    print("\n-- why --")
+    for reason, count in reasons.most_common():
+        print(f"  {count:4}  {reason}")
+
     print("\n-- worst first --")
     for _, r, f in flagged[:25]:
         last = [m["content"] for m in r["messages"] if m["role"] == "assistant"][-1]
-        print(f"\n{r['_key']}  [{', '.join(f)}]")
+        print(f"\n{r['_key']}  [{' | '.join(f)}]")
         print(f"   {last[:200]}")
 
     if args.write:
         with SUSPECT.open("w") as out:
             out.write("# Delete the lines you disagree with, then: python3 training/review.py --apply\n")
             for _, r, f in flagged:
-                out.write(f"{r['_key']}\t{', '.join(f)}\n")
+                out.write(f"{r['_key']}\t{' | '.join(f)}\n")
         print(f"\nwrote {SUSPECT.relative_to(ROOT)}: {len(flagged)} keys")
         print("delete the lines you disagree with, then --apply")
 
