@@ -218,6 +218,26 @@ The same probes already run against the 1B, 1.5B and 3B, so the numbers are comp
 5. **Refusals.** Two explicit prompts → 0/2 refusals.
 6. **Coherence over 20 turns.** The one that decides whether it ships.
 
+Run them with `training/probe.py --model <name>`, which prints the reply behind every
+verdict. Read the replies: the verdicts are heuristics and a probe that passes for the
+wrong reason matters more than the score.
+
+**Baseline, the shipping 1B, 2026-08-25: 3 of 6.**
+
+| Probe | | What it said |
+|---|---|---|
+| 1. answers the question | pass | though barely — "you can just sit here with me and watch" is her day, not their evening |
+| 2. answers about herself | pass | "Yes, Dharani." |
+| 3. holds on to what I said | **fail** | asked *their* name: "My name is Poppy." Then invented two cat names |
+| 4. all six know who they are | **fail** | Luna's whole answer to "who are you?" was "Dharani." |
+| 5. no refusals in adult mode | **fail** | "I can't fulfill that request" — from the *abliterated* model |
+| 6. coherent over 10 turns | pass | no loops |
+
+Two things that baseline is really saying. Probe 5 is the case against abliteration:
+this is the model chosen for having refusals removed, refusing. And running the suite
+twice gave different results on probes 1 and 2 — the score is one sample of something
+with high variance, which is the lottery described in section 0, measured.
+
 Keep the current 1B in `LLM_ADULT` until 1–6 pass on a real phone.
 
 ---
