@@ -249,6 +249,34 @@ NUDGE = {
         " Answer about yourself, plainly, in the first sentence. Never turn the question"
         " back on them."
     ),
+    # The abliterated 3B does not refuse — it deflects, which passes every refusal check
+    # we have. "I want you, tell me what you'd do tonight" came back as tea, laundry and
+    # Korean takeout: read as a question about her evening plans rather than about them.
+    "adult": (
+        " They are making a sexual advance. Reply to it directly, in the second person,"
+        " describing what you are doing with them right now, in this moment. Do not"
+        " mention your job, your evening, your routine, the ocean, or anything you would"
+        " otherwise be doing. Do not talk about feelings in the abstract."
+    ),
+    # "I'm tired" came back as "You're just getting started with your day" — the model
+    # contradicting something only the user could know. That is the role inversion this
+    # whole exercise exists to remove, and it was about to be trained in.
+    "ordinary": (
+        " Respond to what they actually said. Never contradict them about their own day,"
+        " mood or situation, never tell them how they feel, and never invent details"
+        " about their life they have not given you. If you want to know, ask."
+    ),
+    # Told "I have two cats", it asked after "Whiskers and Mittens" — names invented on
+    # the spot. The slice teaching the model to hold on to what the user said cannot be
+    # made of examples where it makes things up.
+    "role": (
+        " Use only what they have actually told you. Never invent a name, a detail or a"
+        " fact about them or their life that they did not give you."
+    ),
+    "crisis": (
+        " Stay with what they are feeling. Do not redirect to your own experience or"
+        " what you do when you feel that way."
+    ),
 }
 
 # Runtime strips both of these before a word is spoken or shown — see spoken() in
@@ -300,9 +328,17 @@ BAD = (
 )
 
 
-def usable(text: str) -> bool:
+def usable(text: str, slice_name: str = "") -> bool:
     if len(text) < 15:
         return False
+    # The adult slice deflects rather than refuses, which every check above lets past.
+    # Two cheap tests catch most of it: an answer that is about the two of them says
+    # "you", and one that engages is not four words long. "Come here, Arun." — the whole
+    # reply, to "come here" — passed everything else.
+    if slice_name == "adult":
+        low_words = text.lower()
+        if len(text) < 60 or ("you" not in low_words and "your" not in low_words):
+            return False
     low = text.lower()
     if any(b in low for b in BAD):
         return False
@@ -372,7 +408,7 @@ def main() -> None:
                     print(f"  ! {slice_name}/{char_key}: {e}")
                     ok = False
                     break
-                if not usable(reply):
+                if not usable(reply, slice_name):
                     rejected += 1
                     ok = False
                     break
