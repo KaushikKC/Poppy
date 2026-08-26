@@ -203,6 +203,24 @@ llama.cpp/build/bin/llama-quantize poppys-0.6b-f16.gguf poppys-0.6b-q4_k_m.gguf 
 
 Result: roughly **400–500 MB** at Q4_K_M, against 955 MB today.
 
+### Verified, not assumed, 2026-08-25
+
+A four-iteration run against `Qwen/Qwen3-0.6B` on real rows from the set, to find a
+broken argument now rather than at 11pm on training night:
+
+```
+Trainable parameters: 0.484% (2.884M/596.050M)
+Iter 1: Val loss 2.836
+Iter 4: Val loss 2.326
+Peak mem 4.165 GB
+Saved final weights to adapters/adapters.safetensors
+```
+
+The LoRA attaches to Qwen3, `--mask-prompt` is accepted, the chat template resolves,
+loss moves, and the adapter is written. 4.2 GB peak leaves plenty of a 16 GB machine —
+this ran *while* Ollama was serving the 8B teacher, which is the worst case it will ever
+see. At this rate 600 iterations is well under an hour.
+
 ---
 
 ## 5. How to know it worked
