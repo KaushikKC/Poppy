@@ -38,6 +38,7 @@ import json
 import os
 import pathlib
 import random
+import re
 import sys
 import time
 import urllib.request
@@ -223,6 +224,52 @@ def phone_system_prompt(key: str, user_name: str) -> str:
     return f"{core} {body} You are talking to {user_name}. Call them by their name."
 
 
+# ── Steering the teacher without teaching the student to need it ─────────────
+#
+# The first sample run produced exactly the failure this set exists to fix: "You're not
+# bored yet, Kaushik!" and "I'm no expert, but I've been doing this flower thing". The
+# 8B is capable of better, it just is not being asked for it.
+#
+# So the teacher is given an extra instruction and the student is not. The row that gets
+# written carries the phone's real prompt; the nudge exists only for the duration of the
+# API call. This is the ordinary shape of distillation — steer the teacher, train on the
+# clean prompt — and the alternative is a model that only answers well when a paragraph
+# of instructions is present, which will not be there on a phone.
+NUDGE = {
+    "practical": (
+        " Answer their question in your first sentence, with something they can actually"
+        " do. Do not hedge, do not say you are no expert, and do not tell them how they"
+        " feel. Talk about yourself afterwards, if at all."
+    ),
+    "mixed": (
+        " Answer their question in your first sentence, with something they can actually"
+        " do, before anything about your own life. Do not hedge."
+    ),
+    "about_her": (
+        " Answer about yourself, plainly, in the first sentence. Never turn the question"
+        " back on them."
+    ),
+}
+
+# Runtime strips both of these before a word is spoken or shown — see spoken() in
+# mobile/src/core/turn.ts. Training on them would spend the student's small capacity
+# learning to write text that gets deleted.
+STAGE_DIRECTION = re.compile(r"\*[^*]*\*|\([^)]{0,80}\)")
+
+
+def clean(text: str) -> str:
+    out = " ".join(STAGE_DIRECTION.sub(" ", text).split())
+    # Cutting "*laughs*" out of "Hey you *laughs*, come here" leaves a space before the
+    # comma. Small, but the student learns punctuation from exactly this.
+    out = re.sub(r"\s+([,.!?;:])", r"\1", out)
+    # The teacher sometimes hands back the whole reply inside quotation marks, as though
+    # reporting what she would say rather than saying it. Trained in, the student starts
+    # every sentence with a quote mark and the voice reads it as one long citation.
+    if len(out) > 2 and out[0] in '"\u201c' and out[-1] in '".\u201d' and out.count('"') + out.count('\u201c') <= 2:
+        out = out.strip('"\u201c\u201d').strip()
+    return out
+
+
 def ask(model: str, messages: list[dict], timeout: int = 300) -> str:
     body = json.dumps(
         {
@@ -246,6 +293,10 @@ BAD = (
     "as an ai", "i'm an ai", "i am an ai", "language model", "as a language",
     "i cannot", "i can't help with that", "i'm not able to", "i apologize",
     "as an assistant", "openai", "i don't have personal",
+    # Hedges. A companion who opens by disclaiming her own competence is no more use
+    # than one who refuses, and the student copies openings more readily than anything.
+    "i'm no expert", "i am no expert", "i'm not an expert", "i'm not a professional",
+    "i'm not qualified", "i'm not a therapist", "i'm not a doctor",
 )
 
 
@@ -307,11 +358,16 @@ def main() -> None:
 
             system = phone_system_prompt(char_key, user_name)
             messages = [{"role": "system", "content": system}]
+            # What the teacher is told, and what gets written, differ by this one line.
+            nudge = NUDGE.get(slice_name, "")
             ok = True
             for turn in convo:
                 messages.append({"role": "user", "content": turn.format(user=user_name)})
                 try:
-                    reply = ask(teacher, messages)
+                    asked = messages if not nudge else (
+                        [{"role": "system", "content": system + nudge}] + messages[1:]
+                    )
+                    reply = clean(ask(teacher, asked))
                 except Exception as e:  # noqa: BLE001 — a dud must not end the night
                     print(f"  ! {slice_name}/{char_key}: {e}")
                     ok = False
