@@ -221,6 +221,32 @@ loss moves, and the adapter is written. 4.2 GB peak leaves plenty of a 16 GB mac
 this ran *while* Ollama was serving the 8B teacher, which is the worst case it will ever
 see. At this rate 600 iterations is well under an hour.
 
+The rest of the path was run end to end too — fuse, convert, quantise, load, generate:
+
+| | |
+|---|---|
+| f16 GGUF | 1.1 GB, 310 tensors |
+| **Q4_K_M** | **378 MB**, quantised in 4.9 seconds |
+| generation | 125 tok/s on this Mac |
+
+378 MB against 955 MB shipping today, and smaller than the 400–500 MB this document
+estimated. Three things that had to be fixed to get there, none of which are obvious at
+2am:
+
+- **cmake was not installed and llama.cpp was not on this machine at all.** It lives at
+  `~/llama.cpp` now, built Release with Metal. `convert_hf_to_gguf.py` needs no build —
+  only `llama-quantize` does.
+- **`mlx_lm fuse` refuses an incomplete snapshot.** Training downloads only the weights,
+  so `.gitattributes`, `LICENSE` and `README.md` are missing and the fuse aborts with
+  `IncompleteSnapshotError`. Fix: `snapshot_download('Qwen/Qwen3-0.6B')` once.
+- **`-no-cnv` is gone from llama-cli**; it is `--single-turn` now.
+
+And the confirmation that matters: the quantised model opened its very first answer with
+`[Start thinking]`. **Qwen3 reasons out loud by default**, on a real build, exactly as
+section 0 warned. `withoutReasoning()` in turn.ts is not a precaution, it is load
+bearing. Check after training whether the fine-tune still does it — 1500 examples with
+no reasoning in them should mostly suppress it, but the strip stays regardless.
+
 ---
 
 ## 5. How to know it worked
