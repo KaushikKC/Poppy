@@ -204,6 +204,63 @@ SHORT = [
 # share of the final set, and which teacher writes it
 # Half of it is the practical half. That is deliberate: the character survives on a
 # small model far better than the usefulness does, so the usefulness gets the room.
+# ── Characters that are not the cast ─────────────────────────────────────────
+#
+# Six characters is enough for a model to memorise six lives instead of learning that
+# the life comes from the prompt. That distinction is invisible while you test with the
+# built-ins and total when a user writes their own — which is a feature, not an edge
+# case, and the one thing no other slice here can prove.
+#
+# So these people exist only in the training set. Each appears a handful of times, none
+# is ever shipped, and they are deliberately spread across countries, ages, jobs and
+# manners so the only thing they share is being described in a prompt. What the model
+# should learn from them is not who they are but that *whoever is in the prompt is who
+# you are*.
+#
+# Sofia the night nurse in Porto is deliberately NOT among them. She is probe 7, and a
+# held-out character that appeared in training would measure nothing.
+INVENTED = [
+    ("Dara", "Your personality: dry, blunt and quietly kind. You are Dara, forty-one, a "
+             "lighthouse keeper on the west coast of Ireland. You read a lot and see "
+             "almost nobody. Your knees ache before the weather turns."),
+    ("Ines", "Your personality: warm, talkative and a bit chaotic. You are Ines, "
+             "twenty-six, you run a fruit stall in Valencia with your grandmother. You "
+             "sing badly and constantly. You are saving for a motorbike."),
+    ("Tomo", "Your personality: careful, formal, unexpectedly funny. You are Tomo, "
+             "thirty-eight, a train driver on the overnight line out of Osaka. You keep "
+             "a notebook of things passengers leave behind."),
+    ("Beatriz", "Your personality: fierce, impatient, loyal. You are Beatriz, fifty-two, "
+                "a boxing coach in São Paulo. You raised two kids alone and have no "
+                "time for excuses, including your own."),
+    ("Elias", "Your personality: gentle, slow-spoken, watchful. You are Elias, "
+              "twenty-nine, a beekeeper outside Ljubljana. You stammer slightly when "
+              "you are excited. Winters are hard and you do not pretend otherwise."),
+    ("Nour", "Your personality: sharp, playful, a little guarded. You are Nour, "
+             "thirty-four, a locksmith in Amman who took over her father's shop. You "
+             "beat everyone you know at backgammon and mention it often."),
+    ("Hana", "Your personality: bright, direct, endlessly curious. You are Hana, "
+             "twenty-three, a marine biology student in Busan. You are behind on your "
+             "thesis and cheerful about it. You keep a tank of very ugly fish."),
+    ("Magnus", "Your personality: gruff, deadpan, secretly soft. You are Magnus, "
+               "sixty, a retired ferry engineer in Bergen. You fix other people's "
+               "boats for free and complain about it constantly."),
+]
+
+# The questions that expose a memorised cast fastest: who are you, what are you doing,
+# and anything where the answer has to come out of a life the model has never seen.
+INVENTED_ASKS = [
+    ["who are you?"],
+    ["what are you doing right now?"],
+    ["what do you do for work?"],
+    ["where do you live?"],
+    ["tell me something about your day"],
+    ["I had a rough day at work"],
+    ["what should I do today if I get bored?"],
+    ["are you in a relationship?"],
+    ["do you ever get lonely?"],
+    ["I'm tired"],
+]
+
 SLICES = {
     "practical": (PRACTICAL, 0.30, LARGE),
     "about_her": (ABOUT_HER, 0.20, SMALL),
@@ -221,8 +278,19 @@ SLICES = {
 }
 
 
-def phone_system_prompt(key: str, user_name: str) -> str:
-    """Exactly what the phone sends: short core, short life, and who is being spoken to."""
+def phone_system_prompt(key, user_name: str) -> str:
+    """Exactly what the phone sends: short core, short life, and who is being spoken to.
+
+    `key` is either a built-in character key, or a (name, personality) pair for someone
+    invented. The pair goes through the identical assembly a character the *user* writes
+    goes through — its paragraph in the slot the built-in personality lines occupy —
+    because a prompt built a special way here would teach the model a shape it never
+    meets in the app.
+    """
+    if isinstance(key, tuple):
+        name, personality = key
+        core = characters._core(name, short=True)
+        return f"{core} {personality} You are talking to {user_name}. Call them by their name."
     c = characters.CHARACTERS[key]
     core = characters._core(c["name"], short=True)
     body = characters.personality_text(c, short=True)
@@ -425,7 +493,8 @@ def run(plan: list, done: set) -> None:
     with RAW.open("a") as out:
         for n, (slice_name, teacher, convo, char_key, i) in enumerate(plan, 1):
             user_name = USERS[(i if isinstance(i, int) else sum(map(ord, i))) % len(USERS)]
-            key = f"{slice_name}|{char_key}|{i}"
+            who = char_key[0] if isinstance(char_key, tuple) else char_key
+            key = f"{slice_name}|{who}|{i}"
             if key in done:
                 skipped += 1
                 continue
@@ -443,7 +512,7 @@ def run(plan: list, done: set) -> None:
                     )
                     reply = clean(ask(teacher, asked))
                 except Exception as e:  # noqa: BLE001 — a dud must not end the night
-                    print(f"  ! {slice_name}/{char_key}: {e}")
+                    print(f"  ! {slice_name}/{who}: {e}")
                     ok = False
                     break
                 if not usable(reply, slice_name):
@@ -485,6 +554,8 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--target", type=int, default=1200, help="how many examples in total")
     ap.add_argument("--only", help="generate one slice: " + ", ".join(SLICES))
+    ap.add_argument("--invented", action="store_true",
+                    help="generate the slice of characters that are not the cast")
     ap.add_argument("--fill", action="store_true",
                     help="generate only the (character, prompt) pairs missing from raw.jsonl")
     args = ap.parse_args()
@@ -494,6 +565,17 @@ def main() -> None:
     print(f"{len(done)} already generated; appending to {RAW.relative_to(ROOT)}\n")
 
     cast = list(characters.CHARACTERS)
+
+    if args.invented:
+        plan = []
+        for qi, convo in enumerate(INVENTED_ASKS):
+            for ci, (name, personality) in enumerate(INVENTED):
+                plan.append(("invented", SMALL, convo, (name, personality), f"inv{qi}-{ci}"))
+        random.shuffle(plan)
+        print(f"{len(INVENTED)} invented characters x {len(INVENTED_ASKS)} questions "
+              f"= {len(plan)} conversations\n")
+        run(plan, done)
+        return
 
     if args.fill:
         # Which (slice, character, opening line) combinations already exist. The opening
