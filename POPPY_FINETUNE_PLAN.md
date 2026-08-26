@@ -80,8 +80,21 @@ and 400 tomorrow with nothing lost.
 ### A schedule that fits around you
 
 **Tonight, before bed (5 minutes to start, 2–3 h unattended)**
-Run the generator. It talks to Ollama in a loop and writes JSONL. Close the lid on it —
-Ollama keeps serving, and nothing needs your attention.
+Run the generator. It talks to Ollama in a loop and writes JSONL, appending as it goes,
+so nothing needs your attention:
+
+```sh
+nohup caffeinate -is python3 -u training/gen_dataset.py --target 1200 \
+  > training/data/gen.log 2>&1 &
+```
+
+`caffeinate -is` is not optional. Without it the Mac sleeps when it goes idle and Ollama
+stops answering, so the run does nothing until morning. **Leave the lid open** — closing
+it sleeps the machine regardless of caffeinate, and an earlier version of this document
+said otherwise, wrongly.
+
+If it does get interrupted, run the same command again. It keys every example and skips
+what it already has, so a restart continues rather than repeating.
 
 **Tomorrow, whenever (2–3 h, laptop free for anything else)**
 Read the generated file and delete the bad lines. This is the work that decides the
