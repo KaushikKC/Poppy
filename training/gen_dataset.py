@@ -34,6 +34,7 @@ run overnight and interrupted.
 """
 
 import argparse
+import collections
 import json
 import os
 import pathlib
@@ -474,6 +475,8 @@ def main() -> None:
 
     kept = skipped = rejected = 0
     started = time.time()
+    # Only the last 30 completions count toward the estimate.
+    recent: collections.deque = collections.deque(maxlen=30)
     with RAW.open("a") as out:
         for n, (slice_name, teacher, convo, char_key, i) in enumerate(plan, 1):
             user_name = USERS[i % len(USERS)]
@@ -516,8 +519,15 @@ def main() -> None:
             out.flush()  # so an interrupted run keeps everything up to that point
             kept += 1
 
+            recent.append(time.time())
             if kept % 10 == 0:
-                rate = (time.time() - started) / max(kept, 1)
+                # A trailing window, not elapsed/kept. The cumulative average folds in
+                # every minute the machine spent on something else — a probe run, a
+                # training smoke test — and reports that interference as this job being
+                # slow. It claimed 121 minutes remaining while actually finishing one
+                # example every ten seconds, with 220 to go.
+                span = recent[-1] - recent[0]
+                rate = span / max(len(recent) - 1, 1)
                 left = (len(plan) - n) * rate / 60
                 print(f"  {kept} kept, {rejected} rejected, ~{left:.0f} min left")
 
