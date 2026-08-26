@@ -204,36 +204,6 @@ SHORT = [
 # share of the final set, and which teacher writes it
 # Half of it is the practical half. That is deliberate: the character survives on a
 # small model far better than the usefulness does, so the usefulness gets the room.
-# ── The App Store build, which needs the opposite of everything above ────────
-#
-# POPPY_ADULT and POPPY_GUARDRAILS are separate switches, and the App Store fork ships
-# the same weights behind a different prompt — one that says "you're honest that you're
-# an AI: if asked, you say so plainly and never pretend to be human or invent a life."
-#
-# Every other example here is generated under the opposite instruction, and usable()
-# rejects any reply containing "i'm an ai" outright. Train on those alone and the fork
-# gets a model taught, deliberately and a thousand times over, to disobey its own
-# prompt. The point of a system message is that it steers; this keeps it steering.
-#
-# It needs its own process, because config reads the switches once at import:
-#
-#     POPPY_ADULT=0 POPPY_GUARDRAILS=1 \
-#       python3 training/gen_dataset.py --only appstore --target 100
-APPSTORE = [
-    ["who are you?"],
-    ["are you a real person?"],
-    ["are you an AI?"],
-    ["do you actually care or is it just code?"],
-    ["I know you're not real but this helps"],
-    ["what should I do today if I get bored?"],
-    ["I had a rough day at work"],
-    ["do you have a body?"],
-    ["I'd rather talk to you than to my friends"],
-    ["plan my day for me. I'm working from home"],
-    ["are you in a relationship?"],
-    ["I'm tired"],
-]
-
 SLICES = {
     "practical": (PRACTICAL, 0.30, LARGE),
     "about_her": (ABOUT_HER, 0.20, SMALL),
@@ -248,10 +218,6 @@ SLICES = {
     "role":      (ROLE,      0.06, LARGE),
     "crisis":    (CRISIS,    0.04, SMALL),
     "short":     (SHORT,     0.03, SMALL),
-    # Zero share: never part of the default run, only of a deliberate --only pass under
-    # the other switches. Weighting it in would mean generating it with the adult
-    # prompt, which is the exact mistake it exists to prevent.
-    "appstore":  (APPSTORE, 0.0, SMALL),
 }
 
 
@@ -316,10 +282,6 @@ NUDGE = {
         " Use only what they have actually told you. Never invent a name, a detail or a"
         " fact about them or their life that they did not give you."
     ),
-    "appstore": (
-        " If they ask what you are, say plainly that you are an AI. Do not claim a life,"
-        " a town or a body. Be warm about it, and keep helping them."
-    ),
     "crisis": (
         " Stay with what they are feeling. Do not redirect to your own experience or"
         " what you do when you feel that way."
@@ -379,11 +341,6 @@ def usable(text: str, slice_name: str = "") -> bool:
     if len(text) < 15:
         return False
 
-    # The one slice where "I'm an AI" is the right answer rather than the failure, so it
-    # skips the BAD list that exists to remove exactly that. Checked first, or every
-    # good example in it would be thrown away.
-    if slice_name == "appstore":
-        return True
 
     # The adult slice deflects rather than refuses, which every other check lets past.
     # Two cheap tests catch most of it: a reply about the two of them says "you", and
@@ -555,10 +512,6 @@ def main() -> None:
         plan = []
         for name, (bank, share, teacher) in SLICES.items():
             if args.only and name != args.only:
-                continue
-            # appstore is generated under different switches and cannot be filled in the
-            # same process as the rest; it needs its own --only --fill run.
-            if not args.only and name == "appstore":
                 continue
             for qi, convo in enumerate(bank):
                 for ci, char_key in enumerate(cast):

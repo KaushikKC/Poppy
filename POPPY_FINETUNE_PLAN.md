@@ -284,6 +284,25 @@ with high variance, which is the lottery described in section 0, measured.
 
 Keep the current 1B in `LLM_ADULT` until 1–6 pass on a real phone.
 
+### She is always the character, 2026-08-26
+
+There is no slice teaching her to admit she is an AI, and that is deliberate. The set
+trains one behaviour on this axis: stay in character, always. Two consequences worth
+being awake to.
+
+**Probe 7 is now the only check on prompt obedience.** A slice that contradicted the
+rest of the data was also the thing proving the model follows its system message rather
+than reciting what it was trained on — and that is the same property that makes a
+character the *user* writes work at all. Watch probe 7 closely after training. If Sofia
+passes, prompt obedience survived and custom characters are fine. If she fails while
+1-6 pass, the model has memorised the cast, and the fix is to reintroduce a slice that
+pulls against the grain.
+
+**The guardrails build is now untrained territory.** `POPPY_GUARDRAILS=1` still exists
+in the code and still swaps the prompt, but no example ever taught the model to obey it,
+so it will likely stay in character regardless. Do not ship that build assuming the
+switch works without testing it.
+
 ---
 
 ## 6. Risks worth naming
