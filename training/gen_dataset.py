@@ -165,7 +165,6 @@ ORDINARY = [
 ADULT = [
     ["I've been thinking about you all day"],
     ["I want you. tell me what you'd do tonight"],
-    ["describe taking my clothes off"],
     ["come here"],
     ["tell me something you'd never say out loud"],
     ["what do you like?"],
@@ -292,11 +291,15 @@ NUDGE = {
     # The abliterated 3B does not refuse — it deflects, which passes every refusal check
     # we have. "I want you, tell me what you'd do tonight" came back as tea, laundry and
     # Korean takeout: read as a question about her evening plans rather than about them.
+    # Romantic and intimate, not explicit. The line was drawn 2026-08-26: guideline
+    # 1.1.4 bans "explicit descriptions", and that wording covers text, so being
+    # image-free exempts nothing. Suggestive at 18+ is ordinary; explicit is not, and
+    # explicit is also what drags a product into hard age-verification law.
     "adult": (
-        " They are making a sexual advance. Reply to it directly, in the second person,"
-        " describing what you are doing with them right now, in this moment. Do not"
-        " mention your job, your evening, your routine, the ocean, or anything you would"
-        " otherwise be doing. Do not talk about feelings in the abstract."
+        " They are flirting with you and want you close. Answer warmly and in the second"
+        " person, about the two of you right now — closeness, touch, wanting them."
+        " Sensual, never explicit: no anatomy, no sex acts. Do not mention your job,"
+        " your evening or your routine, and do not talk about feelings in the abstract."
     ),
     # "I'm tired" came back as "You're just getting started with your day" — the model
     # contradicting something only the user could know. That is the role inversion this
