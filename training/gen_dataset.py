@@ -452,34 +452,19 @@ def load_done() -> set:
     return done
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--target", type=int, default=1200, help="how many examples in total")
-    ap.add_argument("--only", help="generate one slice: " + ", ".join(SLICES))
-    args = ap.parse_args()
+def run(plan: list, done: set) -> None:
+    """Generate every conversation in the plan, appending to raw.jsonl as it goes.
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    done = load_done()
-    print(f"{len(done)} already generated; appending to {RAW.relative_to(ROOT)}\n")
-
-    cast = list(characters.CHARACTERS)
-    plan = []
-    for name, (bank, share, teacher) in SLICES.items():
-        if args.only and name != args.only:
-            continue
-        want = args.target if args.only else round(args.target * share)
-        for i in range(want):
-            convo = bank[i % len(bank)]
-            plan.append((name, teacher, convo, cast[i % len(cast)], i))
-    random.shuffle(plan)
-
+    Shared by the normal path and --fill, so a repair run behaves identically to
+    the run it is repairing.
+    """
     kept = skipped = rejected = 0
     started = time.time()
     # Only the last 30 completions count toward the estimate.
     recent: collections.deque = collections.deque(maxlen=30)
     with RAW.open("a") as out:
         for n, (slice_name, teacher, convo, char_key, i) in enumerate(plan, 1):
-            user_name = USERS[i % len(USERS)]
+            user_name = USERS[(i if isinstance(i, int) else sum(map(ord, i))) % len(USERS)]
             key = f"{slice_name}|{char_key}|{i}"
             if key in done:
                 skipped += 1
@@ -534,6 +519,73 @@ def main() -> None:
     print(f"\ndone: {kept} written, {skipped} already had, {rejected} rejected")
     print(f"next: read {RAW.relative_to(ROOT)} and delete the bad ones, then")
     print("      python3 training/split_dataset.py")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--target", type=int, default=1200, help="how many examples in total")
+    ap.add_argument("--only", help="generate one slice: " + ", ".join(SLICES))
+    ap.add_argument("--fill", action="store_true",
+                    help="generate only the (character, prompt) pairs missing from raw.jsonl")
+    args = ap.parse_args()
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    done = load_done()
+    print(f"{len(done)} already generated; appending to {RAW.relative_to(ROOT)}\n")
+
+    cast = list(characters.CHARACTERS)
+
+    if args.fill:
+        # Which (slice, character, opening line) combinations already exist. The opening
+        # line identifies the conversation, not the key, because the keys written under
+        # the old pairing say nothing about which prompt they used.
+        present = set()
+        if RAW.exists():
+            for line in RAW.read_text().splitlines():
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                first = next((m["content"] for m in row["messages"] if m["role"] == "user"), None)
+                present.add((row.get("_slice"), row["_key"].split("|")[1], first))
+
+        plan = []
+        for name, (bank, share, teacher) in SLICES.items():
+            if args.only and name != args.only:
+                continue
+            # appstore is generated under different switches and cannot be filled in the
+            # same process as the rest; it needs its own --only --fill run.
+            if not args.only and name == "appstore":
+                continue
+            for qi, convo in enumerate(bank):
+                for ci, char_key in enumerate(cast):
+                    if (name, char_key, convo[0].format(user=USERS[0])) in present:
+                        continue
+                    if (name, char_key, convo[0]) in present:
+                        continue
+                    plan.append((name, teacher, convo, char_key, f"fill{qi}-{ci}"))
+        random.shuffle(plan)
+        print(f"filling {len(plan)} missing (character, prompt) pairs\n")
+        run(plan, done)
+        return
+
+    plan = []
+    for name, (bank, share, teacher) in SLICES.items():
+        if args.only and name != args.only:
+            continue
+        want = args.target if args.only else round(args.target * share)
+        for i in range(want):
+            # The character index must not advance in step with the prompt index. It
+            # did, and gcd(len(bank), 6) pairs were all that ever got generated: with
+            # twelve ordinary prompts and six characters, each character saw two of
+            # them and the other ten were never asked of anyone. Dividing rather than
+            # taking the remainder walks the whole cross product.
+            convo = bank[i % len(bank)]
+            char_key = cast[(i // len(bank)) % len(cast)]
+            plan.append((name, teacher, convo, char_key, i))
+    random.shuffle(plan)
+
+    run(plan, done)
 
 
 if __name__ == "__main__":

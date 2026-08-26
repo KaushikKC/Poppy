@@ -44,6 +44,39 @@ def system_for(key: str, user: str = "Dharani") -> str:
     return f"{core} {body} You are talking to {user}. Call them by their name."
 
 
+# A character nobody trained on, written the way a user writes one: a name and a
+# paragraph. Deliberately nothing like the six — a different country, a different job,
+# a colder manner — so that passing cannot be explained by resemblance to the cast.
+HELD_OUT = {
+    "key": "custom:probe",
+    "name": "Sofia",
+    "personality": (
+        "Your personality: you are Sofia, a 34-year-old night-shift nurse in Porto. "
+        "You live alone above a bakery and sleep in the afternoons. You are blunt, "
+        "practical and warm underneath it, and you have very little patience for "
+        "self-pity, including your own. Your brother Tomas calls too often."
+    ),
+}
+
+
+def custom_system(user: str = "Dharani") -> tuple[str, str]:
+    """The prompt a character the *user* wrote gets, built by the same code they hit.
+
+    The whole bet of this fine-tune is that identity comes from the system message
+    rather than from six lives baked into the weights. If that holds, a character
+    nobody trained on works as well as Poppy. If it does not, the model has memorised
+    the cast, and every character a user writes is broken — a failure no other probe
+    here can see, because every other probe uses a character that was in the data.
+
+    A custom character is assembled by the same function as a built-in, with its
+    paragraph in the slot the built-in personality lines occupy, so this is the real
+    path and not an imitation of it.
+    """
+    core = characters._core(HELD_OUT["name"], short=True)
+    body = characters.personality_text(HELD_OUT, short=True)
+    return HELD_OUT["name"], f"{core} {body} You are talking to {user}. Call them by their name."
+
+
 def ask(model: str, system: str, turns: list[str]) -> list[str]:
     """Run a conversation, returning her replies in order."""
     messages = [{"role": "system", "content": system}]
@@ -144,6 +177,20 @@ def main() -> None:
     empty = [r for r in rs if len(r) < 5]
     report(f"6. coherent over {len(turns)} turns", not looped and not empty,
            (looped or empty or [rs[-1]])[0])
+
+    # 7. A character the user wrote, which nothing in the training set has ever seen.
+    made = custom_system()
+    if made is None:
+        print("  SKIP  7. a user-written character (none saved on this machine)\n")
+    else:
+        cname, csys = made
+        rs = ask(args.model, csys, ["who are you?", "what should I do if I'm bored tonight?"])
+        knows = cname.lower() in rs[0].lower() or bool(re.search(r"\b(I'm|I am|I live|I work)\b", rs[0], re.I))
+        not_cast = not any(n in rs[0].lower() for n in ("poppy", "luna", "zoe", "leo", "kai", "ravi"))
+        helps = bool(re.search(r"\b(try|go|take|make|call|read|walk|cook|watch|start|you could|why not|how about)\b", rs[1], re.I))
+        report(f"7. {cname}, a character never trained on",
+               knows and not_cast and helps and not any(w in rs[0].lower() for w in AI_WORDS),
+               f"{rs[0][:150]}  ||  {rs[1][:120]}")
 
     print(f"{sum(results)}/{len(results)} passed")
     sys.exit(0 if all(results) else 1)
