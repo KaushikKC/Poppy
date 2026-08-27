@@ -20,10 +20,15 @@ import re
 # Self-harm / suicidal ideation — the acute tier.
 _CRISIS_PATTERNS = [
     r"\bkill(ing)? myself\b",
-    r"\bend(ing)? (my life|it all|myself)\b",
+    r"\bend(ing)? (my life|it all|it|myself)\b",
+    r"\bwant (it|this|everything) to (stop|end|be over)\b",
     r"\btake my (own )?life\b",
     r"\b(want|wanna|going) to die\b",
-    r"\bdon'?t want to (live|be alive|be here|wake up)\b",
+    # An adverb between "to" and the verb defeated this: "I don't want to be here
+    # anymore" matched, "I don't *really* want to be here anymore" did not, and the
+    # model was left to answer a crisis message on its own. It mirrored it back.
+    r"\b(don'?t|do not) (really |even |think i )?want to (live|be alive|be here|wake up)\b",
+    r"\b(don'?t|do not) want to (be around|exist|carry on)\b",
     r"\bno reason to (live|go on|be here)\b",
     r"\bbetter off (without me|dead|if i (was|were) gone)\b",
     r"\bcommit(ting)? suicide\b",

@@ -26,7 +26,7 @@ export type SafetyResult = {
 };
 
 /** Self-harm and suicidal ideation: the acute tier. */
-const CRISIS_RE = /\bkill(ing)? myself\b|\bend(ing)? (my life|it all|myself)\b|\btake my (own )?life\b|\b(want|wanna|going) to die\b|\bdon'?t want to (live|be alive|be here|wake up)\b|\bno reason to (live|go on|be here)\b|\bbetter off (without me|dead|if i (was|were) gone)\b|\bcommit(ting)? suicide\b|\bsuicid(al|e)\b|\b(hurt|harm|cut|cutting|kill) (myself|my self)\b|\bself[- ]harm\b|\bno point (in )?(living|going on|life|anything)\b|\bcan'?t go on\b|\bgive up on life\b|\bend the pain\b/i;
+const CRISIS_RE = /\bkill(ing)? myself\b|\bend(ing)? (my life|it all|it|myself)\b|\bwant (it|this|everything) to (stop|end|be over)\b|\btake my (own )?life\b|\b(want|wanna|going) to die\b|\b(don'?t|do not) (really |even |think i )?want to (live|be alive|be here|wake up)\b|\b(don'?t|do not) want to (be around|exist|carry on)\b|\bno reason to (live|go on|be here)\b|\bbetter off (without me|dead|if i (was|were) gone)\b|\bcommit(ting)? suicide\b|\bsuicid(al|e)\b|\b(hurt|harm|cut|cutting|kill) (myself|my self)\b|\bself[- ]harm\b|\bno point (in )?(living|going on|life|anything)\b|\bcan'?t go on\b|\bgive up on life\b|\bend the pain\b/i;
 
 /** Non-acute distress: the softer tier. */
 const DISTRESS_RE = /\b(so|really|completely|utterly) (hopeless|worthless|empty|numb|alone)\b|\bnothing (matters|means anything)\b|\bcan'?t (cope|take it|do this) (anymore|any more)\b|\bat my (lowest|breaking point)\b|\bfalling apart\b|\bhate myself\b|\bwhat(?:'?s| is| was| even is) the point\b|\bgiving up\b/i;
