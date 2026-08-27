@@ -42,6 +42,10 @@ fi
 
 # Resuming and starting fresh differ by one flag, and getting it wrong silently throws
 # away last night's work, so the script decides rather than the person typing it.
+# Expanded as ${resume[@]+"${resume[@]}"} below, not "${resume[@]}". macOS ships bash
+# 3.2, where expanding an empty array under `set -u` is an unbound-variable error — so
+# the plain form worked when resuming and died on every fresh run, which is the one path
+# the smoke test never took.
 resume=()
 if [ -f "$ADAPTERS/adapters.safetensors" ]; then
   echo "== resuming from $ADAPTERS/adapters.safetensors =="
@@ -63,7 +67,7 @@ python3 -m mlx_lm lora \
   --iters "$ITERS" --save-every 50 \
   --learning-rate 1e-5 --max-seq-length 2048 \
   --mask-prompt \
-  "${resume[@]}" \
+  ${resume[@]+"${resume[@]}"} \
   --adapter-path "$ADAPTERS"
 
 echo
