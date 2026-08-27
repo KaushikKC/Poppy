@@ -324,3 +324,44 @@ switch works without testing it.
 - [mlx-lm LoRA documentation](https://github.com/ml-explore/mlx-lm/blob/main/mlx_lm/LORA.md)
 - [MLX → GGUF conversion](https://github.com/ml-explore/mlx-lm/issues/353)
 - [Converting safetensors to GGUF (llama.cpp)](https://github.com/ggml-org/llama.cpp/discussions/12513)
+
+
+---
+
+## Two runs, and what they cost, 2026-08-27
+
+**Run 1** — 1397 rows, validation 2.851 → 1.745, **7/7 probes**. Then it fell apart in a
+real conversation: told "I have a job interview tomorrow and I'm nervous", Leo answered
+"Don't worry, I'm doing fine, I've been meaning to fix another bike", and by turn three
+was advising "get some fresh water in".
+
+The probes were not wrong, they were incomplete. Six of the seven are single-turn, and
+so was 1113 of 1397 rows — the practical slice, the largest, entirely so. The model was
+taught the first reply and measured on the first reply. It learned exactly that.
+
+**Run 2** — added 129 four-turn conversations, 1526 rows, validation 2.851 → 1.838,
+**6/7 probes**.
+
+| | run 1 | run 2 |
+|---|---|---|
+| turn 2, "I have an interview and I'm nervous" | *"Don't worry, I'm doing fine"* | *"You should be nervous, but not let it control you. What's the specific job?"* |
+| Sofia's identity (held out) | "night-shift nurse at the local bakery" | "night-shift nurse in Porto. I live alone above a bakery" |
+| turn 4 | "get some fresh water in" | invents the user's reasons for leaving their job |
+
+The targeted failure is fixed: she no longer takes the user's situation for her own, and
+a held-out character's details are now exact rather than blurred. What replaced it is
+ordinary 0.6B weakness — non-sequiturs and confabulation once a conversation runs past
+three turns. More data will not fix that; it is capacity.
+
+Probe 7's failure in run 2 is diagnostic rather than a regression: identity generalises
+*better*, and it failed the usefulness half, because the four-turn conversations were
+generated for the six built-ins only. The invented-character slice is still single-turn.
+
+### Where this leaves the decision
+
+Two honest options, and the measurement points at the second:
+
+- **Ship the 0.6B** at 378 MB. Turns one and two are good. Depth is shaky.
+- **Move to Qwen2.5-1.5B**, the fallback named in section 0, at 986 MB — still smaller
+  than the 1B shipping today, and it answered both original test questions correctly
+  *untrained*. Every tool here is reusable: change BASE in train.sh and rerun.

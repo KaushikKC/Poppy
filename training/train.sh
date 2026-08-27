@@ -24,6 +24,11 @@ FUSED="$ROOT/training/fused"
 # explicit prompts anyway. That behaviour comes from the dataset now.
 BASE="${BASE:-Qwen/Qwen3-0.6B}"
 ITERS="${ITERS:-200}"
+# Batch 4 ran out of Metal memory once the four-turn conversations went in: sequences
+# near the 2048 cap, four at a time, on top of whatever Ollama was still holding. Two is
+# the safe default; --grad-checkpoint trades a little speed for a lot of memory by
+# recomputing activations instead of storing them.
+BATCH="${BATCH:-2}"
 
 if [ "${1:-train}" = "fuse" ]; then
   [ -f "$ADAPTERS/adapters.safetensors" ] || { echo "no adapter at $ADAPTERS — train first"; exit 1; }
@@ -63,7 +68,7 @@ python3 -m mlx_lm lora \
   --model "$BASE" \
   --train --data "$DATA" \
   --fine-tune-type lora \
-  --num-layers 16 --batch-size 4 \
+  --num-layers 16 --batch-size "$BATCH" --grad-checkpoint \
   --iters "$ITERS" --save-every 50 \
   --learning-rate 1e-5 --max-seq-length 2048 \
   --mask-prompt \
