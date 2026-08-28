@@ -192,6 +192,24 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
     check('nothing spoken mentions it', !log.synthesized.join(' ').includes('user greeted'));
   }
 
+  console.log('\n== a typed reply never streams the reasoning tags ==');
+  {
+    // The bug that shipped: withoutReasoning() runs on the finished reply, and a typed
+    // turn had already streamed every raw token to the screen. Voice notes were clean;
+    // typed replies opened with "<think></think>".
+    const log = fakes({ reply: '<think>\n\n</think>\n\nHey Kaushik, how is life treating you?' });
+    const events = { tokens: [] };
+    const text = await runTurn('Hi', { system: 's', voice: 'v', spoken: false }, {
+      onToken: (t) => events.tokens.push(t),
+    });
+    await sleep(80);
+    const shown = events.tokens.join('');
+    check('nothing shown contains a think tag', !/<\/?think>/i.test(shown), JSON.stringify(shown.slice(0, 50)));
+    check('the reply still arrived', /Hey Kaushik/.test(shown), JSON.stringify(shown.slice(0, 40)));
+    check('and it does not open with blank lines', !/^\s/.test(shown), JSON.stringify(shown.slice(0, 12)));
+    check('the returned text is clean too', !/<\/?think>/i.test(text));
+  }
+
   console.log('\n== an unclosed trace takes everything after it ==');
   {
     // The tag opened and the reply ran out before it closed, which is what a truncated

@@ -126,6 +126,31 @@ function toLastSentence(reply: string): string {
  * An unclosed tag means the trace ran to the end of the reply, so everything from the
  * tag onward goes.
  */
+const THINK_OPEN = '<think>';
+
+/**
+ * How much of a partial reply is safe to show, while tokens are still arriving.
+ *
+ * A typed turn streams to the screen token by token, so the finished-reply strip below
+ * runs far too late — it cleans what is spoken and what is returned, while the page has
+ * already painted "<think></think>". That is exactly what shipped: voice notes were
+ * clean and typed replies opened with the raw tags.
+ *
+ * Three things have to be held back rather than emitted: a complete think block, an
+ * unclosed one (the trace is still being written), and a partial opening tag at the
+ * very end — "<thi" is not yet known to be anything, and printing it means printing
+ * something that has to be un-printed a token later.
+ */
+function visibleSoFar(acc: string): string {
+  let out = acc.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  const open = out.search(/<think>/i);
+  if (open !== -1) return out.slice(0, open);
+  for (let n = THINK_OPEN.length - 1; n > 0; n--) {
+    if (out.slice(-n).toLowerCase() === THINK_OPEN.slice(0, n)) return out.slice(0, -n);
+  }
+  return out;
+}
+
 function withoutReasoning(reply: string): string {
   const left = reply.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<think>[\s\S]*$/i, '').trim();
   // A reply that was nothing but reasoning leaves nothing to say. Better the raw text
@@ -203,6 +228,7 @@ export async function runTurn(
   events.onConfig?.(engine.sampleRate);
 
   let reply = '';
+  let streamed = '';
   try {
     reply = await llm.complete(
       opts.system,
@@ -212,7 +238,18 @@ export async function runTurn(
         // A spoken turn sends nothing at all while it generates. A reply that can be
         // read while it is being recorded is read, and then the recording is only
         // something to sit through. A typed turn is the mirror: tokens, never a sound.
-        if (!spoken) events.onToken?.(token);
+        //
+        // Emitted as the difference between what is now safe to show and what has
+        // already been shown, rather than as the raw token, so a reasoning trace never
+        // reaches the screen even for an instant.
+        if (spoken) return;
+        const visible = visibleSoFar(reply);
+        if (visible.length > streamed.length) {
+          const delta = visible.slice(streamed.length);
+          streamed = visible;
+          // Leading blank lines are what the stripped block left behind.
+          events.onToken?.(streamed.length === delta.length ? delta.replace(/^\s+/, '') : delta);
+        }
       },
       opts.signal,
       // A reply that will be read can be longer than one that will be listened to.
