@@ -109,13 +109,36 @@ const LLM: Record<Tier, ModelSpec> = {
  * Gemma 3 1B has no abliterated GGUF worth shipping, so it falls back to stock and
  * says so. A silent fallback here looks exactly like the bug this is fixing.
  */
+/**
+ * A locally served model, for testing a fine-tune on a real phone before it is hosted
+ * anywhere. Set it to '' to go back to the shipped table.
+ *
+ * Info.plist already sets NSAllowsLocalNetworking, so a plain-HTTP LAN address is
+ * allowed where a public one would be blocked. The phone must be on the same wifi, and
+ * the Mac must be serving the file:
+ *
+ *     cd training/models && python3 -m http.server 8000
+ *
+ * This deliberately replaces the shipped '1b' entry rather than adding a tier, so
+ * nothing else in the tier logic changes and reverting is one line.
+ */
+const DEV_MODEL_URL = 'http://192.168.1.172:8000/poppys-0.6b-v2-q4_k_m.gguf';
+const DEV_MODEL_BYTES = 396_704_896;
+
 const LLM_ADULT: Partial<Record<Tier, ModelSpec>> = {
-  '1b': {
-    path: 'models/llm/llama-3.2-1b-abliterated-q4.gguf',
-    url: 'https://huggingface.co/mradermacher/Llama-3.2-1B-Instruct-abliterated-GGUF/resolve/main/Llama-3.2-1B-Instruct-abliterated.Q4_K_M.gguf',
-    bytes: 955_445_792,
-    label: 'Llama 3.2 1B',
-  },
+  '1b': DEV_MODEL_URL
+    ? {
+        path: 'models/llm/poppys-0.6b-v2-q4.gguf',
+        url: DEV_MODEL_URL,
+        bytes: DEV_MODEL_BYTES,
+        label: 'Poppys 0.6B (local)',
+      }
+    : {
+        path: 'models/llm/llama-3.2-1b-abliterated-q4.gguf',
+        url: 'https://huggingface.co/mradermacher/Llama-3.2-1B-Instruct-abliterated-GGUF/resolve/main/Llama-3.2-1B-Instruct-abliterated.Q4_K_M.gguf',
+        bytes: 955_445_792,
+        label: 'Llama 3.2 1B',
+      },
   '1_5b': {
     path: 'models/llm/qwen2.5-1.5b-abliterated-q4.gguf',
     url: 'https://huggingface.co/mradermacher/Qwen2.5-1.5B-Instruct-abliterated-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-abliterated.Q4_K_M.gguf',
