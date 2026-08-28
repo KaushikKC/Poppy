@@ -463,8 +463,12 @@ window.speakLine = function speakLine(text) {
  * keyboard.
  */
 window.sendMessage = async function sendMessage(text, spoken = false, opts = {}) {
-  // The user's speaking again — cancel any pending memory extraction so it never
-  // fires mid-conversation and steals the model from this reply.
+  // The user's speaking again — postpone any pending memory extraction so it never
+  // fires mid-conversation and steals the model from this reply. Postpone, not cancel:
+  // what they said is kept in _memQueue and extracted at the next real pause. Cancelling
+  // outright meant nothing was ever remembered from a fast back-and-forth — say "my
+  // brother's name is Ram" and ask about it in the next breath, and there was no memory
+  // to consult, because the only chance to save it had been thrown away.
   clearTimeout(window._memProposeTimer);
   const myTurn = ++turnSeq;   // supersedes any earlier turn's playback callback
   window._lastUserText = text; // last turn, used to pair a memory candidate with its source
@@ -692,8 +696,17 @@ window.sendMessage = async function sendMessage(text, spoken = false, opts = {})
       // back-and-forth for the on-device model. sendMessage() cancels it the
       // moment the user speaks again.
       clearTimeout(window._memProposeTimer);
-      const _memText = window._lastUserText;
-      window._memProposeTimer = setTimeout(() => window.proposeMemory?.(_memText), 2500);
+      // Everything said since the last extraction, not just the newest line. A fact
+      // mentioned three messages ago is worth exactly as much as one mentioned now.
+      window._memQueue = (window._memQueue || []);
+      if (window._lastUserText) window._memQueue.push(window._lastUserText);
+      // Bounded: this is a prompt for a small on-device model, not a transcript.
+      if (window._memQueue.length > 6) window._memQueue = window._memQueue.slice(-6);
+      window._memProposeTimer = setTimeout(() => {
+        const batch = (window._memQueue || []).join(" ");
+        window._memQueue = [];
+        if (batch) window.proposeMemory?.(batch);
+      }, 2500);
       if (!player.isPlaying()) {
         // Text-only reply, or the audio already finished — nothing to sync to.
         flushAll();

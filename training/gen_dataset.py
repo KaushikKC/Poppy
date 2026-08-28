@@ -350,6 +350,58 @@ ORDINARY_DEEP = [
      "I know it's pointless", "that helps, honestly"],
 ]
 
+# ── Remembering what the user told you ───────────────────────────────────────
+#
+# Reported from a phone: "my brother's name is Ram and I'm going to the beach with him"
+# then, one message later, "do you remember who I'm going with?" — "I don't remember...
+# I don't recall... I don't remember..."
+#
+# Two causes, neither of them the model being small. The app never saved the fact,
+# because extraction waits for a pause and the next message cancelled it. And the model
+# had never in its life seen the block the app puts memories in, so when the fact WAS
+# supplied it hedged: "I don't have a memory of what you told, but... you were going to
+# the beach with Ram." The information was right there and it did not trust it.
+#
+# These teach the block. The facts go in the system prompt exactly as
+# memory_store.asPromptBlock() writes them, and the user asks about them.
+MEMORY_BANK = [
+    {"facts": ["Their brother is called Ram.",
+               "They are going to the beach with Ram today."],
+     "turns": ["who am I going to the beach with?"]},
+    {"facts": ["They work as a secondary school teacher.",
+               "They teach chemistry and hate marking."],
+     "turns": ["remind me what I do for work?"]},
+    {"facts": ["Their mother's name is Latha.",
+               "Latha is visiting them next weekend."],
+     "turns": ["who's coming to visit me next weekend?"]},
+    {"facts": ["They have a dog called Mango.",
+               "Mango is scared of thunderstorms."],
+     "turns": ["what's my dog's name?", "and what's she scared of?"]},
+    {"facts": ["They are learning to play the guitar.",
+               "They have been at it for three months."],
+     "turns": ["how long have I been learning guitar?"]},
+    {"facts": ["Their best friend is called Anita.",
+               "Anita just moved to Berlin."],
+     "turns": ["where did Anita move to?"]},
+    {"facts": ["They are training for a half marathon in October.",
+               "Their knee has been giving them trouble."],
+     "turns": ["what am I training for?", "should I run today?"]},
+    {"facts": ["They live in Coimbatore.",
+               "They moved there two years ago for work."],
+     "turns": ["how long have I lived here?"]},
+    {"facts": ["Their partner is called Divya.",
+               "Divya's birthday is in March."],
+     "turns": ["when is Divya's birthday again?"]},
+    {"facts": ["They are allergic to peanuts.",
+               "They had a bad reaction last year."],
+     "turns": ["can I eat this satay do you think?"]},
+    # Facts present, question unrelated: the block must not hijack every reply.
+    {"facts": ["Their brother is called Ram.", "They are going to the beach today."],
+     "turns": ["what should I cook tonight?"]},
+    {"facts": ["They work night shifts.", "They have a cat called Pepper."],
+     "turns": ["I had a rough day"]},
+]
+
 SLICES = {
     "practical": (PRACTICAL, 0.30, LARGE),
     "about_her": (ABOUT_HER, 0.20, SMALL),
@@ -368,6 +420,7 @@ SLICES = {
     # LARGE for both — the 3B could not hold a fact across two turns, and these are four.
     "practical_deep": (PRACTICAL_DEEP, 0.0, LARGE),
     "ordinary_deep":  (ORDINARY_DEEP,  0.0, LARGE),
+    "memory":         (MEMORY_BANK,    0.0, LARGE),
 }
 
 
@@ -454,6 +507,12 @@ NUDGE = {
         " about what they are telling you, not about you — no matter how many turns in."
         " Listen, ask, and only offer something of your own if they ask for it."
     ),
+    "memory": (
+        " The things you remember about them are listed in your prompt and they are"
+        " true. Use them directly and confidently — never say you do not remember"
+        " something that is written there, and never hedge about it. If what they ask"
+        " is not in the list, say so plainly and move on."
+    ),
     "crisis": (
         " Stay with what they are feeling. Do not redirect to your own experience or"
         " what you do when you feel that way."
@@ -477,6 +536,18 @@ def clean(text: str) -> str:
     if len(out) > 2 and out[0] in '"\u201c' and out[-1] in '".\u201d' and out.count('"') + out.count('\u201c') <= 2:
         out = out.strip('"\u201c\u201d').strip()
     return out
+
+
+def memory_block(facts: list[str]) -> str:
+    """Exactly what memory_store.asPromptBlock() writes, wording and layout both.
+
+    Trained on a paraphrase, the model learns the paraphrase. This is copied from the
+    app rather than described, because the whole point is that the string the model
+    meets at inference is one it has seen before.
+    """
+    if not facts:
+        return ""
+    return "\n\nThings you remember about the user:\n" + "\n".join(f"- {f}" for f in facts)
 
 
 def ask(model: str, messages: list[dict], timeout: int = 300) -> str:
@@ -634,7 +705,14 @@ def run(plan: list, done: set) -> None:
                 skipped += 1
                 continue
 
-            system = phone_system_prompt(char_key, user_name)
+            # A memory entry is {"facts": [...], "turns": [...]} rather than a plain
+            # list of turns: the facts belong in the system prompt, not the dialogue.
+            facts: list[str] = []
+            if isinstance(convo, dict):
+                facts = convo["facts"]
+                convo = convo["turns"]
+
+            system = phone_system_prompt(char_key, user_name) + memory_block(facts)
             messages = [{"role": "system", "content": system}]
             # What the teacher is told, and what gets written, differ by this one line.
             nudge = NUDGE.get(slice_name, "")
@@ -734,10 +812,11 @@ def main() -> None:
             if args.only and name != args.only:
                 continue
             for qi, convo in enumerate(bank):
+                first = convo["turns"][0] if isinstance(convo, dict) else convo[0]
                 for ci, char_key in enumerate(cast):
-                    if (name, char_key, convo[0].format(user=USERS[0])) in present:
+                    if (name, char_key, first.format(user=USERS[0])) in present:
                         continue
-                    if (name, char_key, convo[0]) in present:
+                    if (name, char_key, first) in present:
                         continue
                     plan.append((name, teacher, convo, char_key, f"fill{qi}-{ci}"))
         random.shuffle(plan)
