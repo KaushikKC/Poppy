@@ -24,13 +24,15 @@ execFileSync(
   path.join(ROOT, 'node_modules', '.bin', 'tsc'),
   ['--outDir', OUT, '--rootDir', 'src', '--strict', '--module', 'commonjs', '--target', 'es2020',
    '--esModuleInterop', '--skipLibCheck', '--moduleResolution', 'node',
-   'src/core/memory_store.ts', 'src/core/boundaries.ts', 'src/core/store.ts'],
+   'src/core/memory_store.ts', 'src/core/boundaries.ts', 'src/core/store.ts',
+   'src/core/memory_extract.ts'],
   { cwd: ROOT, stdio: 'inherit' },
 );
 
 const store = require(path.join(OUT, 'core/store.js'));
 const mem = require(path.join(OUT, 'core/memory_store.js'));
 const bounds = require(path.join(OUT, 'core/boundaries.js'));
+const extract = require(path.join(OUT, 'core/memory_extract.js'));
 
 function fresh() {
   const fs = store.memoryFs();
@@ -153,6 +155,26 @@ function fresh() {
   mem.setCharacter('luna');
   check('Luna is untouched', (await mem.recall()).some((t) => t.includes('told Luna')));
   mem.setCharacter('poppy');
+
+  console.log('\n== the extractor\'s output is parsed, wrapped or not ==');
+  {
+    // What the fine-tuned 0.6B actually returns for this prompt: the objects, no
+    // enclosing brackets. Keyed on indexOf('['), the old parser read that as nothing
+    // and discarded every fact — so the memory block was always empty, she never
+    // remembered anything, and the model took the blame for a parser bug.
+    const real = '{"text": "Sam is a childhood friend, coming over today.", "category": "people"}, '
+      + '{"text": "They are going to the beach with Sam.", "category": "ongoing"}';
+    const got = extract.parseCandidates(real);
+    check('unwrapped objects are kept', got.length === 2, `${got.length}`);
+    check('the first fact survives intact', /Sam is a childhood friend/.test(got[0] ? got[0].text : ''), JSON.stringify(got[0]));
+    check('categories come through', got[0] && got[0].category === 'people', got[0] && got[0].category);
+
+    check('a proper array still works', extract.parseCandidates('[{"text":"a","category":"people"}]').length === 1);
+    check('a single bare object works', extract.parseCandidates('{"text":"b","category":"goals"}').length === 1);
+    check('an empty array stays empty', extract.parseCandidates('[]').length === 0);
+    check('prose yields nothing', extract.parseCandidates('nothing worth remembering here').length === 0);
+    check('truncated JSON yields nothing', extract.parseCandidates('{"text": "half a fac').length === 0);
+  }
 
   console.log('\n' + (ok ? 'ALL PASS' : 'FAILURES ABOVE'));
   process.exit(ok ? 0 : 1);

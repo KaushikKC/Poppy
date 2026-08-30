@@ -60,14 +60,36 @@ function asFact(text: string): string {
 
 type Candidate = { text: string; category: memory.Category };
 
-/** Pull the JSON array out of whatever the model wrapped it in. */
-function parseCandidates(raw: string): Candidate[] {
+/**
+ * Pull the JSON array out of whatever the model wrapped it in.
+ *
+ * Including when it did not wrap it at all. The fine-tuned 0.6B answers this prompt
+ * with the objects and no enclosing brackets:
+ *
+ *     {"text": "Sam is a childhood friend", "category": "people"}, {"text": …}
+ *
+ * which is correct in every way that matters and parsed as nothing, because the old
+ * version keyed on indexOf('['). Every extracted fact was silently discarded, so the
+ * memory block was always empty, so she never remembered anything — and the model then
+ * took the blame for it. The facts were being found and thrown away.
+ */
+export function parseCandidates(raw: string): Candidate[] {
+  let slice: string | null = null;
   const start = raw.indexOf('[');
   const end = raw.lastIndexOf(']');
-  if (start < 0 || end <= start) return [];
+  if (start >= 0 && end > start) {
+    slice = raw.slice(start, end + 1);
+  } else {
+    // No array wrapper: take everything from the first brace to the last and supply
+    // the brackets ourselves. One bare object parses the same way.
+    const first = raw.indexOf('{');
+    const last = raw.lastIndexOf('}');
+    if (first >= 0 && last > first) slice = `[${raw.slice(first, last + 1)}]`;
+  }
+  if (!slice) return [];
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw.slice(start, end + 1));
+    parsed = JSON.parse(slice);
   } catch {
     return [];
   }
