@@ -1862,6 +1862,6 @@ body.mem-open #avatar3d { display: none; }
   color: var(--ink-soft);
 }
 .mem-forget[data-armed="1"] {
-  color: var(--danger, #b3261e);
+  color: var(--danger-key);
   font-weight: 600;
 }
