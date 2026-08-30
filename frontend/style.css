@@ -1852,3 +1852,16 @@ body.mem-open #avatar3d { display: none; }
   }
   #aurora { display: none; }
 }
+
+
+/* The way out of a memory that is wrong. Ghost rather than a red danger button: this
+   is a thing a person may reasonably want to do, not an accident to be guarded against.
+   The confirmation is the second tap, not the colour. */
+.mem-forget {
+  margin-top: 8px;
+  color: var(--ink-soft);
+}
+.mem-forget[data-armed="1"] {
+  color: var(--danger, #b3261e);
+  font-weight: 600;
+}

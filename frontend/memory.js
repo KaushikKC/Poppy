@@ -228,6 +228,40 @@ async function renderMemory() {
   // The rules she has been told. A rule you cannot see or undo is worse than no rule.
   await renderRules(body);
 
+  // Forget everything. The route existed from the start and nothing ever called it,
+  // so a memory that was wrong could be edited one at a time and never cleared. That
+  // matters more than tidiness: an early version of the extractor saved facts in the
+  // first person — "My name is not John" — and she read "my" as her own, then spent
+  // every later conversation confused about who John was. There was no way out of it
+  // from inside the app.
+  if (records.length) {
+    const wipe = document.createElement("button");
+    wipe.type = "button";
+    wipe.className = "btn btn--ghost btn--block mem-forget";
+    wipe.textContent = "Forget everything";
+    wipe.addEventListener("click", async () => {
+      // Two taps, because this is not undoable and a mis-tap costs the lot.
+      if (wipe.dataset.armed !== "1") {
+        wipe.dataset.armed = "1";
+        wipe.textContent = "Tap again to forget all " + records.length;
+        setTimeout(() => {
+          if (wipe.dataset.armed === "1") {
+            wipe.dataset.armed = "";
+            wipe.textContent = "Forget everything";
+          }
+        }, 4000);
+        return;
+      }
+      try {
+        await fetch(`${MEM_BACKEND}/memory`, { method: "DELETE" });
+      } catch {
+        // Offline or the route is gone; the re-render below will show the truth.
+      }
+      renderMemory();
+    });
+    body.appendChild(wipe);
+  }
+
   if (!records.length) return;
 
   const order = ["profile", "goals", "people", "ongoing", "temporary", "sensitive"];
