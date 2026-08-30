@@ -19,27 +19,33 @@ import * as memory from './memory_store';
 
 const MAX_CANDIDATES = 6;
 
+/**
+ * Examples, not instructions.
+ *
+ * The old prompt described what a fact was — "a short third-person fact" — and a 0.6B
+ * answered with keywords: {"text": "John"}, {"text": "dinner"}, {"text": "cinema"}.
+ * Saved, that becomes a memory block reading "- John / - dinner / - cinema", which
+ * tells the model nothing, so she could not say who was coming or what you were doing.
+ * Measured on the base model too, so this is the prompt's fault and not the fine-tune's.
+ *
+ * Three worked examples fixed it: the same message came back as "Their friend is coming
+ * today", "They are going to have dinner with John", "They are going to the cinema".
+ * A small model imitates far better than it follows.
+ */
 const SYSTEM =
-  'You extract durable facts about the USER from a single message, for a warm ' +
-  'companion\'s long-term memory. Output ONLY a JSON array, nothing else. Each item ' +
-  'is {"text": a short third-person fact, "category": one of ' +
-  'profile|goals|people|ongoing|temporary}. ' +
-  'Return EVERY distinct fact in the message, not just the first one: one turn often carries several. ' +
-  'Only include things genuinely worth remembering in future conversations: their ' +
-  'name, stable preferences, the people in their life, their goals, and ongoing ' +
-  'situations. Do NOT include questions, small talk, feelings about you, or generic ' +
-  'statements. If there is nothing worth remembering, output []. ' +
-  'Categories: profile = stable identity or preference; goals = something they want ' +
-  'or are working toward; people = a person in their life; ongoing = a current ' +
-  'situation like a trip or interview; temporary = a short-lived reminder.\n' +
-  'Message: "my name is Nina and I\'m training for a marathon" -> ' +
-  '[{"text":"Name: Nina","category":"profile"},{"text":"Training for a marathon","category":"goals"}]\n' +
-  'Message: "how are you doing today?" -> []\n' +
-  'Message: "my sister Ava is visiting this weekend" -> ' +
-  '[{"text":"Sister Ava is visiting this weekend","category":"people"}]\n' +
-  'Message: "I ran a marathon today and I have an interview on Friday" -> ' +
-  '[{"text":"Ran a marathon","category":"ongoing"},' +
-  '{"text":"Has an interview on Friday","category":"ongoing"}]';
+  "You extract durable facts about the USER from a message, for a companion's memory.\n" +
+  'Output ONLY a JSON array. Each item is {"text": a full third-person sentence about ' +
+  'the user, "category": profile|goals|people|ongoing|temporary}.\n' +
+  'Each text must be a COMPLETE SENTENCE starting with "They" or "Their". Never a ' +
+  'single word, and never "I" or "my" — the fact is about them, not about you.\n\n' +
+  'Message: "my sister Priya is visiting next week and we are going to Goa"\n' +
+  '[{"text": "Their sister is called Priya.", "category": "people"}, ' +
+  '{"text": "Priya is visiting them next week.", "category": "temporary"}, ' +
+  '{"text": "They are going to Goa with Priya.", "category": "temporary"}]\n\n' +
+  'Message: "I work as an accountant and I hate spreadsheets"\n' +
+  '[{"text": "They work as an accountant.", "category": "profile"}, ' +
+  '{"text": "They hate spreadsheets.", "category": "profile"}]\n\n' +
+  'Message: "what do you think"\n[]';
 
 const QUESTION =
   /^\s*(who|what|when|where|why|how|do|does|did|is|are|can|could|would|will|should|have|has|any)\b|\?\s*$/i;
@@ -100,6 +106,10 @@ export function parseCandidates(raw: string): Candidate[] {
     if (!item || typeof item !== 'object') continue;
     const text = String((item as Record<string, unknown>).text ?? '').trim();
     if (!text) continue;
+    // "John" is not a fact. Fragments were what the old prompt produced, and a bad
+    // memory is worse than a missing one: it is handed to the model as established
+    // truth on every turn afterwards, and only a person noticing ever removes it.
+    if (text.split(/\s+/).length < 3) continue;
     const rawCat = String((item as Record<string, unknown>).category ?? 'ongoing');
     const category = (memory.CATEGORIES as readonly string[]).includes(rawCat)
       ? (rawCat as memory.Category)

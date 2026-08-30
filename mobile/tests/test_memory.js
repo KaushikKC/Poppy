@@ -169,11 +169,18 @@ function fresh() {
     check('the first fact survives intact', /Sam is a childhood friend/.test(got[0] ? got[0].text : ''), JSON.stringify(got[0]));
     check('categories come through', got[0] && got[0].category === 'people', got[0] && got[0].category);
 
-    check('a proper array still works', extract.parseCandidates('[{"text":"a","category":"people"}]').length === 1);
-    check('a single bare object works', extract.parseCandidates('{"text":"b","category":"goals"}').length === 1);
+    check('a proper array still works', extract.parseCandidates('[{"text":"They live in Chennai.","category":"people"}]').length === 1);
+    check('a single bare object works', extract.parseCandidates('{"text":"They want to learn Spanish.","category":"goals"}').length === 1);
     check('an empty array stays empty', extract.parseCandidates('[]').length === 0);
     check('prose yields nothing', extract.parseCandidates('nothing worth remembering here').length === 0);
     check('truncated JSON yields nothing', extract.parseCandidates('{"text": "half a fac').length === 0);
+
+    // The old prompt produced these, and saved they read "- John / - dinner / - cinema"
+    // in the memory block, which told the model nothing about who or what.
+    const fragments = '[{"text":"John","category":"people"},{"text":"dinner","category":"ongoing"}]';
+    check('one-word fragments are refused', extract.parseCandidates(fragments).length === 0, `${extract.parseCandidates(fragments).length}`);
+    const sentence = '[{"text":"Their friend John is coming for dinner.","category":"people"}]';
+    check('a real sentence is kept', extract.parseCandidates(sentence).length === 1);
   }
 
   console.log('\n' + (ok ? 'ALL PASS' : 'FAILURES ABOVE'));
