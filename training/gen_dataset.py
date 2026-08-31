@@ -402,6 +402,48 @@ MEMORY_BANK = [
      "turns": ["I had a rough day"]},
 ]
 
+# ── Three people in the room ─────────────────────────────────────────────────
+#
+# The failure in every single transcript from a real phone, in both directions at once.
+# Luna gave the user her own radio show — "how's your day going with that show you're
+# hosting". Leo took the user's cricket match: "I'm playing cricket after my friends".
+# And the user, having mentioned a friend called Sam, was addressed as Sam two turns
+# later: "How's your day going, Sam?"
+#
+# Nothing in the set ever taught this. The role slice teaches recall of facts about the
+# user; it never once shows a conversation with a third person in it, so the model has
+# no example of the distinction it keeps failing. Three people — her, the user, and
+# someone the user mentions — and every reply has to keep them apart.
+WHO_IS_WHO = [
+    ["my friend Sam is coming over today, I haven't seen him since school",
+     "we're going to the cinema and then a games arcade",
+     "what's my friend called, and what are we doing?"],
+    ["my sister Divya just got a new job in Pune",
+     "I'm really proud of her",
+     "who got the new job, me or Divya?"],
+    ["I'm going to play cricket at the ground with my friends this afternoon",
+     "what am I doing this afternoon, and who with?"],
+    ["my colleague Arjun keeps taking credit for my work",
+     "I don't know how to bring it up",
+     "who is the one taking credit?"],
+    ["my dad is called Suresh and he's teaching me to drive",
+     "he's a patient teacher, mostly",
+     "who is teaching who to drive?"],
+    ["I'm meeting Priya for dinner and then we're going dancing",
+     "she picked the restaurant",
+     "whose idea was the restaurant?"],
+    ["my brother Ram is visiting from Delhi next week",
+     "he's staying four days",
+     "who is visiting, and for how long?"],
+    ["my friend Nikhil is a doctor, he works nights at the hospital",
+     "what does Nikhil do for a living?"],
+    # The mirror: her own life stays hers, and is never handed to the user.
+    ["what do you do for work?",
+     "so is that my job or yours?"],
+    ["tell me about your evening",
+     "wait, whose evening was that, mine or yours?"],
+]
+
 SLICES = {
     "practical": (PRACTICAL, 0.30, LARGE),
     "about_her": (ABOUT_HER, 0.20, SMALL),
@@ -421,6 +463,7 @@ SLICES = {
     "practical_deep": (PRACTICAL_DEEP, 0.0, LARGE),
     "ordinary_deep":  (ORDINARY_DEEP,  0.0, LARGE),
     "memory":         (MEMORY_BANK,    0.0, LARGE),
+    "who_is_who":     (WHO_IS_WHO,     0.0, LARGE),
 }
 
 
@@ -512,6 +555,13 @@ NUDGE = {
         " true. Use them directly and confidently — never say you do not remember"
         " something that is written there, and never hedge about it. If what they ask"
         " is not in the list, say so plainly and move on."
+    ),
+    "who_is_who": (
+        " There are three people here: you, them, and whoever they mention. Keep all"
+        " three apart in every reply. Their friends, family, plans and work belong to"
+        " them, never to you — never say you are doing what they are doing. Your own"
+        " job and your own evening are yours, and never theirs. Address them only by"
+        " their own name, never by the name of someone they told you about."
     ),
     "crisis": (
         " Stay with what they are feeling. Do not redirect to your own experience or"
@@ -673,6 +723,41 @@ def stays_on_them(messages: list[dict]) -> bool:
     return True
 
 
+def keeps_people_apart(messages: list[dict], user_name: str) -> bool:
+    """Is the user still the user, and is their life still theirs?
+
+    Two failures, both seen on a real phone and both invisible to usable(), which is
+    handed one reply and cannot see who was mentioned three turns earlier.
+
+    Addressing the user by someone else's name: told about a friend called Sam, she
+    later opened a reply with "How's your day going, Sam?" The name is right there in
+    the conversation and attached to the wrong person.
+
+    And claiming their plans. "I'm going to play cricket with my friends" came back as
+    "I'm playing cricket after my friends" — the same sentence with the owner swapped.
+    """
+    said = " ".join(m["content"] for m in messages if m["role"] == "user")
+    # Names the user mentioned, which are not the user.
+    others = {
+        w for w in re.findall(r"\b[A-Z][a-z]{2,}\b", said)
+        if w.lower() != user_name.lower() and w.lower() not in STOP
+    }
+    for m in messages:
+        if m["role"] != "assistant":
+            continue
+        reply = m["content"]
+        for name in others:
+            # Used as a form of address rather than mentioned: ", Sam?" or "Sam, ..."
+            if re.search(rf",\s*{re.escape(name)}\s*[.?!]", reply) or re.match(rf"^{re.escape(name)}\s*[,!]", reply):
+                return False
+        # Her claiming an activity the user just described.
+        for verb in ("playing", "going to the", "meeting", "having dinner with"):
+            if f"you are {verb}" in said.lower() or f"i'm {verb}" in said.lower():
+                if re.search(rf"\bI(?:'m| am) {re.escape(verb)}\b", reply, re.I):
+                    return False
+    return True
+
+
 def load_done() -> set:
     """What has already been generated, so a restart continues instead of repeating."""
     done = set()
@@ -742,6 +827,9 @@ def run(plan: list, done: set) -> None:
                 rejected += 1
                 continue
             if slice_name.endswith("_deep") and not stays_on_them(messages):
+                rejected += 1
+                continue
+            if slice_name == "who_is_who" and not keeps_people_apart(messages, user_name):
                 rejected += 1
                 continue
 
