@@ -347,6 +347,9 @@ export function createSocketHandler(): SocketHandler {
           {
             system,
             history: sized.history,
+            // So a reply that opens "Sam, …" is corrected to their own name. See
+            // fixVocative() in turn.ts for why the model needs this.
+            userName: who,
             voice: profile.voice,
             signal: session.abort.signal,
             spoken: msg.spoken !== false,

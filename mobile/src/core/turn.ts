@@ -59,6 +59,8 @@ export type TurnEvents = {
 
 export type TurnOptions = {
   system: string;
+  /** The user's own name, if known. See fixVocative() for what it is used for. */
+  userName?: string;
   history?: Array<{ role: 'user' | 'assistant'; content: string }>;
   voice: string;
   signal?: AbortSignal;
@@ -126,6 +128,32 @@ function toLastSentence(reply: string): string {
  * An unclosed tag means the trace ran to the end of the reply, so everything from the
  * tag onward goes.
  */
+/**
+ * She is only ever talking to one person, so any name used to address them is theirs.
+ *
+ * Measured on the fine-tuned 0.6B: told "my school friend is called Sam", it opened its
+ * reply "Sam, you know that story, right?" in 6 of 8 samples — reading the nearest name
+ * in the conversation as the name of the person it was speaking to. Training against it
+ * barely moved the number (7 of 8 before the who-is-who slice, 6 of 8 after), which is
+ * about what a model this size can be taught not to do.
+ *
+ * It does not need to be taught. A vocative is only ever the user, so a vocative that
+ * is not the user's name is wrong by construction and can simply be corrected. Only the
+ * form of address is touched — "Sam sounds like good company" is about Sam and is left
+ * exactly as it is.
+ */
+export function fixVocative(reply: string, userName?: string): string {
+  const name = (userName || '').trim();
+  if (!name) return reply;
+  const other = String.raw`[A-Z][a-z]{2,}`;
+  return reply
+    // "Sam, ..." at the very start.
+    .replace(new RegExp(String.raw`^(${other})(?=\s*[,!])`), (m) => (m === name ? m : name))
+    // "..., Sam?" at the end of a sentence.
+    .replace(new RegExp(String.raw`(,\s*)(${other})(?=\s*[.?!])`, 'g'),
+             (m, comma, who) => (who === name ? m : `${comma}${name}`));
+}
+
 const THINK_OPEN = '<think>';
 
 /**
@@ -257,7 +285,7 @@ export async function runTurn(
     );
 
     // Ending mid-phrase is the cap's doing, not hers.
-    reply = toLastSentence(withoutReasoning(reply));
+    reply = fixVocative(toLastSentence(withoutReasoning(reply)), opts.userName);
 
     // Decided here, on the finished reply, because that is the only point at which
     // the length is known — and it is known for free, before a sound is made.

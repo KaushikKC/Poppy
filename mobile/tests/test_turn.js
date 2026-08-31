@@ -192,6 +192,23 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
     check('nothing spoken mentions it', !log.synthesized.join(' ').includes('user greeted'));
   }
 
+  console.log('\n== she calls the user by the user\'s name ==');
+  {
+    const { fixVocative } = require(path.join(OUT, 'core/turn.js'));
+    // The real failure, measured in 6 of 8 samples: told "my school friend is called
+    // Sam", the model opens its reply addressing the user as Sam.
+    check('opening vocative corrected', fixVocative('Sam, you know that story, right?', 'Kaushik') === 'Kaushik, you know that story, right?',
+      fixVocative('Sam, you know that story, right?', 'Kaushik'));
+    check('trailing vocative corrected', fixVocative('How is your day going, Sam?', 'Kaushik') === 'How is your day going, Kaushik?',
+      fixVocative('How is your day going, Sam?', 'Kaushik'));
+    check('the right name is left alone', fixVocative('Kaushik, that sounds good.', 'Kaushik') === 'Kaushik, that sounds good.');
+    // Mentioning someone is not addressing them, and must survive untouched.
+    check('a mention is not an address', fixVocative('Sam sounds like good company.', 'Kaushik') === 'Sam sounds like good company.',
+      fixVocative('Sam sounds like good company.', 'Kaushik'));
+    check('mid-sentence names survive', fixVocative('I hope Sam enjoys the film.', 'Kaushik') === 'I hope Sam enjoys the film.');
+    check('no user name means no change', fixVocative('Sam, hello.', '') === 'Sam, hello.');
+  }
+
   console.log('\n== a typed reply never streams the reasoning tags ==');
   {
     // The bug that shipped: withoutReasoning() runs on the finished reply, and a typed
