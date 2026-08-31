@@ -122,10 +122,15 @@ export async function remember(
     return null; // duplicate
   }
 
-  const expires =
-    cat === 'temporary'
-      ? new Date(Date.now() + TEMPORARY_TTL_DAYS * 86400_000).toISOString()
-      : null;
+  // A fact about *today* is false tomorrow, and fourteen days of it is a fortnight of
+  // her telling you where you went. Reported from a phone: a day after mentioning the
+  // beach, asked where he was going, she answered "You were at the beach today, right?"
+  //
+  // The wording is what dates it. "They are going to the beach today" cannot outlive
+  // the day; "Priya is visiting next week" is exactly what the fortnight is for.
+  const today = /\b(today|tonight|this (morning|afternoon|evening)|right now)\b/i.test(clean);
+  const days = cat === 'temporary' ? (today ? 1 : TEMPORARY_TTL_DAYS) : 0;
+  const expires = days ? new Date(Date.now() + days * 86400_000).toISOString() : null;
 
   const record: Record = {
     id: newId(),

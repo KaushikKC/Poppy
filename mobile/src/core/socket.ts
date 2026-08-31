@@ -297,7 +297,13 @@ export function createSocketHandler(): SocketHandler {
       //
       // The name comes from the account when there is one. Nothing is invented when
       // there is not: a wrong name is worse than no name.
-      const who = (await accounts.account())?.name?.trim();
+      // First name only. Google sign-in returns the full name, so the prompt said
+      // "You are talking to Kaushik KC" and she called him that, surname and all, in
+      // every reply. Nobody's friend does that. Taking the first word is enough: a
+      // one-word name is unchanged, and a display name that is not a real name is no
+      // worse off than it was.
+      const fullName = (await accounts.account())?.name?.trim();
+      const who = fullName ? fullName.split(/\s+/)[0] : undefined;
       const youAre = who ? ` You are talking to ${who}. Call them by their name.` : '';
 
       let system =

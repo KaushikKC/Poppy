@@ -156,6 +156,19 @@ function fresh() {
   check('Luna is untouched', (await mem.recall()).some((t) => t.includes('told Luna')));
   mem.setCharacter('poppy');
 
+  console.log('\n== a fact about today does not outlive the day ==');
+  {
+    await mem.forgetAll();
+    const beach = await mem.remember('They are going to the beach today.', 'temporary');
+    const visit = await mem.remember('Priya is visiting them next week.', 'temporary');
+    const stable = await mem.remember('They work as a teacher.', 'profile');
+    const hours = (r) => (new Date(r.expires_at).getTime() - Date.now()) / 3600000;
+    check('a "today" fact expires within a day', beach && hours(beach) <= 25, beach && `${hours(beach).toFixed(0)}h`);
+    check('a "next week" fact keeps the fortnight', visit && hours(visit) > 300, visit && `${hours(visit).toFixed(0)}h`);
+    check('a stable fact never expires', stable && stable.expires_at === null);
+    await mem.forgetAll();
+  }
+
   console.log('\n== the extractor\'s output is parsed, wrapped or not ==');
   {
     // What the fine-tuned 0.6B actually returns for this prompt: the objects, no
