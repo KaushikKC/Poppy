@@ -122,13 +122,13 @@ const LLM: Record<Tier, ModelSpec> = {
  * This deliberately replaces the shipped '1b' entry rather than adding a tier, so
  * nothing else in the tier logic changes and reverting is one line.
  */
-const DEV_MODEL_URL = 'http://192.168.1.172:8000/poppys-0.6b-v3-q4_k_m.gguf';
+const DEV_MODEL_URL = 'http://192.168.1.172:8000/poppys-0.6b-v4-q4_k_m.gguf';
 const DEV_MODEL_BYTES = 396_704_896;
 
 const LLM_ADULT: Partial<Record<Tier, ModelSpec>> = {
   '1b': DEV_MODEL_URL
     ? {
-        path: 'models/llm/poppys-0.6b-v3-q4.gguf',
+        path: 'models/llm/poppys-0.6b-v4-q4.gguf',
         url: DEV_MODEL_URL,
         bytes: DEV_MODEL_BYTES,
         label: 'Poppys 0.6B (local)',
