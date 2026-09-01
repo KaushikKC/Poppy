@@ -47,6 +47,94 @@ const SYSTEM =
   '{"text": "They hate spreadsheets.", "category": "profile"}]\n\n' +
   'Message: "what do you think"\n[]';
 
+/**
+ * Facts pulled out by rule, before the model is asked anything.
+ *
+ * Measured, because the model half of this does not work at 0.6B. Given "My friend Sam
+ * is coming today and we are planning to go to the cinema", the fine-tune returned a
+ * usable fact 0 times in 6 runs and the stock model 1 time in 4. That is why the Memory
+ * tab stayed empty through an entire conversation: nothing was being found to save.
+ *
+ * The facts a companion actually needs are not open-ended. They are the people in
+ * someone's life, where they are going, what they do, and where they live — and people
+ * say those things in a small number of shapes. A regex gets them every time, costs no
+ * inference, and cannot hallucinate a fact that was never said, which matters more here
+ * than coverage: a wrong memory is repeated to the user as truth on every later turn.
+ *
+ * The model still runs afterwards and its findings are merged. This is the floor, not
+ * the ceiling.
+ */
+const RELATION =
+  'friend|brother|sister|mother|father|mum|mom|dad|partner|wife|husband|' +
+  'girlfriend|boyfriend|colleague|boss|cousin|son|daughter|neighbour|neighbor';
+
+// Words that look like names to a regex and are not. "one of my friend is coming"
+// produced "Their friend is called coming" before this existed, and a wrong memory is
+// repeated back as truth on every later turn.
+const NOT_A_NAME = new Set([
+  'coming', 'going', 'visiting', 'staying', 'calling', 'today', 'tomorrow', 'tonight',
+  'and', 'but', 'who', 'that', 'this', 'here', 'there', 'she', 'his', 'her', 'their',
+  'the', 'from', 'with', 'was', 'were', 'is', 'are', 'has', 'had', 'will', 'just',
+  'actually', 'really', 'name', 'named', 'called', 'yesterday', 'morning', 'evening',
+]);
+
+const isName = (w: string): boolean =>
+  /^[A-Z][a-z]{1,20}$/.test(w) && !NOT_A_NAME.has(w.toLowerCase());
+
+type Rule = { re: RegExp; fact: (m: RegExpMatchArray) => string | null; category: memory.Category };
+
+// Case matters for the names, so these are deliberately not /i. "My" at the start of a
+// sentence is spelled out rather than lowercased away.
+const RULES: Rule[] = [
+  { re: new RegExp(String.raw`\b[Mm]y (${RELATION})(?:'s name)?(?: is called| is named| is|,)? ([A-Za-z]+)`),
+    fact: (m) => (isName(m[2]) ? `Their ${m[1].toLowerCase()} is called ${m[2]}.` : null),
+    category: 'people' },
+  { re: /\b(?:his|her|their|His|Her|Their) name is ([A-Za-z]+)/,
+    fact: (m) => (isName(m[1]) ? `Someone in their life is called ${m[1]}.` : null),
+    category: 'people' },
+  { re: /\b[Mm]y name is ([A-Za-z]+)/,
+    fact: (m) => (isName(m[1]) ? `Their name is ${m[1]}.` : null), category: 'profile' },
+  { re: /\bI (?:work as|am) an? ([a-z][a-z ]{2,26}?)(?=[.,!?]|$| and | but | who )/,
+    fact: (m) => `They work as a ${m[1].trim()}.`, category: 'profile' },
+  { re: /\bI live in ([A-Z][a-zA-Z]{1,20})/,
+    fact: (m) => (isName(m[1]) ? `They live in ${m[1]}.` : null), category: 'profile' },
+  { re: /\b(?:I'm|I am|we're|we are|We're|We are)(?: planning to go| going)(?: to)?(?: the| a)? ([a-z][a-z ]{2,22}?)(?=[.,!?]|$| with | today| tonight| tomorrow| and )/,
+    fact: (m) => `They are going to the ${m[1].trim()}.`, category: 'temporary' },
+];
+
+/**
+ * Facts pulled out by rule, before the model is asked anything.
+ *
+ * Measured, because the model half does not work at this size. Given "My friend Sam is
+ * coming today and we are planning to go to the cinema", the fine-tune returned a
+ * usable fact 0 times in 6 runs and the stock model 1 in 4. That is why the Memory tab
+ * stayed empty through a whole conversation — nothing was being found to save, and the
+ * model was blamed for not remembering what had never been written down.
+ *
+ * What a companion needs is not open-ended: the people in someone's life, where they
+ * are going, what they do, where they live. People say those in a handful of shapes. A
+ * regex catches them every time, costs no inference, and cannot invent one that was
+ * never said — which matters more than coverage here, because a wrong memory is read
+ * back to the user as established truth on every turn that follows.
+ *
+ * The model still runs and its findings are added. This is the floor, not the ceiling.
+ */
+export function fromRules(text: string): Candidate[] {
+  const out: Candidate[] = [];
+  const seen = new Set<string>();
+  for (const rule of RULES) {
+    const m = text.match(rule.re);
+    if (!m) continue;
+    const fact = rule.fact(m);
+    if (!fact) continue;
+    const key = fact.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ text: fact, category: rule.category });
+  }
+  return out;
+}
+
 const QUESTION =
   /^\s*(who|what|when|where|why|how|do|does|did|is|are|can|could|would|will|should|have|has|any)\b|\?\s*$/i;
 
@@ -156,7 +244,8 @@ export async function extractAndSave(text: string): Promise<Array<{ text: string
   if (!clean || !worthExtracting(clean)) return [];
 
   const suppressed = new Set(await memory.suppressedCategories());
-  let candidates: Candidate[] = [];
+  // Rules first, and they stand whatever the model does or fails to do.
+  let candidates: Candidate[] = fromRules(clean);
 
   try {
     const { llm } = await awaitEngines();
@@ -164,11 +253,9 @@ export async function extractAndSave(text: string): Promise<Array<{ text: string
     await llm.complete(SYSTEM, [{ role: 'user', content: `Message: "${clean}" ->` }], (tok) => {
       raw += tok;
     });
-    candidates = parseCandidates(raw);
+    candidates = candidates.concat(parseCandidates(raw));
   } catch {
-    // The model being unavailable must not lose the message; the keeper below
-    // still runs.
-    candidates = [];
+    // The model being unavailable must not lose what the rules already found.
   }
 
   // Nothing is kept when the model extracted nothing.

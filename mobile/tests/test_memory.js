@@ -156,6 +156,32 @@ function fresh() {
   check('Luna is untouched', (await mem.recall()).some((t) => t.includes('told Luna')));
   mem.setCharacter('poppy');
 
+  console.log('\n== facts by rule, with no model involved ==');
+  {
+    const R = extract.fromRules;
+    const one = (t) => R(t).map((c) => c.text);
+    // The real message from a phone, transcription errors and all.
+    check('a name survives bad transcription',
+      one('Today I went to gym, I met one of the friend, his name is Sam and we are planning to go to cinema today.')
+        .some((f) => /Sam/.test(f)));
+    check('and so does the plan',
+      one('Today I went to gym, his name is Sam and we are planning to go to cinema today.')
+        .some((f) => /cinema/.test(f)));
+    check('relations are captured', one('my brother Ram is visiting').some((f) => /brother is called Ram/.test(f)));
+    check('the job is captured', one('I work as a teacher').some((f) => /work as a teacher/.test(f)));
+    check('their own name is captured', one('my name is Kaushik').some((f) => /name is Kaushik/.test(f)));
+
+    // Nothing invented. This matters more than coverage: a wrong memory is repeated to
+    // the user as truth on every later turn.
+    check('a question yields nothing', R('what should I do today?').length === 0);
+    check('a mood yields nothing', R('I am feeling bored today').length === 0);
+    // The bug this replaced: "one of my friend is coming" became "their friend is
+    // called coming".
+    check('a verb is not mistaken for a name',
+      !one('one of my friend is coming to my house').some((f) => /called coming/i.test(f)),
+      JSON.stringify(one('one of my friend is coming to my house')));
+  }
+
   console.log('\n== a message is not a question just because it ends in one ==');
   {
     const worth = extract.worthExtracting;
