@@ -192,6 +192,19 @@ function fakes({ reply, synthMs = 20, tokenMs = 2, failOn = null } = {}) {
     check('nothing spoken mentions it', !log.synthesized.join(' ').includes('user greeted'));
   }
 
+  console.log('\n== a greeting is answered like a greeting ==');
+  {
+    const { isGreeting } = require(path.join(OUT, 'core/reply_shape.js'));
+    for (const g of ['Hi', 'hey', 'Hello!', 'how are you', "what's up", 'Good morning']) {
+      check(`"${g}" is a greeting`, isGreeting(g));
+    }
+    // Anything carrying content is not, and must keep the full budget.
+    for (const n of ['Hi, I had a rough day', 'how are you supposed to fix a tap',
+                     'hey can you help me plan tomorrow', 'I am bored']) {
+      check(`"${n.slice(0, 26)}…" is not`, !isGreeting(n));
+    }
+  }
+
   console.log('\n== she calls the user by the user\'s name ==');
   {
     const { fixVocative } = require(path.join(OUT, 'core/turn.js'));

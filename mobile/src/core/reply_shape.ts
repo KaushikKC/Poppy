@@ -73,3 +73,22 @@ export function wantsVoice(userText: string): boolean {
   if (!text) return false;
   return VOICE_CUE.test(text) && ASK_CUE.test(text);
 }
+
+
+/**
+ * A greeting deserves a greeting, not a biography.
+ *
+ * Measured on the fine-tuned 0.6B: five of twelve "Hi"s came back as a paragraph about
+ * her own afternoon — "I'm sitting in my office in Seattle, working on a new bridge
+ * design. The room's a little too quiet…" Nobody answers hello like that, and it is the
+ * first thing a new user sees.
+ *
+ * The cap is the fix rather than the prompt, because a model this size drifts into its
+ * own life whenever it has room to and cannot reliably be told not to. Given forty
+ * tokens it says one sentence, and toLastSentence() trims that to a whole one.
+ */
+const GREETING = /^\s*(hi|hey|hello|yo|hiya|good (morning|afternoon|evening)|how are you|how'?s it going|what'?s up|sup)\b[\s!,.?]*$/i;
+
+export function isGreeting(userText: string): boolean {
+  return GREETING.test((userText || '').trim());
+}

@@ -33,7 +33,7 @@
 
 import { awaitEngines, MAX_TOKENS_SPOKEN, MAX_TOKENS_TEXT } from './engines';
 import { playback } from './playback';
-import { speakIt, wantsVoice } from './reply_shape';
+import { isGreeting, speakIt, wantsVoice } from './reply_shape';
 
 export type TurnEvents = {
   /** A config frame, before any audio: the UI initialises its player from this. */
@@ -281,7 +281,9 @@ export async function runTurn(
       },
       opts.signal,
       // A reply that will be read can be longer than one that will be listened to.
-      spoken ? MAX_TOKENS_SPOKEN : MAX_TOKENS_TEXT,
+      // A greeting gets a greeting, not a biography. See isGreeting() for why the cap
+      // does this and the prompt cannot.
+      isGreeting(text) ? 40 : spoken ? MAX_TOKENS_SPOKEN : MAX_TOKENS_TEXT,
     );
 
     // Ending mid-phrase is the cap's doing, not hers.
