@@ -156,6 +156,23 @@ function fresh() {
   check('Luna is untouched', (await mem.recall()).some((t) => t.includes('told Luna')));
   mem.setCharacter('poppy');
 
+  console.log('\n== a message is not a question just because it ends in one ==');
+  {
+    const worth = extract.worthExtracting;
+    // The message that broke it on a real phone: every fact in the conversation was in
+    // this one, and it was discarded whole for its last six words.
+    check('facts followed by a question are kept',
+      worth('Today I went to gym, I met a friend, his name is Sam and we are planning to go to cinema today. What do you think about this?'));
+    check('a statement then a question is kept',
+      worth('My friend John is coming for dinner. Do you think that is a good idea?'));
+    check('a plain statement is kept', worth('I work as a teacher.'));
+    // And a question with nothing in it still costs no inference.
+    check('a bare question is skipped', !worth('what should I do today?'));
+    check('a greeting is skipped', !worth('how are you'));
+    check('a short ask is skipped', !worth('Can you help me?'));
+    check('two words are skipped', !worth('ok then'));
+  }
+
   console.log('\n== a fact about today does not outlive the day ==');
   {
     await mem.forgetAll();

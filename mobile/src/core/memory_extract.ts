@@ -51,11 +51,26 @@ const QUESTION =
   /^\s*(who|what|when|where|why|how|do|does|did|is|are|can|could|would|will|should|have|has|any)\b|\?\s*$/i;
 
 /** Worth asking the model about at all. Questions are skipped. */
-function worthLlm(text: string): boolean {
+/**
+ * Worth asking the model about at all.
+ *
+ * Questions are skipped, because "what should I do today" holds nothing to remember.
+ * But a message is not a question just because it ends in one, and that distinction
+ * was missing: "Today I went to the gym, I met a friend, his name is Sam and we are
+ * planning to go to the cinema today. What do you think?" was thrown away whole — the
+ * only message in the conversation that carried a fact, discarded for its last six
+ * words. The Memory tab stayed empty and she could not say who Sam was.
+ *
+ * So a message qualifies if any sentence in it is a statement worth reading, whatever
+ * the sentence after it does.
+ */
+export function worthExtracting(text: string): boolean {
   const t = (text || '').trim();
   if (t.split(/\s+/).length < 3) return false;
-  if (QUESTION.test(t)) return false;
-  return true;
+  const sentences = t.split(/(?<=[.!?])\s+/).filter(Boolean);
+  return sentences.some(
+    (s) => s.split(/\s+/).length >= 4 && !QUESTION.test(s.trim()),
+  );
 }
 
 /** The user's own sentence, tidied into something she can read back later. */
@@ -138,7 +153,7 @@ function dedupe(list: Candidate[]): Candidate[] {
  */
 export async function extractAndSave(text: string): Promise<Array<{ text: string; category: string }>> {
   const clean = (text || '').trim();
-  if (!clean || !worthLlm(clean)) return [];
+  if (!clean || !worthExtracting(clean)) return [];
 
   const suppressed = new Set(await memory.suppressedCategories());
   let candidates: Candidate[] = [];
