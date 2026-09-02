@@ -279,44 +279,41 @@ export async function extractAndSave(text: string): Promise<Array<{ text: string
   if (!clean || !worthExtracting(clean)) return [];
 
   const suppressed = new Set(await memory.suppressedCategories());
-  // Rules first, and they stand whatever the model does or fails to do.
-  let candidates: Candidate[] = fromRules(clean);
+  const saved: Array<{ text: string; category: string }> = [];
 
+  const keep = async (found: Candidate[]): Promise<void> => {
+    for (const c of dedupe(found)) {
+      if (suppressed.has(c.category)) continue;
+      const rec = await memory.remember(c.text, c.category);
+      if (rec) saved.push({ text: rec.text, category: rec.category });
+    }
+  };
+
+  // What the rules found is written before the model is asked anything.
+  //
+  // It used to be collected and held until the model call came back. That call is a
+  // second inference on a phone that has just finished generating a reply: slow, and if
+  // it hangs — app backgrounded, next turn starting, engine busy — this function never
+  // returns and facts already in hand are never written. A fact found by rule does not
+  // need the model's permission to be true.
+  await keep(fromRules(clean));
+
+  // Then the model, for whatever the rules do not cover, on a leash. What it finds is a
+  // bonus; what it does must not cost what is already saved.
   try {
     const { llm } = await awaitEngines();
     let raw = '';
-    await llm.complete(SYSTEM, [{ role: 'user', content: `Message: "${clean}" ->` }], (tok) => {
+    const gen = llm.complete(SYSTEM, [{ role: 'user', content: `Message: "${clean}" ->` }], (tok) => {
       raw += tok;
     });
-    candidates = candidates.concat(parseCandidates(raw));
+    await Promise.race([
+      gen,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('extract timed out')), 20_000)),
+    ]);
+    await keep(parseCandidates(raw));
   } catch {
-    // The model being unavailable must not lose what the rules already found.
+    // Unavailable, slow, or nonsense. The rules have already run.
   }
 
-  // Nothing is kept when the model extracted nothing.
-  //
-  // There used to be a fallback here: if no JSON came back but the sentence looked
-  // substantial, the user's own words were saved verbatim rather than "lost". That is
-  // a reasonable trade with a model that usually succeeds. With the 1B it fails
-  // often, and what it saved instead was raw speech-to-text — read back from a real
-  // phone: "I think you are not sending", "So, you are a character which you will not
-  // speak right", "I don't know really what kind of activities I can think".
-  //
-  // Those are not facts, and the damage is not merely untidy. They are handed to the
-  // model every single turn under "Things you remember about the user", so it reads
-  // half-transcribed meta-chatter as established truth about the person, mirrors that
-  // register back, and answers questions about the conversation instead of the
-  // question. They also cost ~150 tokens of prompt on every turn, for ever.
-  //
-  // A memory not taken is one conversation slightly poorer. A wrong memory is every
-  // conversation after it slightly wrong, and there is nothing that removes it but a
-  // person noticing.
-
-  const saved: Array<{ text: string; category: string }> = [];
-  for (const c of dedupe(candidates)) {
-    if (suppressed.has(c.category)) continue;
-    const rec = await memory.remember(c.text, c.category);
-    if (rec) saved.push({ text: rec.text, category: rec.category });
-  }
   return saved;
 }

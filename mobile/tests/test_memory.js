@@ -25,7 +25,7 @@ execFileSync(
   ['--outDir', OUT, '--rootDir', 'src', '--strict', '--module', 'commonjs', '--target', 'es2020',
    '--esModuleInterop', '--skipLibCheck', '--moduleResolution', 'node',
    'src/core/memory_store.ts', 'src/core/boundaries.ts', 'src/core/store.ts',
-   'src/core/memory_extract.ts'],
+   'src/core/memory_extract.ts', 'src/core/engines.ts'],
   { cwd: ROOT, stdio: 'inherit' },
 );
 
@@ -155,6 +155,25 @@ function fresh() {
   mem.setCharacter('luna');
   check('Luna is untouched', (await mem.recall()).some((t) => t.includes('told Luna')));
   mem.setCharacter('poppy');
+
+  console.log('\n== the rules save even when the model never answers ==');
+  {
+    const engines = require(path.join(OUT, 'core/engines.js'));
+    await mem.forgetAll();
+    // The model hangs. Before, extractAndSave awaited it and nothing was ever written,
+    // even though the rules had already found the facts.
+    engines.setEngines({
+      llm: { complete: () => new Promise(() => {}) },
+      stt: { transcribe: async () => '' },
+      speech: { sampleRate: 24000, synthesize: async () => ({ samples: [], sampleRate: 24000 }) },
+    });
+    const saved = await extract.extractAndSave('my friend Sam is coming and we are going to the cinema today');
+    check('facts saved despite the hang', saved.length >= 2, `${saved.length}`);
+    check('the name is there', saved.some((s) => /Sam/.test(s.text)), JSON.stringify(saved.map((s) => s.text)));
+    check('the plan is there', saved.some((s) => /cinema/.test(s.text)));
+    check('and they are in the store', (await mem.records()).length >= 2);
+    await mem.forgetAll();
+  }
 
   console.log('\n== facts by rule, with no model involved ==');
   {
