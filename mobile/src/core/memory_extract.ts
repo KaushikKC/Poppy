@@ -78,6 +78,14 @@ const NOT_A_NAME = new Set([
   'actually', 'really', 'name', 'named', 'called', 'yesterday', 'morning', 'evening',
 ]);
 
+// A destination is a place. These are the words that turn up in the slot and are not:
+// "we gonna have after the cinema" yielded "They are going to the have."
+const NOT_A_PLACE = new Set([
+  'have', 'get', 'go', 'be', 'do', 'take', 'make', 'see', 'try', 'meet', 'eat', 'stay',
+  'come', 'call', 'talk', 'watch', 'play', 'sleep', 'work', 'start', 'finish', 'help',
+  'think', 'feel', 'know', 'say', 'tell', 'ask', 'give', 'put', 'find', 'keep', 'let',
+]);
+
 const isName = (w: string): boolean =>
   /^[A-Z][a-z]{1,20}$/.test(w) && !NOT_A_NAME.has(w.toLowerCase());
 
@@ -89,8 +97,19 @@ const RULES: Rule[] = [
   { re: new RegExp(String.raw`\b[Mm]y (${RELATION})(?:'s name)?(?: is called| is named| is|,)? ([A-Za-z]+)`),
     fact: (m) => (isName(m[2]) ? `Their ${m[1].toLowerCase()} is called ${m[2]}.` : null),
     category: 'people' },
+  // "my old friends, cool friend, his name is John" — the relation is said once and the
+  // name several words later, so the name rule alone produced "Someone in their life is
+  // called John". Too vague to answer "what is my friend called?" with, which is the
+  // question it exists for. The nearest relation word before the name supplies it.
   { re: /\b(?:his|her|their|His|Her|Their) name is ([A-Za-z]+)/,
-    fact: (m) => (isName(m[1]) ? `Someone in their life is called ${m[1]}.` : null),
+    fact: (m) => {
+      if (!isName(m[1])) return null;
+      const before = (m.input || '').slice(0, m.index ?? 0);
+      const rel = before.match(new RegExp(`(${RELATION})(?!.*(${RELATION}))`, 'is'));
+      return rel
+        ? `Their ${rel[1].toLowerCase()} is called ${m[1]}.`
+        : `Someone in their life is called ${m[1]}.`;
+    },
     category: 'people' },
   { re: /\b[Mm]y name is ([A-Za-z]+)/,
     fact: (m) => (isName(m[1]) ? `Their name is ${m[1]}.` : null), category: 'profile' },
@@ -98,8 +117,21 @@ const RULES: Rule[] = [
     fact: (m) => `They work as a ${m[1].trim()}.`, category: 'profile' },
   { re: /\bI live in ([A-Z][a-zA-Z]{1,20})/,
     fact: (m) => (isName(m[1]) ? `They live in ${m[1]}.` : null), category: 'profile' },
-  { re: /\b(?:I'm|I am|we're|we are|We're|We are)(?: planning to go| going)(?: to)?(?: the| a)? ([a-z][a-z ]{2,22}?)(?=[.,!?]|$| with | today| tonight| tomorrow| and )/,
-    fact: (m) => `They are going to the ${m[1].trim()}.`, category: 'temporary' },
+  // Every destination, not just the first. "going to cinema today … we going to dinner"
+  // is two plans and the second was being dropped. And the day-word is kept in the
+  // fact, because that is what gives it a one-day life instead of a fortnight — the
+  // cinema was expiring in September.
+  // Pronoun, then a movement verb, then the place. Keeping the verb out of the pronoun
+  // alternation is what lets "we going to a restaurant" match at all — with "we going"
+  // in the prefix it demanded a second verb and found "to".
+  { re: /\b(?:I'm|I am|I|we're|we are|we|We're|We are|We)\s+(?:planning to go|gonna go|going|gonna|go|heading)\s+(?:to\s+)?(?:the\s+|a\s+)?([a-z][a-z ]{2,22}?)(?=[.,!?]|$| with | and | after | then )( today| tonight| tomorrow)?/g,
+    fact: (m) => {
+      const place = m[1].trim();
+      const head = place.split(/\s+/)[0].toLowerCase();
+      if (place.length < 3 || NOT_A_NAME.has(place) || NOT_A_PLACE.has(head)) return null;
+      return `They are going to the ${place}${m[2] ? m[2] : ''}.`;
+    },
+    category: 'temporary' },
 ];
 
 /**
@@ -123,14 +155,17 @@ export function fromRules(text: string): Candidate[] {
   const out: Candidate[] = [];
   const seen = new Set<string>();
   for (const rule of RULES) {
-    const m = text.match(rule.re);
-    if (!m) continue;
-    const fact = rule.fact(m);
-    if (!fact) continue;
-    const key = fact.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push({ text: fact, category: rule.category });
+    // A global rule can match several times in one message; a plain one matches once.
+    const found = rule.re.global ? [...text.matchAll(rule.re)] : [text.match(rule.re)];
+    for (const m of found) {
+      if (!m) continue;
+      const fact = rule.fact(m as RegExpMatchArray);
+      if (!fact) continue;
+      const key = fact.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ text: fact, category: rule.category });
+    }
   }
   return out;
 }

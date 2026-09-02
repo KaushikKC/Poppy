@@ -177,6 +177,20 @@ function fresh() {
     check('a mood yields nothing', R('I am feeling bored today').length === 0);
     // The bug this replaced: "one of my friend is coming" became "their friend is
     // called coming".
+    // The real message from a phone, and the three bugs it exposed: the relation was
+    // dropped ("someone in their life"), only the first destination was kept, and the
+    // day-word was stripped so the fact outlived the day by a fortnight.
+    const real = one('Ok, I am planning to go to cinema today with my old friends, cool friend, '
+      + 'his name is John and we gonna have after the cinema we going to dinner to restor.');
+    check('the relation is named, not "someone"', real.some((f) => /friend is called John/.test(f)), JSON.stringify(real));
+    check('both plans are kept', real.filter((f) => /going to/.test(f)).length >= 2, `${real.length}`);
+    check('the day is kept, so it expires tonight', real.some((f) => /cinema today/.test(f)));
+    check('a second destination survives',
+      one('I am going to the gym and then we going to a restaurant').filter((f) => /going to/.test(f)).length === 2);
+    // False positives, which are worse than misses.
+    check('a mood is not a destination', R('I am feeling bored').length === 0, JSON.stringify(one('I am feeling bored')));
+    check('being tired is not a destination', R('I am tired today').length === 0);
+
     check('a verb is not mistaken for a name',
       !one('one of my friend is coming to my house').some((f) => /called coming/i.test(f)),
       JSON.stringify(one('one of my friend is coming to my house')));
