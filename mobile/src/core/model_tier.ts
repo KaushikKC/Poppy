@@ -110,19 +110,18 @@ const LLM: Record<Tier, ModelSpec> = {
  * says so. A silent fallback here looks exactly like the bug this is fixing.
  */
 /**
- * A locally served model, for testing a fine-tune on a real phone before it is hosted
- * anywhere. Set it to '' to go back to the shipped table.
+ * The fine-tuned model, hosted so anyone can install the app and get it.
  *
- * Info.plist already sets NSAllowsLocalNetworking, so a plain-HTTP LAN address is
- * allowed where a public one would be blocked. The phone must be on the same wifi, and
- * the Mac must be serving the file:
+ * This was a LAN address while it was only ever going to be tested on the machine that
+ * built it. It is on Hugging Face now, which is where every other URL in this file
+ * points, so a tester on another network downloads it like any other model. Set it to
+ * '' to go back to the shipped table.
  *
- *     cd training/models && python3 -m http.server 8000
- *
- * This deliberately replaces the shipped '1b' entry rather than adding a tier, so
- * nothing else in the tier logic changes and reverting is one line.
+ * It deliberately replaces the '1b' entry rather than adding a tier, so nothing else in
+ * the tier logic changes and reverting is one line.
  */
-const DEV_MODEL_URL = 'http://192.168.1.172:8000/poppys-0.6b-v4-q4_k_m.gguf';
+const DEV_MODEL_URL =
+  'https://huggingface.co/Kaushikk17/poppys-0.6b-gguf/resolve/main/poppys-0.6b-v4-q4_k_m.gguf';
 const DEV_MODEL_BYTES = 396_704_896;
 
 const LLM_ADULT: Partial<Record<Tier, ModelSpec>> = {
