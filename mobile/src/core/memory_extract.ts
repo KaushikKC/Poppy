@@ -183,6 +183,8 @@ const FILLER = /^(yeah|yes|no|ok|okay|hi|hey|hello|hmm|so|well|and|but|actually)
 function toThirdPerson(sentence: string): string {
   return sentence
     .replace(/\bI'm\b/g, 'They are').replace(/\bI am\b/g, 'They are')
+    // "I was" -> "They were", not "They was".
+    .replace(/\bI was\b/g, 'They were').replace(/\bwe was\b/gi, 'they were')
     .replace(/\bI've\b/g, 'They have').replace(/\bI'll\b/g, 'They will')
     .replace(/\bI\b/g, 'They')
     .replace(/\bmy\b/gi, 'their').replace(/\bme\b/g, 'them')
@@ -359,14 +361,15 @@ export async function extractAndSave(text: string): Promise<Array<{ text: string
   // it hangs — app backgrounded, next turn starting, engine busy — this function never
   // returns and facts already in hand are never written. A fact found by rule does not
   // need the model's permission to be true.
-  const byRule = fromRules(clean);
-  await keep(byRule);
-
-  // If the rules recognised nothing, keep what they actually said rather than nothing.
-  // See fromOwnWords(): a whole conversation used to save zero facts, because real
-  // speech is past tense and unnamed while every rule here was written for plans and
-  // proper nouns.
-  if (!byRule.length) await keep(fromOwnWords(clean));
+  // Both, always. The rules give a precise fact where they recognise one — "Their
+  // friend is called Sam" — and their own sentence carries everything the rules were
+  // never written for. Running the sentence only as a fallback still lost most of what
+  // was said whenever a rule happened to fire: "my friend Sam is coming, we had a fight
+  // last week and I'm nervous about it" kept the name and threw away the rest.
+  //
+  // dedupe() inside keep() drops the overlap, and remember() refuses exact duplicates.
+  await keep(fromRules(clean));
+  await keep(fromOwnWords(clean));
 
   // Then the model, for whatever the rules do not cover, on a leash. What it finds is a
   // bonus; what it does must not cost what is already saved.

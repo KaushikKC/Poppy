@@ -175,6 +175,43 @@ function fresh() {
     await mem.forgetAll();
   }
 
+  console.log('\n== every way a person says something about themselves ==');
+  {
+    const all = (m) => [...extract.fromRules(m), ...extract.fromOwnWords(m)].map((c) => c.text);
+    const KEEP = [
+      ['simple past', 'I went to the beach yesterday with my brother'],
+      ['past continuous', 'I was watching a film when my friend called'],
+      ['past perfect', 'I had already finished the report before the meeting'],
+      ['present simple', 'I work as a software engineer in Bangalore'],
+      ['present continuous', 'I am learning to play the guitar at the moment'],
+      ['present perfect', 'I have been feeling much better since I started running'],
+      ['future will', 'I will visit my parents next weekend'],
+      ['future going to', 'I am going to the dentist tomorrow morning'],
+      ['future continuous', 'I will be travelling to Delhi all next week'],
+      ['conditional', 'I would move to Chennai if I got that job'],
+      ['obligation', 'I have to finish this project before Friday'],
+      ['negative', 'I do not eat meat any more'],
+      ['possession', 'I have two cats and a very loud dog'],
+      ['preference', 'I really hate waking up early in the morning'],
+      ['relationship', 'my sister just got engaged to her boyfriend'],
+      ['plural we', 'we are moving to a new flat next month'],
+      ['emotion with cause', 'I am nervous about the interview on Monday'],
+      ['garbled speech', 'Yeah, it went well. I just visited a new place of UKs like historical places'],
+    ];
+    for (const [label, msg] of KEEP) check(`kept: ${label}`, all(msg).length > 0, msg.slice(0, 40));
+    // Grammar, because these are read back to the model as facts.
+    check('was becomes were', /They were watching/.test(all('I was watching a film when my friend called')[0] || ''));
+
+    const SKIP = [
+      ['a question', 'what should I do today?'],
+      ['a greeting', 'hey how are you'],
+      ['filler', 'ok'],
+      ['a question about her', 'what do you do for work?'],
+      ['not about them', 'the weather is nice out there today'],
+    ];
+    for (const [label, msg] of SKIP) check(`skipped: ${label}`, all(msg).length === 0, JSON.stringify(all(msg)));
+  }
+
   console.log('\n== ordinary past-tense speech is not lost ==');
   {
     const own = (t) => extract.fromOwnWords(t).map((c) => c.text);
