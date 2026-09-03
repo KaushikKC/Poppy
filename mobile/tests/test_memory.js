@@ -175,6 +175,32 @@ function fresh() {
     await mem.forgetAll();
   }
 
+  console.log('\n== ordinary past-tense speech is not lost ==');
+  {
+    const own = (t) => extract.fromOwnWords(t).map((c) => c.text);
+    // Two real messages from a phone. Every rule was written for plans and proper
+    // nouns, so both matched nothing and a whole conversation saved zero facts.
+    const a = own("Yeah, I'm a bit busy for past week, I went out, outing with my friends and I was just in vacation.");
+    check('a past-tense turn is kept', a.length >= 1, JSON.stringify(a));
+    check('and it is about them', /^They/.test(a[0] || ''), a[0]);
+    check('mid-sentence pronouns are lowercase', !/ They\b/.test(a[0] || ''), a[0]);
+    const b = own('Yeah, it went well. I just visited a new place of UKs like historical places');
+    check('the second one too', b.some((f) => /visited/.test(f)), JSON.stringify(b));
+
+    // And still nothing from what carries nothing.
+    check('a question is not kept', extract.fromOwnWords('what should I do today?').length === 0);
+    check('a filler word is not kept', extract.fromOwnWords('ok').length === 0);
+    check('a greeting is not kept', extract.fromOwnWords('hey how are you').length === 0);
+    check('someone else entirely is not kept', extract.fromOwnWords('the weather is nice out there today').length === 0,
+      JSON.stringify(extract.fromOwnWords('the weather is nice out there today')));
+
+    // The rules still win when they match, so a named fact stays precise.
+    check('rules take precedence when they match',
+      extract.fromRules('my friend Sam is coming').some((c) => /friend is called Sam/.test(c.text)));
+    check('past-tense places are matched by rule now',
+      extract.fromRules('I went to the beach with my brother').some((c) => /went to the beach/.test(c.text)));
+  }
+
   console.log('\n== facts by rule, with no model involved ==');
   {
     const R = extract.fromRules;

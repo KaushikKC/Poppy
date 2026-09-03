@@ -121,6 +121,17 @@ const RULES: Rule[] = [
   // is two plans and the second was being dropped. And the day-word is kept in the
   // fact, because that is what gives it a one-day life instead of a fortnight — the
   // cinema was expiring in September.
+  // Past tense too. "I went to the beach" and "I visited the museum" are the commonest
+  // way anyone says where they have been, and matched nothing at all before.
+  { re: /\b(?:I|we|We)\s+(?:went to|visited|have been to|was at|were at)\s+(?:the\s+|a\s+)?([a-z][a-z ]{2,22}?)(?=[.,!?]|$| with | and | then )/g,
+    fact: (m) => {
+      const place = m[1].trim();
+      const head = place.split(/\s+/)[0].toLowerCase();
+      if (place.length < 3 || NOT_A_PLACE.has(head)) return null;
+      return `They went to the ${place}.`;
+    },
+    category: 'temporary' },
+
   // Pronoun, then a movement verb, then the place. Keeping the verb out of the pronoun
   // alternation is what lets "we going to a restaurant" match at all — with "we going"
   // in the prefix it demanded a second verb and found "to".
@@ -151,6 +162,58 @@ const RULES: Rule[] = [
  *
  * The model still runs and its findings are added. This is the floor, not the ceiling.
  */
+// Their own words, turned into a fact about them.
+//
+// The rules below only match the shapes I happened to test with — a named person, a
+// plan in the future. Real speech is mostly neither: "I went out with my friends",
+// "I just visited historical places in the UK". Those matched nothing, so an entire
+// conversation saved nothing, and the tab said "Nothing yet" while the user talked.
+//
+// So anything substantive they said about themselves is kept, with the pronouns
+// swapped. It reads a little stiffly — "They went out with their friends" — and that
+// is fine: the model reads a labelled list far better than it reads dialogue, and a
+// stiff true sentence beats an empty tab.
+//
+// A previous version of this idea was removed for saving raw speech-to-text as fact,
+// including half-transcribed meta-chatter about the app itself. The guards below are
+// what that cost: it must be about them, in the first person, a real sentence, and
+// short enough to have been one thought.
+const FILLER = /^(yeah|yes|no|ok|okay|hi|hey|hello|hmm|so|well|and|but|actually)\b[\s,]*/i;
+
+function toThirdPerson(sentence: string): string {
+  return sentence
+    .replace(/\bI'm\b/g, 'They are').replace(/\bI am\b/g, 'They are')
+    .replace(/\bI've\b/g, 'They have').replace(/\bI'll\b/g, 'They will')
+    .replace(/\bI\b/g, 'They')
+    .replace(/\bmy\b/gi, 'their').replace(/\bme\b/g, 'them')
+    .replace(/\bmyself\b/g, 'themselves')
+    .replace(/\bwe're\b/gi, 'they are').replace(/\bwe\b/gi, 'they')
+    .replace(/\bour\b/gi, 'their')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+export function fromOwnWords(text: string): Candidate[] {
+  const out: Candidate[] = [];
+  for (const raw of text.split(/(?<=[.!?])\s+/)) {
+    const sentence = raw.replace(FILLER, '').trim().replace(/[,\s]+$/, '');
+    if (!sentence) continue;
+    const words = sentence.split(/\s+/);
+    // One thought, said about themselves, as a statement.
+    if (words.length < 5 || words.length > 26) continue;
+    if (QUESTION.test(sentence)) continue;
+    if (!/\b(I|I'm|I've|I'll|my|we|we're|our)\b/i.test(sentence)) continue;
+    let fact = toThirdPerson(sentence);
+    // "and They was just in vacation" — the swap capitalises every I, including the
+    // ones in the middle of a sentence.
+    fact = fact.replace(/(?<=[a-z,] )They\b/g, 'they');
+    fact = fact.charAt(0).toUpperCase() + fact.slice(1);
+    out.push({ text: fact.endsWith('.') ? fact : `${fact}.`, category: 'temporary' });
+    if (out.length >= 2) break; // two per message; this is a prompt, not a diary
+  }
+  return out;
+}
+
 export function fromRules(text: string): Candidate[] {
   const out: Candidate[] = [];
   const seen = new Set<string>();
@@ -296,7 +359,14 @@ export async function extractAndSave(text: string): Promise<Array<{ text: string
   // it hangs — app backgrounded, next turn starting, engine busy — this function never
   // returns and facts already in hand are never written. A fact found by rule does not
   // need the model's permission to be true.
-  await keep(fromRules(clean));
+  const byRule = fromRules(clean);
+  await keep(byRule);
+
+  // If the rules recognised nothing, keep what they actually said rather than nothing.
+  // See fromOwnWords(): a whole conversation used to save zero facts, because real
+  // speech is past tense and unnamed while every rule here was written for plans and
+  // proper nouns.
+  if (!byRule.length) await keep(fromOwnWords(clean));
 
   // Then the model, for whatever the rules do not cover, on a leash. What it finds is a
   // bonus; what it does must not cost what is already saved.

@@ -4,6 +4,13 @@
 // call lifecycle against the backend (/companion, /call/open, /call/close, /home).
 (function () {
   const BACKEND = window.BACKEND || "http://localhost:8000";
+  /** Pronoun tokens, or she if Pronouns has not loaded. See frontend/pronouns.js. */
+  const P = (tpl) =>
+    window.Pronouns
+      ? window.Pronouns.fill(tpl)
+      : tpl.replace(/\{Subj\}/g, "She").replace(/\{subj\}/g, "she")
+           .replace(/\{Obj\}/g, "Her").replace(/\{obj\}/g, "her")
+           .replace(/\{Poss\}/g, "Her").replace(/\{poss\}/g, "her");
 
   const onboarding = document.getElementById("onboarding");
   const home = document.getElementById("home");
@@ -1127,8 +1134,8 @@
         '<p class="traits-kicker">Your account</p>' +
         '<p class="traits-sub">' +
           (signedIn
-            ? "Signed in. Your companion and what she remembers belong to this account."
-            : "So your companion and what she remembers follow you to any device. No password, ever: Apple and Google ask for it on their own pages.") +
+            ? P("Signed in. Your companion and what {subj} remembers belong to this account.")
+            : P("So your companion and what {subj} remembers follow you to any device. No password, ever: Apple and Google ask for it on their own pages.")) +
         "</p>" +
         (signedIn
           ? '<div class="glass pad4 stack gap1 acct-who">' +

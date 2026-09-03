@@ -179,6 +179,15 @@ function dismissConsent() {
  */
 let _memFilter = "all";
 
+/** Fill pronoun tokens, or fall back to she if the module has not loaded. */
+function pro(tpl) {
+  return window.Pronouns
+    ? window.Pronouns.fill(tpl)
+    : tpl.replace(/\{Subj\}/g, "She").replace(/\{subj\}/g, "she")
+         .replace(/\{Obj\}/g, "Her").replace(/\{obj\}/g, "her")
+         .replace(/\{Poss\}/g, "Her").replace(/\{poss\}/g, "her");
+}
+
 async function renderMemory() {
   let records = [];
   try {
@@ -203,9 +212,7 @@ async function renderMemory() {
   });
   const heading = document.createElement("span");
   heading.className = "t-h2";
-  heading.textContent = window.Pronouns
-    ? window.Pronouns.fill("What {subj} knows")
-    : "What she knows";
+  heading.textContent = pro("What {subj} knows");
   nav.append(back, heading);
   memPanel.appendChild(nav);
 
@@ -221,7 +228,10 @@ async function renderMemory() {
   summary.innerHTML =
     '<span class="stack gap1">' +
       `<span class="t-sm semi tnum">${n ? `${n} ${n === 1 ? "thing" : "things"}, all yours` : "Nothing yet"}</span>` +
-      `<span class="t-xs muted">${n ? "Edit or delete any of them. She won't argue." : "She'll remember things as you talk."}</span>` +
+      // Through Pronouns like the heading above it. These two were written as "she"
+      // and stayed that way under a male character: "What he knows" sat directly above
+      // "She'll remember things as you talk."
+      `<span class="t-xs muted">${n ? pro("Edit or delete any of them. {Subj} won't argue.") : pro("{Subj}'ll remember things as you talk.")}</span>` +
     "</span>";
   body.appendChild(summary);
 
@@ -348,13 +358,13 @@ function memoryCard(r, cat) {
     const why = document.createElement("button");
     why.type = "button";
     why.className = "chip chip--tiny";
-    why.textContent = "Why she has this";
+    why.textContent = pro("Why {subj} has this");
     const receipt = document.createElement("p");
     receipt.className = "mem-receipt hidden";
     receipt.textContent = `You said: "${r.why}"`;
     why.addEventListener("click", () => {
       const shown = !receipt.classList.toggle("hidden");
-      why.textContent = shown ? "Hide" : "Why she has this";
+      why.textContent = shown ? "Hide" : pro("Why {subj} has this");
     });
     actions.appendChild(why);
     card.append(text, meta, actions, receipt);
