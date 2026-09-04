@@ -59,3 +59,8 @@ poppys-app.zip
 training/data/
 training/adapters/
 training/fused/
+
+# Generated at build time by the copyPoppysWebUI Gradle task, from frontend/ plus
+# mobile/web-overlay/. Committing it would mean two copies of every screen and one of
+# them going stale, which is the whole thing the copy step exists to prevent.
+mobile/android/app/src/main/assets/web/

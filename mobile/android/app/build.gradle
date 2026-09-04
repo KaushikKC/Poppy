@@ -117,3 +117,57 @@ dependencies {
         implementation jscFlavor
     }
 }
+
+// ── The web UI ───────────────────────────────────────────────────────────────
+//
+// The desktop frontend *is* the app's interface on both platforms, loaded in a
+// WebView from file:///android_asset/web/index.html. It is copied in at build time
+// rather than duplicated in the repo, so there is one copy of every screen and a
+// change to the UI reaches Android on the next build.
+//
+// iOS has done this since the spike, through a "Copy Poppys web UI" build phase.
+// Android never had the equivalent, so android_asset/web did not exist and the
+// WebView had nothing to load — the app would start and show a blank page.
+//
+// Kept deliberately parallel to that phase, including the exclusions: model weights
+// and video loops are large and unused on device.
+def frontendDir = file("$rootDir/../../frontend")
+def overlayDir  = file("$rootDir/../web-overlay")
+def webAssets   = file("$projectDir/src/main/assets/web")
+
+tasks.register('copyPoppysWebUI') {
+    description = 'Copies the frontend into assets/web for the WebView.'
+    inputs.dir frontendDir
+    if (overlayDir.exists()) inputs.dir overlayDir
+    outputs.dir webAssets
+    doLast {
+        if (!frontendDir.exists()) {
+            throw new GradleException("frontend not found at $frontendDir")
+        }
+        delete webAssets
+        copy {
+            from(frontendDir) {
+                exclude '**/*.glb', '**/*.mp4', '**/*.webm', '**/.DS_Store'
+            }
+            into webAssets
+        }
+        // Two copies rather than two `from` blocks in one: with both in a single Copy
+        // task the overlay did not win, and the desktop mic.js shipped — which asks for
+        // getUserMedia from a file:// origin and never gets a microphone on the phone.
+        if (overlayDir.exists()) {
+            copy {
+                from overlayDir
+                into webAssets
+                duplicatesStrategy = DuplicatesStrategy.INCLUDE
+            }
+            logger.lifecycle("applied web overlay: " + overlayDir.list().join(' '))
+        }
+        logger.lifecycle("copied web UI -> $webAssets")
+    }
+}
+
+tasks.configureEach { task ->
+    if (task.name.startsWith('merge') && task.name.endsWith('Assets')) {
+        task.dependsOn 'copyPoppysWebUI'
+    }
+}
