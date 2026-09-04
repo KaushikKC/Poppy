@@ -120,6 +120,20 @@
         ended = cb;
       },
       release: () => {},
+      /**
+       * The sound is already coming out of the phone.
+       *
+       * Her reply plays natively the moment it is synthesised, and the bubble used to
+       * be a picture of a player until that finished — so the first pass, the one you
+       * are actually listening to, was the one you could not pause. This lets the
+       * handle adopt a playback it did not start, so the controls are live from the
+       * first second.
+       */
+      assumePlaying: () => {
+        startedAt = Date.now();
+        offset = 0;
+        isPlaying = true;
+      },
       /** The native side reports the real ending, which is what actually ends it. */
       _finished: () => {
         isPlaying = false;
@@ -146,7 +160,12 @@
    * still the right thing for a reply whose audio the page was never given.
    */
   function render(bubble, opts) {
-    const { durationMs = 0, transcript = "", handle = null, autoplay = false } = opts || {};
+    const {
+      durationMs = 0, transcript = "", handle = null, autoplay = false,
+      // Rendered over a playback that has already started elsewhere. See
+      // assumePlaying() on the native handle.
+      playing = false,
+    } = opts || {};
     const secs = Math.max(1, Math.round(durationMs / 1000));
 
     bubble.classList.remove("recording", "streaming");
@@ -250,6 +269,9 @@
 
       if (autoplay) {
         handle.play();
+        setPlaying(true);
+      } else if (playing) {
+        handle.assumePlaying?.();
         setPlaying(true);
       }
     }

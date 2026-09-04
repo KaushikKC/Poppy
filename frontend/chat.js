@@ -376,7 +376,7 @@ window.speakLine = function speakLine(text) {
     // Once it has played out it becomes a note that can be played again and read,
     // exactly like a reply. Before this, her opener was the one recording in the app
     // you got a single pass at.
-    if (lineMs && window.VoiceNote && (replyWav || lineClipId)) {
+    if (lineMs && window.VoiceNote && replyWav && !bubble.querySelector(".vn-wave")) {
       window.VoiceNote.render(bubble, {
         durationMs: lineMs,
         transcript: lineText,
@@ -423,7 +423,17 @@ window.speakLine = function speakLine(text) {
       lineMs = msg.durationMs;
       lineClipId = msg.clipId || null;
       lineText = msg.text || "";
-      renderVoiceNote(bubble, msg.durationMs, lineText);
+      // Her opener, same reasoning as the reply above.
+      if (lineClipId && window.VoiceNote) {
+        window.VoiceNote.render(bubble, {
+          durationMs: msg.durationMs,
+          transcript: lineText,
+          handle: window.VoiceNote.nativeHandle(lineClipId, msg.durationMs),
+          playing: true,
+        });
+      } else {
+        renderVoiceNote(bubble, msg.durationMs, lineText);
+      }
     } else if (msg.type === "avatar_clip") {
       window.poppyPlayClip?.(`${BACKEND}${msg.url}`);
     } else if (msg.type === "done") {
@@ -596,7 +606,10 @@ window.sendMessage = async function sendMessage(text, spoken = false, opts = {})
     // during the live pass the audio belongs to the analyser that drives the orb, and
     // two things playing the same reply at once is worse than not being able to
     // replay it.
-    if (voiceReply && window.VoiceNote && (replyWav || replyClipId)) {
+    // Not over a player that is already there. On the phone the bubble became a real
+    // player the moment the audio started, and re-rendering it here would throw away
+    // wherever the user had paused it.
+    if (voiceReply && window.VoiceNote && replyWav && !replyBubble.querySelector(".vn-wave")) {
       window.VoiceNote.render(replyBubble, {
         durationMs: replyMs,
         transcript: replyText,
@@ -669,7 +682,23 @@ window.sendMessage = async function sendMessage(text, spoken = false, opts = {})
       // once the note becomes a player, so a reply is readable when sound is not an
       // option and quotable when it is.
       replyText = msg.text || "";
-      renderVoiceNote(replyBubble, msg.durationMs, replyText);
+      // Interactive from the first second when the phone is playing it natively.
+      //
+      // This used to draw a picture of a voice note and only become a real player once
+      // the reply had finished — so the one pass you are actually listening to was the
+      // one you could not pause. That was right on desktop, where the page plays the
+      // audio into the analyser that drives the orb and a second player would fight it.
+      // On the phone the audio is native and there is nothing to fight.
+      if (replyClipId && window.VoiceNote) {
+        window.VoiceNote.render(replyBubble, {
+          durationMs: msg.durationMs,
+          transcript: replyText,
+          handle: window.VoiceNote.nativeHandle(replyClipId, msg.durationMs),
+          playing: true,
+        });
+      } else {
+        renderVoiceNote(replyBubble, msg.durationMs, replyText);
+      }
 
     } else if (msg.type === "token") {
       if (statusDot.title === "thinking") setStatus("thinking");

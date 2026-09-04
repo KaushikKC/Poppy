@@ -30,7 +30,7 @@ test_model_presence.py
 # The VAD pre-roll suite is JavaScript, because the bug it guards lives in the
 # browser half of the app and testing a Python re-implementation of it would
 # prove nothing. Skipped rather than failed when node is absent.
-JS_SUITES="test_vad_preroll.js test_style_contract.js"
+JS_SUITES="test_vad_preroll.js test_style_contract.js test_voice_note.js"
 
 fail=0
 for s in $SUITES; do

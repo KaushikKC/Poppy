@@ -292,10 +292,15 @@ export default function AppShell() {
         return true;
       }
       if (msg.t === 'clip:pause') {
+        // Both, because the page cannot know which one is making the sound. A reply is
+        // played by the live queue as it is synthesised and by the clip player on every
+        // pass after that, and the pause button is the same button either way.
+        playback.stop();
         clipPlayer.pause();
         return true;
       }
       if (msg.t === 'clip:stop') {
+        playback.stop();
         clipPlayer.stop();
         return true;
       }
