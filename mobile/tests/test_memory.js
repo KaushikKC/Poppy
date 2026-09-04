@@ -175,6 +175,28 @@ function fresh() {
     await mem.forgetAll();
   }
 
+  console.log('\n== a long turn keeps its ending ==');
+  {
+    const all = (m) => [...extract.fromRules(m), ...extract.fromOwnWords(m)].map((c) => c.text);
+    // Three sentences from a phone. Only the first two were stored, and the one that
+    // was dropped is the only one naming where he actually went.
+    const real = all("Hey, okay, okay, that's okay, but I'm from London currently. "
+      + "I'm in London and The last week I went to went out in with my friends. "
+      + "I went out to Scotland To visit Edinburgh or Glasgow and many places with my friends with my cool friends");
+    check('the last sentence survives', real.some((f) => /Scotland/.test(f)), JSON.stringify(real));
+    check('Edinburgh and Glasgow with it', real.some((f) => /Edinburgh|Glasgow/.test(f)));
+    check('and the first one too', real.some((f) => /from London/.test(f)));
+
+    // The stacked fillers in front of it are not part of the fact.
+    check('stacked fillers are stripped', !real.some((f) => /^Okay, okay/.test(f)),
+      JSON.stringify(real.filter((f) => /okay/i.test(f))));
+
+    // "I went to went out in" is speech-to-text repeating itself, and the place rule
+    // used to store it as "They went to the went out in."
+    check('a verb phrase is not stored as a place',
+      !real.some((f) => /went to the went/.test(f)), JSON.stringify(real));
+  }
+
   console.log('\n== every way a person says something about themselves ==');
   {
     const all = (m) => [...extract.fromRules(m), ...extract.fromOwnWords(m)].map((c) => c.text);

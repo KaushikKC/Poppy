@@ -128,6 +128,10 @@ const RULES: Rule[] = [
       const place = m[1].trim();
       const head = place.split(/\s+/)[0].toLowerCase();
       if (place.length < 3 || NOT_A_PLACE.has(head)) return null;
+      // "I went to went out in" — speech-to-text repeats itself, and the capture then
+      // holds a verb phrase rather than a place. Stored, it read "They went to the went
+      // out in."
+      if (/\b(went|going|go|come|coming|be|been)\b/.test(place)) return null;
       return `They went to the ${place}.`;
     },
     category: 'temporary' },
@@ -178,7 +182,9 @@ const RULES: Rule[] = [
 // including half-transcribed meta-chatter about the app itself. The guards below are
 // what that cost: it must be about them, in the first person, a real sentence, and
 // short enough to have been one thought.
-const FILLER = /^(yeah|yes|no|ok|okay|hi|hey|hello|hmm|so|well|and|but|actually)\b[\s,]*/i;
+// Repeated, because people stack them: "Hey, okay, okay, that's okay, but I'm from
+// London" was stored with the whole run of them still attached.
+const FILLER = /^((yeah|yes|no|ok|okay|hi|hey|hello|hmm|so|well|and|but|actually|that's okay|i mean)\b[\s,]*)+/i;
 
 function toThirdPerson(sentence: string): string {
   return sentence
@@ -202,7 +208,9 @@ export function fromOwnWords(text: string): Candidate[] {
     if (!sentence) continue;
     const words = sentence.split(/\s+/);
     // One thought, said about themselves, as a statement.
-    if (words.length < 5 || words.length > 26) continue;
+    // Four, because stripping the fillers off "Hey, okay, okay, that's okay, but I'm
+    // from London currently" leaves exactly four words and that is a fact worth having.
+    if (words.length < 4 || words.length > 26) continue;
     if (QUESTION.test(sentence)) continue;
     if (!/\b(I|I'm|I've|I'll|my|we|we're|our)\b/i.test(sentence)) continue;
     let fact = toThirdPerson(sentence);
@@ -211,7 +219,12 @@ export function fromOwnWords(text: string): Candidate[] {
     fact = fact.replace(/(?<=[a-z,] )They\b/g, 'they');
     fact = fact.charAt(0).toUpperCase() + fact.slice(1);
     out.push({ text: fact.endsWith('.') ? fact : `${fact}.`, category: 'temporary' });
-    if (out.length >= 2) break; // two per message; this is a prompt, not a diary
+    // Four, not two. "I'm from London. I'm in London and last week I went out with my
+    // friends. I went out to Scotland to visit Edinburgh or Glasgow" stored the first
+    // two and dropped the third — the only one naming where he actually went. The
+    // prompt is capped separately in memory_store, so a low cap here buys nothing and
+    // loses the end of every longer turn.
+    if (out.length >= 4) break;
   }
   return out;
 }
