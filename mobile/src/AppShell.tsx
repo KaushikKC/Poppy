@@ -9,7 +9,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Platform, StyleSheet, Text, View } from 'react-native';
 import WebViewComponent from 'react-native-webview';
 import type {
   WebViewMessageEvent,
@@ -368,7 +368,7 @@ export default function AppShell() {
         allowingReadAccessToURL={WEB_ROOT}
         // Must be *before* content loads: chat.js reads window.BACKEND at module
         // scope, and the page captures WebSocket when a call starts.
-        injectedJavaScriptBeforeContentLoaded={SHIM_JS}
+        injectedJavaScriptBeforeContentLoaded={SHIM_JS.replace('__PLATFORM__', Platform.OS)}
         onMessage={onMessage}
         onLoadEnd={() => setReady(true)}
         // A WebView runs its content in its own process, with a far smaller memory

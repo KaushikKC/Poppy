@@ -368,8 +368,10 @@
     return postSignIn(provider, claims.subject, claims.email, claims.name);
   }
 
-  // Apple only exists where the native flow does; on the web it would open nothing.
-  if (window.PoppyNativeAuth?.signIn) {
+  // Apple only exists on Apple's platform. Gated on the native bridge alone, the button
+  // rendered on Android too and opened nothing: the native call is guarded there and
+  // returns null, so it failed silently, which is the worst way for a button to fail.
+  if (window.PoppyNativeAuth?.signIn && window.PoppyPlatform === "ios") {
     document.getElementById("si-apple")?.classList.remove("hidden");
   }
 
@@ -1124,6 +1126,8 @@
   function openAccountSheet(acc) {
     const signedIn = !!(acc && acc.signed_in);
     const native = !!window.PoppyNativeAuth?.signIn;
+    // Same reasoning as the sign-in screen: Apple's button belongs on Apple's phones.
+    const appleOk = native && window.PoppyPlatform === "ios";
     const ov = document.createElement("div");
     ov.id = "account-sheet";
     // Providers only. The name-and-email form that used to be here identified nobody
@@ -1145,7 +1149,7 @@
             "</div>"
           // Apple first where it exists: its guidelines require the option to be at
           // least as prominent as any other.
-          : (native ? '<button type="button" class="btn btn--ink btn--block" id="acct-apple">Continue with Apple</button>' : "") +
+          : (appleOk ? '<button type="button" class="btn btn--ink btn--block" id="acct-apple">Continue with Apple</button>' : "") +
             '<button type="button" class="btn btn--glass btn--block" id="acct-google">Continue with Google</button>') +
         '<p class="ce-error hidden" id="acct-error"></p>' +
         '<div class="traits-actions">' +

@@ -46,6 +46,11 @@ export const SHIM_JS = String.raw`
   // build has no client id. Never with an invented identity.
   var pendingAuth = {};
 
+  // Which phone this is. The page needs it because some things exist on one platform
+  // and not the other — Apple sign-in most obviously, which rendered a button on
+  // Android that opened nothing. Substituted by AppShell before injection.
+  window.PoppyPlatform = '__PLATFORM__';
+
   window.PoppyNativeAuth = {
     signIn: function (provider) {
       var id = nextId++;

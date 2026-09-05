@@ -72,6 +72,17 @@ def enableProguardInReleaseBuilds = false
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
+// Signing secrets, read from android/keystore.properties. That file is gitignored and
+// must stay that way: a signing key in a public repo is the app's identity given away,
+// and anyone holding it can publish an update that Play and every installed phone will
+// accept as yours. Losing it is just as bad in the other direction — Play will not let
+// you update an app signed with a different key, ever.
+def keystoreProps = new Properties()
+def keystorePropsFile = rootProject.file('keystore.properties')
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+
 android {
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
@@ -85,6 +96,10 @@ android {
         versionCode 1
         versionName "1.0"
     }
+    // Read from android/keystore.properties, which is gitignored and never committed.
+    // A signing key in a public repo is the app's identity given away: anyone holding
+    // it can publish an update that Play and every installed phone will accept as
+    // yours.
     signingConfigs {
         debug {
             storeFile file('debug.keystore')
@@ -92,15 +107,27 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        if (keystoreProps.size() > 0) {
+            release {
+                storeFile file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            // The debug key was the default here, and Play rejects an app signed with
+            // it — every developer's debug key is the same key. This uses the real one
+            // when android/keystore.properties exists and falls back to debug when it
+            // does not, so a checkout without the secrets still builds and runs.
+            signingConfig signingConfigs.hasProperty('release') && keystoreProps.size() > 0
+                ? signingConfigs.release
+                : signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
