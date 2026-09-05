@@ -38,12 +38,29 @@ export type Claims = { subject: string; email: string; name: string };
 const IOS_CLIENT_ID =
   '512938090680-r7kj5c5mmuothkh324u0m8vs49kelplt.apps.googleusercontent.com';
 
+/**
+ * The Web client id from the same Google Cloud project.
+ *
+ * Android does not use an Android client id here. It needs the *web* one, because that
+ * is the audience of the ID token Google returns; the Android OAuth client exists only
+ * so Google recognises the app by package name and signing certificate, and is never
+ * named in code. Configured with only iosClientId, sign-in on Android fails with no
+ * useful error.
+ *
+ * Empty until the client is created — see the Android section of the README. Left
+ * empty, Android sign-in returns null the same way a cancel does, rather than throwing.
+ */
+const WEB_CLIENT_ID = '';
+
 let configured = false;
 
 function configure(): void {
   if (configured) return;
   configured = true;
-  GoogleSignin.configure({ iosClientId: IOS_CLIENT_ID });
+  GoogleSignin.configure({
+    iosClientId: IOS_CLIENT_ID,
+    ...(WEB_CLIENT_ID ? { webClientId: WEB_CLIENT_ID } : {}),
+  });
 }
 
 /**
