@@ -109,7 +109,11 @@ android {
         }
         if (keystoreProps.size() > 0) {
             release {
-                storeFile file(keystoreProps['storeFile'])
+                // rootProject.file, not file: this block lives in app/build.gradle, so a
+                // plain file() resolves against android/app/ while keystore.properties
+                // sits in android/ and names a path beside itself. The keystore was
+                // where it was meant to be and Gradle was looking one directory down.
+                storeFile rootProject.file(keystoreProps['storeFile'])
                 storePassword keystoreProps['storePassword']
                 keyAlias keystoreProps['keyAlias']
                 keyPassword keystoreProps['keyPassword']
