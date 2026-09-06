@@ -64,5 +64,21 @@ check(
   schemes.join(', '),
 );
 
+console.log('\n== Android has what it needs ==');
+{
+  const web = auth.match(/const WEB_CLIENT_ID =\s*\n?\s*'([^']+)'/);
+  check('a web client id is set', !!web && web[1].length > 0, web ? web[1].slice(0, 30) + '…' : 'empty');
+  // Android does not use the Android client id in code — it uses the web one, because
+  // that is the audience of the ID token. Configured without it, sign-in there fails
+  // with nothing useful to go on.
+  check('configure passes it', /webClientId/.test(auth));
+  // Two ids from two different Google Cloud projects is the failure that looks exactly
+  // like a cancelled sign-in, so the project numbers must match.
+  const iosNum = (auth.match(/const IOS_CLIENT_ID =\s*\n?\s*'(\d+)-/) || [])[1];
+  const webNum = web ? (web[1].match(/^(\d+)-/) || [])[1] : null;
+  check('and it is the same project as iOS', !!iosNum && iosNum === webNum, `${iosNum} vs ${webNum}`);
+  check('it is a web id, not the ios one', web && web[1] !== (auth.match(/const IOS_CLIENT_ID =\s*\n?\s*'([^']+)'/) || [])[1]);
+}
+
 console.log(ok ? '\nALL PASS' : '\nFAILURES');
 process.exit(ok ? 0 : 1);

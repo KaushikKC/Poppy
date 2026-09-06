@@ -47,10 +47,12 @@ const IOS_CLIENT_ID =
  * named in code. Configured with only iosClientId, sign-in on Android fails with no
  * useful error.
  *
- * Empty until the client is created — see the Android section of the README. Left
- * empty, Android sign-in returns null the same way a cancel does, rather than throwing.
+ * Same Google Cloud project as the iOS client above, which is why the project number
+ * in front of the dash matches. A test checks that, because two ids from two projects
+ * is the failure that looks exactly like a cancelled sign-in.
  */
-const WEB_CLIENT_ID = '';
+const WEB_CLIENT_ID =
+  '512938090680-vsfpps030a1h73plp7mh0cgmfuoui56a.apps.googleusercontent.com';
 
 let configured = false;
 
