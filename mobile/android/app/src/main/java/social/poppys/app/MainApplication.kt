@@ -1,4 +1,4 @@
-package com.poppysspike
+package social.poppys.app
 
 import android.app.Application
 import com.facebook.react.PackageList

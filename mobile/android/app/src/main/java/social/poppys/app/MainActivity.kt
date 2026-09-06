@@ -1,4 +1,4 @@
-package com.poppysspike
+package social.poppys.app
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate

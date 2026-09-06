@@ -113,12 +113,12 @@ Where to get them:
 Push them onto the device:
 
 **Android** (launch the app once first so its data dir exists). Easiest is
-Android Studio → Device Explorer → `data/data/com.poppysspike/files/models`.
+Android Studio → Device Explorer → `data/data/social.poppys.app/files/models`.
 Via CLI:
 ```bash
-adb shell run-as com.poppysspike mkdir -p files/models/llm files/models/whisper files/models/kokoro
+adb shell run-as social.poppys.app mkdir -p files/models/llm files/models/whisper files/models/kokoro
 adb push model.gguf /data/local/tmp/
-adb shell run-as com.poppysspike cp /data/local/tmp/model.gguf files/models/llm/model.gguf
+adb shell run-as social.poppys.app cp /data/local/tmp/model.gguf files/models/llm/model.gguf
 # repeat for the whisper bin and every file inside the kokoro dir
 ```
 
