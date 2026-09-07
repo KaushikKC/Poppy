@@ -100,6 +100,33 @@ android {
     // A signing key in a public repo is the app's identity given away: anyone holding
     // it can publish an update that Play and every installed phone will accept as
     // yours.
+    // react-native-audio-api and react-native-sherpa-onnx each bundle their own ffmpeg,
+    // so both hand the packager a lib/<abi>/libavcodec.so and the merge fails. Taking
+    // the first of each is the standard resolution — but it is a real choice, not a
+    // formality: whichever build wins has to satisfy both callers. Audio playback and
+    // text-to-speech are the two things to try first on a device, because a version
+    // mismatch here surfaces as a crash the moment one of them is used, not at build
+    // time.
+    sourceSets {
+        main {
+            // builtBy by name: the task is registered further down this file, and a
+            // string reference stays lazy so declaration order does not matter. This
+            // is also what tells lint, packaging and every other consumer that the
+            // directory has a producer.
+            assets.srcDir("${layout.buildDirectory.get().asFile}/generated/poppysWeb")
+        }
+    }
+
+    packagingOptions {
+        jniLibs {
+            pickFirsts += [
+                '**/libavcodec.so', '**/libavformat.so', '**/libavutil.so',
+                '**/libavfilter.so', '**/libavdevice.so',
+                '**/libswresample.so', '**/libswscale.so',
+            ]
+        }
+    }
+
     signingConfigs {
         debug {
             storeFile file('debug.keystore')
@@ -162,9 +189,20 @@ dependencies {
 //
 // Kept deliberately parallel to that phase, including the exclusions: model weights
 // and video loops are large and unused on device.
+// preBuild, not builtBy. Registering the directory with .builtBy('copyPoppysWebUI')
+// looked right and produced no dependency at all — the task never ran, the build
+// succeeded, and the APK shipped with an empty assets/web and a blank WebView. That is
+// the same failure this whole copy step exists to prevent, so it is wired to something
+// that cannot be skipped.
+tasks.named('preBuild') { dependsOn 'copyPoppysWebUI' }
+
 def frontendDir = file("$rootDir/../../frontend")
 def overlayDir  = file("$rootDir/../web-overlay")
-def webAssets   = file("$projectDir/src/main/assets/web")
+// Into build/, not src/. Generated files in a source directory are a lie to every
+// task that reads that directory — lint refused to run because it consumes
+// src/main/assets without knowing copyPoppysWebUI writes there. Registered as an asset
+// source set below, so it is packaged exactly as if it had been checked in.
+def webAssets   = file("${layout.buildDirectory.get().asFile}/generated/poppysWeb/web")
 
 tasks.register('copyPoppysWebUI') {
     description = 'Copies the frontend into assets/web for the WebView.'
@@ -197,8 +235,3 @@ tasks.register('copyPoppysWebUI') {
     }
 }
 
-tasks.configureEach { task ->
-    if (task.name.startsWith('merge') && task.name.endsWith('Assets')) {
-        task.dependsOn 'copyPoppysWebUI'
-    }
-}
