@@ -294,11 +294,47 @@ needed — the usual beta-review snag does not apply here.
 - In-app account deletion (§1a). Not a beta blocker; a hard App Review blocker.
 - Android internal → closed testing, so the 12/14-day clock starts running.
 
-### Stage 3 — ads and the $20, together
-Link the ad SDK and the store bridge in one change, then flip `BILLING_LIVE` in both
-twins. `window.PoppyNativeBilling` is referenced by `frontend/flow.js` and does not
-exist yet; until it does, the upgrade button would grant Plus for free, which is
-precisely why the switch is off.
+### Stage 3a — ads (BUILT 2026-09-16, on test units)
+
+**AdMob, not AdSense.** AdSense is the web product, its policy forbids serving into an
+app or WebView, and a `file://` page has no origin to serve against anyway. AdMob is the
+mobile SDK and renders native views.
+
+One flag became two, because ads and the purchase ship at different times:
+`ADS_LIVE = True` and `BILLING_LIVE = False` in `backend/billing.py` and
+`mobile/src/core/billing.ts`. Ads with no purchase are annoying; a purchase with no
+store bridge grants Plus for free, which is why that half stays off.
+
+What was built:
+- `react-native-google-mobile-ads` 16.5.0, pods installed
+- `mobile/src/bridge/ads.ts` — UMP consent, SDK start, `MaxAdContentRating.PG`
+- `window.PoppyNativeAds.setScreen()` in the shim; `frontend/flow.js` `setView()` reports
+  the screen through it (one chokepoint, so the call sites cannot drift)
+- `AppShell.tsx` renders an anchored adaptive banner **only** when
+  `billing.shouldShowAds()` is true **and** the screen is `home`
+- `app.json` app ids + 46 SKAdNetwork ids; iOS `Info.plist` gains
+  `GADApplicationIdentifier` (without it the SDK crashes on launch),
+  `NSUserTrackingUsageDescription`, `SKAdNetworkItems`
+
+**The ad never renders during a call.** It is a sibling of the WebView, not an overlay,
+and it is gated on the screen being `home`. Placement policy lives on the native side
+next to the entitlement, so the page cannot ask for an ad at a bad moment.
+
+**Deliberately no ATT prompt.** This SDK does not expose it and we did not add a separate
+library. Cost: no IDFA on iOS, so ads serve non-personalised and eCPM is lower. Benefit:
+no tracking prompt on first launch, and the App Privacy label never has to declare
+"Used for Tracking". For an app whose pitch is that conversations never leave the phone,
+that is the right trade until ad revenue makes the difference matter.
+
+**Still on Google's test units.** `LIVE_UNIT` in `ads.ts` is empty, so `UNIT_ID` falls
+back to `TestIds.BANNER` and `app.json` carries Google's sample app ids. Requesting live
+ads from a dev build, or tapping your own ad, gets the AdMob account banned at account
+level. Swap in real ids only for a build going to real testers.
+
+### Stage 3b — the $20 (not built)
+`window.PoppyNativeBilling` is referenced by `frontend/flow.js` and does not exist yet.
+Until StoreKit and Play Billing are wired, `BILLING_LIVE` stays false, because the
+upgrade button would take no money and grant Plus anyway.
 
 ### Stage 4 — App Store proper
 Privacy labels updated to final truth (§1b), listing, App Review, manual phased release.
