@@ -59,6 +59,21 @@ const VULNERABLE_MODES = new Set(['vent', 'wind']);
 /** There is a price now, so the free tier is real and is where everyone starts. */
 const DEFAULT_PLAN = 'free';
 
+/**
+ * Two switches, because the two halves ship at different times. Keep in step with
+ * billing.py.
+ *
+ * `ADS_LIVE` says ads may be requested. `BILLING_LIVE` says the upgrade may be offered.
+ * They were one flag and that was wrong: it forced the sell and the buy to arrive
+ * together, when the useful order is ads first (on Google's test units, which need no
+ * account and cost nothing to get wrong) and the purchase after.
+ *
+ * The dangerous combination is `BILLING_LIVE` with no store bridge, because the button
+ * would take no money and grant Plus anyway. That stays false until StoreKit and Play
+ * Billing are wired. Ads without a purchase are merely annoying, not broken.
+ */
+export const ADS_LIVE = true;
+const BILLING_LIVE = false;
 
 export async function plan(): Promise<string> {
   const p = await companion.profile();
@@ -86,6 +101,7 @@ export function canInterrupt(
 export async function shouldShowAds(
   context: { crisis?: boolean; distress?: boolean; mode?: string } = {},
 ): Promise<boolean> {
+  if (!ADS_LIVE) return false;
   if ((await plan()) !== 'free') return false;
   return canInterrupt(context);
 }
@@ -94,8 +110,9 @@ export async function entitlement(): Promise<Record<string, unknown>> {
   const p = await plan();
   return {
     plan: p,
+    billing_live: BILLING_LIVE,
     // The only thing any caller branches on.
-    ads: p === 'free',
+    ads: ADS_LIVE && p === 'free',
     tier: TIERS[p] ?? TIERS.free,
     tiers: TIERS,
   };

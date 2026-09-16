@@ -1153,11 +1153,15 @@
           // least as prominent as any other.
           : (appleOk ? '<button type="button" class="btn btn--ink btn--block" id="acct-apple">Continue with Apple</button>' : "") +
             '<button type="button" class="btn btn--glass btn--block" id="acct-google">Continue with Google</button>') +
-        // The only place the upgrade is offered. Shown as what it is, a line about
-        // ads, not a teaser for features that Free already has.
-        (ent && ent.ads
-          ? '<button type="button" class="btn btn--glass btn--block" id="acct-plus">Remove ads, $20</button>'
-          : '<p class="t-xs muted">Poppy Plus. Ads are off.</p>') +
+        // The only place the upgrade is offered, and it is offered only once there is
+        // something to buy. While billing_live is false there are no ads to remove and
+        // no store to take the money, so the row is absent rather than disabled: an
+        // inert price is a worse answer than no price.
+        (ent && ent.billing_live
+          ? (ent.ads
+              ? '<button type="button" class="btn btn--glass btn--block" id="acct-plus">Remove ads, $20</button>'
+              : '<p class="t-xs muted">Poppy Plus. Ads are off.</p>')
+          : "") +
         '<p class="ce-error hidden" id="acct-error"></p>' +
         '<div class="traits-actions">' +
           '<button type="button" class="outro-ghost" id="acct-cancel">Close</button>' +

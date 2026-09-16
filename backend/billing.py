@@ -57,6 +57,20 @@ TIERS = {
 # Mood modes that are emotionally vulnerable by nature. Nothing interrupts these.
 _VULNERABLE_MODES = {"vent", "wind"}
 
+# Two switches, because the two halves ship at different times.
+#
+# ADS_LIVE says ads may be requested. BILLING_LIVE says the upgrade may be offered.
+# They were one flag and that was wrong: it forced the sell and the buy to arrive
+# together, when the useful order is ads first (with Google's test units, which need no
+# account and cost nothing to get wrong) and the purchase after.
+#
+# The dangerous combination is BILLING_LIVE without a store bridge, because the button
+# would take no money and grant Plus anyway. So that one stays False until StoreKit and
+# Play Billing are wired. Ads with no purchase are merely annoying, not broken, and are
+# the thing being tested right now.
+ADS_LIVE = True
+BILLING_LIVE = False
+
 
 def plan() -> str:
     return companion.profile().get("plan", "free")
@@ -81,6 +95,8 @@ def should_show_ads(context: dict | None = None) -> bool:
     """True when an ad may be requested right now: the user has not bought Plus, and
     this is an abundance moment. Check this at *every* ad call site — a paid user must
     never see a request fire, not even one that fails to fill."""
+    if not ADS_LIVE:
+        return False
     if plan() != "free":
         return False
     return can_interrupt(context)
@@ -92,7 +108,8 @@ def entitlement() -> dict:
     p = plan()
     return {
         "plan": p,
-        "ads": p == "free",
+        "billing_live": BILLING_LIVE,
+        "ads": ADS_LIVE and p == "free",
         "tier": TIERS.get(p, TIERS["free"]),
         "tiers": TIERS,
     }
