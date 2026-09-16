@@ -1,24 +1,26 @@
 /**
- * Plans and the fair daily limit — the port of backend/billing.py.
+ * Plans and the ad guardrail — the port of backend/billing.py. Keep the two in step.
  *
- * ## The decision for iOS v1: the logic ships, the paywall does not
+ * ## What changed, and why the default flipped
  *
- * `DEFAULT_PLAN` is `plus`, so `paywallDue()` is always false and nobody meets a
- * locked door. That is deliberate, for two reasons.
+ * `DEFAULT_PLAN` was `plus`, because there was no price and no StoreKit product, and a
+ * paywall with no way to pay is a door with no handle. There is a price now, and the
+ * thing being sold is ads-off, so the same reasoning inverts: leaving everyone on
+ * `plus` would mean no phone ever shows an ad and the free tier does not exist.
+ * It is `free`, and StoreKit / Play Billing move a user off it.
  *
- * There is no price yet and no StoreKit product, so a paywall would be a door with no
- * handle: the user could neither continue nor pay. And an app with no in-app purchase
- * has a materially simpler App Store review than one with a subscription.
+ * ## What did not change, and is the whole point of this file
  *
- * The logic is ported anyway rather than stubbed out, because the interesting part is
- * not the counting, it is the guardrail: **a paywall is impossible during a vulnerable
- * moment.** That rule belongs in code now, while it is easy, not bolted on later when
- * a launch is being rushed. When there is a price, `DEFAULT_PLAN` becomes `free` and
- * StoreKit fills in `setPlan`; nothing else changes.
+ * Free is the entire product, uncapped. The daily-call limit is gone: metering
+ * conversation is the one thing this app will not do, and the person reaching for a
+ * sixth call today is the one least well served by a locked door. $20 buys quiet.
+ *
+ * So one rule survives, and it matters more now than it ever did as a paywall rule:
+ * **nothing interrupts a vulnerable moment.** An ad on top of someone venting is worse
+ * than a paywall there. `canInterrupt()` makes it impossible rather than discouraged.
  */
 
 import * as companion from './companion';
-import { streakDay } from './streak';
 
 export const TIERS: Record<string, {
   name: string;
@@ -29,40 +31,34 @@ export const TIERS: Record<string, {
   free: {
     name: 'Free',
     price: '₹0',
-    blurb: 'Everything you need to build the habit.',
+    blurb: 'The whole thing, free.',
     features: [
-      'A few calls a day',
+      'Unlimited calls, always',
       'Your companion, your vibe',
       'Core memory that remembers you',
       'Morning / night ritual',
       'Full privacy, export, and delete',
+      'A few ads between conversations',
     ],
   },
   plus: {
     name: 'Poppy Plus',
-    price: '₹299/mo · ₹2,499/yr',
-    blurb: "For when Poppy's part of your day.",
+    price: '$20 once',
+    blurb: 'The same Poppy, without the ads.',
     features: [
-      'Unlimited, longer calls',
-      'Richer voice and deeper memory',
-      'Look-together and background calls',
-      'Priority latency',
+      'No ads, anywhere, ever',
+      'Everything in Free, unchanged',
+      'One payment, not a subscription',
     ],
   },
 };
 
-/**
- * A *fair* daily limit, not a wall. Going over it during an ordinary call is where an
- * upgrade is invited; going over it during a vulnerable call is where the person is
- * simply allowed to talk.
- */
-export const FREE_DAILY_CALLS = 5;
-
-/** Modes where money is never mentioned. */
+/** Modes where nothing is ever sold and nothing ever interrupts. */
 const VULNERABLE_MODES = new Set(['vent', 'wind']);
 
-/** See the module note: no price, no StoreKit, so no paywall on iOS v1. */
-const DEFAULT_PLAN = 'plus';
+/** There is a price now, so the free tier is real and is where everyone starts. */
+const DEFAULT_PLAN = 'free';
+
 
 export async function plan(): Promise<string> {
   const p = await companion.profile();
@@ -70,27 +66,12 @@ export async function plan(): Promise<string> {
   return saved && TIERS[saved] ? saved : DEFAULT_PLAN;
 }
 
-export async function callsToday(): Promise<number> {
-  const p = await companion.profile();
-  const state = p.calls_day as { day?: string; count?: number } | null;
-  if (!state || state.day !== streakDay()) return 0;
-  return state.count ?? 0;
-}
-
-export async function recordCall(): Promise<number> {
-  const count = (await callsToday()) + 1;
-  await companion.update({
-    calls_day: { day: streakDay(), count } as unknown as Record<string, unknown>,
-  });
-  return count;
-}
-
 /**
  * The guardrail. False for any vulnerable moment — a distress or crisis turn, or an
- * emotionally vulnerable mood — so a paywall there is impossible rather than merely
- * discouraged.
+ * emotionally vulnerable mood. Every ad surface and every upgrade prompt goes through
+ * here.
  */
-export function canShowPaywall(
+export function canInterrupt(
   context: { crisis?: boolean; distress?: boolean; mode?: string } = {},
 ): boolean {
   if (context.crisis || context.distress) return false;
@@ -98,32 +79,34 @@ export function canShowPaywall(
   return true;
 }
 
-export async function paywallDue(
+/**
+ * True when an ad may be requested right now. Check at *every* ad call site: a paid
+ * user must never see a request fire, not even one that fails to fill.
+ */
+export async function shouldShowAds(
   context: { crisis?: boolean; distress?: boolean; mode?: string } = {},
 ): Promise<boolean> {
   if ((await plan()) !== 'free') return false;
-  if ((await callsToday()) < FREE_DAILY_CALLS) return false;
-  return canShowPaywall(context);
+  return canInterrupt(context);
 }
 
 export async function entitlement(): Promise<Record<string, unknown>> {
   const p = await plan();
-  const used = await callsToday();
-  const limit = p !== 'free' ? null : FREE_DAILY_CALLS;
   return {
     plan: p,
+    // The only thing any caller branches on.
+    ads: p === 'free',
     tier: TIERS[p] ?? TIERS.free,
     tiers: TIERS,
-    calls_today: used,
-    daily_limit: limit,
-    calls_left: limit === null ? null : Math.max(0, limit - used),
-    // What the UI reads to decide whether to show a locked state at all.
-    entitled: p !== 'free',
-    paywall: false,
   };
 }
 
-/** Where StoreKit will attach when there is a price. */
+/**
+ * Cache the tier. The authority is the store receipt, not this call: StoreKit's
+ * `Transaction.currentEntitlements` and Play's `queryPurchasesAsync` are signed and
+ * verified on-device, and are re-resolved on every cold start. This only records what
+ * they said, so a wrong value here is corrected by the next launch rather than sold.
+ */
 export async function setPlan(next: string): Promise<Record<string, unknown>> {
   await companion.update({ plan: TIERS[next] ? next : 'free' });
   return entitlement();
