@@ -32,6 +32,9 @@ import { createHost, dispatchAudio, dispatchAuth, dispatchClip, dispatchMic } fr
 import { signInWithApple, signInWithGoogle } from './bridge/auth';
 import { cancelRitual, scheduleRitual } from './bridge/notify';
 import { createMic } from './bridge/mic';
+import { UNIT_ID, startAds } from './bridge/ads';
+import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
+import * as billing from './core/billing';
 import { registerHandlers } from './core/handlers';
 import { createSocketHandler } from './core/socket';
 import { loadNativeEngines } from './core/native_engines';
@@ -228,6 +231,24 @@ export default function AppShell() {
     return () => sub?.remove();
   }, [fail]);
 
+  // The banner shows only when both of these are true. Two pieces of state rather than
+  // one because they answer different questions and change at different rates: the
+  // screen changes constantly, the entitlement almost never.
+  const [screen, setScreen] = useState('');
+  const [adsAllowed, setAdsAllowed] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      // shouldShowAds() with no context is the standing answer: is this user on a tier
+      // that sees ads at all. The per-moment question is the `screen` check below.
+      const allowed = await billing.shouldShowAds();
+      setAdsAllowed(allowed);
+      // Consent and SDK start are deferred until we know an ad could be wanted, so a
+      // paying user never sees a consent form for ads they will never be shown.
+      if (allowed) await startAds();
+    })();
+  }, []);
+
   const onMessage = useMemo(() => {
     // The one thing that actually makes sound, handed to the core so the core itself
     // stays free of native imports.
@@ -266,6 +287,12 @@ export default function AppShell() {
       }
       if (msg.t === 'notify:clear') {
         void cancelRitual();
+        return true;
+      }
+      // Where the user is. The page reports it; the decision to draw anything stays
+      // here, next to the entitlement, so the page cannot talk us into a bad moment.
+      if (msg.t === 'ads:screen') {
+        setScreen(String((msg as { view?: string }).view ?? ''));
         return true;
       }
       // Sign in. The page asks, Google's own sheet answers, and what comes back is a
@@ -384,6 +411,26 @@ export default function AppShell() {
         mediaPlaybackRequiresUserAction={false}
         style={styles.web}
       />
+      {/*
+        Home only, and only between conversations.
+
+        Not on 'chat', which is where a call happens: an ad beside someone mid
+        sentence, or mid vent, is the single fastest way to lose the trust this app
+        runs on. Not on 'onboarding' either, where the person has not yet decided
+        whether to care about any of this.
+
+        Rendered as a sibling of the WebView rather than an overlay, so it takes its
+        own space in the column and never covers a control the page drew.
+      */}
+      {adsAllowed && screen === 'home' && (
+        <View style={styles.adSlot}>
+          <BannerAd
+            unitId={UNIT_ID}
+            size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+            requestOptions={{ requestNonPersonalizedAdsOnly: false }}
+          />
+        </View>
+      )}
       {!ready && (
         <View style={styles.loading}>
           <ActivityIndicator />
@@ -405,6 +452,10 @@ export default function AppShell() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#eaf1f8' },
   web: { flex: 1, backgroundColor: 'transparent' },
+  // No border or shadow: an ad that tries to look like part of the app is both worse
+  // design and against AdMob's own placement policy. It sits on the page's own ground
+  // colour and is plainly a separate band.
+  adSlot: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#eaf1f8' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   err: { color: '#b3261e', textAlign: 'center' },
   loading: {
