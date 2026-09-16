@@ -1119,11 +1119,13 @@
   // From settings, the same two fields, in the sheet the rest of the app uses.
   document.getElementById("home-account")?.addEventListener("click", async () => {
     let acc = {};
+    let ent = {};
     try { acc = await (await fetch(`${BACKEND}/account`)).json(); } catch {}
-    openAccountSheet(acc);
+    try { ent = await (await fetch(`${BACKEND}/entitlement`)).json(); } catch {}
+    openAccountSheet(acc, ent);
   });
 
-  function openAccountSheet(acc) {
+  function openAccountSheet(acc, ent) {
     const signedIn = !!(acc && acc.signed_in);
     const native = !!window.PoppyNativeAuth?.signIn;
     // Same reasoning as the sign-in screen: Apple's button belongs on Apple's phones.
@@ -1151,6 +1153,11 @@
           // least as prominent as any other.
           : (appleOk ? '<button type="button" class="btn btn--ink btn--block" id="acct-apple">Continue with Apple</button>' : "") +
             '<button type="button" class="btn btn--glass btn--block" id="acct-google">Continue with Google</button>') +
+        // The only place the upgrade is offered. Shown as what it is, a line about
+        // ads, not a teaser for features that Free already has.
+        (ent && ent.ads
+          ? '<button type="button" class="btn btn--glass btn--block" id="acct-plus">Remove ads, $20</button>'
+          : '<p class="t-xs muted">Poppy Plus. Ads are off.</p>') +
         '<p class="ce-error hidden" id="acct-error"></p>' +
         '<div class="traits-actions">' +
           '<button type="button" class="outro-ghost" id="acct-cancel">Close</button>' +
@@ -1169,6 +1176,11 @@
           await loadHome();
         }
       });
+    ov.querySelector("#acct-plus")?.addEventListener("click", () => {
+      ov.remove();
+      showUpgrade(ent);
+    });
+
     wire("#acct-apple", "apple", "Continue with Apple");
     wire("#acct-google", "google", "Continue with Google");
 
@@ -1581,13 +1593,6 @@
       })).json();
     } catch {}
 
-    // Abundance-moment upgrade prompt (§8). The backend only returns this when it's
-    // a non-vulnerable call over the fair free limit — it's impossible here otherwise.
-    if (r.paywall) {
-      showPaywall(r.paywall, { seed, vibe, mode });
-      return;
-    }
-
     if (vibe && window.PersonaPicker) window.PersonaPicker.select(vibe);
     if (profile && profile.gender) setAvatarGender(profile.gender);
     nameCompanion(profile && profile.companion_name);
@@ -1635,10 +1640,15 @@
     }).observe(dot, { attributes: true, attributeFilter: ["class"] });
   })();
 
-  // ── Upgrade prompt (§8) — abundance framing, never shown at a vulnerable moment ──
+  // ── Upgrade sheet (§8) ──────────────────────────────────────────────────────
+  //
+  // This used to stand in front of the sixth call of the day. It does not stand in
+  // front of anything any more: free is uncapped, and the only thing $20 buys is the
+  // ads going away. So it is reached from the account sheet, by someone who went
+  // looking for it, which is the only honest place for it now.
   const paywall = document.getElementById("paywall");
 
-  function showPaywall(ent, retry) {
+  function showUpgrade(ent) {
     const plus = (ent.tiers && ent.tiers.plus) || ent.tier || {};
     paywall.innerHTML = "";
     const card = document.createElement("div");
@@ -1646,10 +1656,10 @@
 
     const eyebrow = document.createElement("p");
     eyebrow.className = "paywall-eyebrow";
-    eyebrow.textContent = "You two talk a lot";
+    eyebrow.textContent = "Poppy Plus";
     const head = document.createElement("h2");
     head.className = "paywall-head";
-    head.textContent = "Go unlimited with Poppy Plus?";
+    head.textContent = "The same Poppy, without the ads.";
     const price = document.createElement("p");
     price.className = "paywall-price";
     price.textContent = plus.price || "";
@@ -1665,8 +1675,32 @@
     const go = document.createElement("button");
     go.type = "button";
     go.className = "paywall-go";
-    go.textContent = "Go unlimited";
-    go.addEventListener("click", async () => {
+    go.textContent = "Remove ads, $20";
+    go.addEventListener("click", () => settle(() => window.PoppyNativeBilling?.purchase()));
+
+    // Guideline 3.1.1 makes this mandatory on a non-consumable, and it is not a
+    // formality: without it, anyone who reinstalls has paid twice for the same thing.
+    const restore = document.createElement("button");
+    restore.type = "button";
+    restore.className = "paywall-later";
+    restore.textContent = "Restore purchase";
+    restore.addEventListener("click", () => settle(() => window.PoppyNativeBilling?.restore()));
+
+    const later = document.createElement("button");
+    later.type = "button";
+    later.className = "paywall-later";
+    later.textContent = "Not now";
+    later.addEventListener("click", () => paywall.classList.add("hidden"));
+
+    // The store is the authority; the backend only caches what it said. Desktop has no
+    // store, so the bridge is absent there and the local field is the truth instead.
+    async function settle(viaStore) {
+      let owned = true;
+      try {
+        const r = await viaStore();
+        if (r !== undefined) owned = !!r;
+      } catch { return; }
+      if (!owned) return;
       try {
         await fetch(`${BACKEND}/entitlement`, {
           method: "POST",
@@ -1675,19 +1709,9 @@
         });
       } catch {}
       paywall.classList.add("hidden");
-      startCall(retry); // now unlimited — dial straight in
-    });
+    }
 
-    const later = document.createElement("button");
-    later.type = "button";
-    later.className = "paywall-later";
-    later.textContent = "Maybe later";
-    later.addEventListener("click", () => {
-      paywall.classList.add("hidden");
-      setView("home");
-    });
-
-    card.append(eyebrow, head, price, ul, go, later);
+    card.append(eyebrow, head, price, ul, go, restore, later);
     paywall.appendChild(card);
     paywall.classList.remove("hidden");
   }
