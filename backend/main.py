@@ -431,13 +431,10 @@ async def open_call(payload: dict = Body(default={})):
     `mode` frames a mood-mode call (§4.5). A newly-reached streak milestone (§6) is
     woven into the opener and returned so the UI can mark the moment."""
     data = payload or {}
-    # Trust-as-code (§8): a paywall may only appear at an abundance moment, never a
-    # vulnerable one. If it's due, signal it and do NOT open/record the call. A
-    # vulnerable call (vent/wind, or later a distress turn) always passes through.
-    if await asyncio.to_thread(billing.paywall_due, {"mode": data.get("mode")}):
-        ent = await asyncio.to_thread(billing.entitlement)
-        return {"paywall": ent}
-
+    # No gate here, deliberately. Free is uncapped: the person reaching for a sixth
+    # call today is the one least well served by being stopped, and metering
+    # conversation is the one thing this product will not do. Plus buys silence from
+    # ads, not permission to speak. See billing.py.
     profile = await asyncio.to_thread(companion.record_call)
     # The milestone was reached when the streak was credited, at the *close* of the
     # qualifying call. It's surfaced here so she can make it a moment inside the
@@ -690,14 +687,15 @@ async def close_call(payload: dict = Body(default={})):
 
 @app.get("/entitlement")
 async def get_entitlement():
-    """Current tier, the fair daily-call budget, and how much is left (§8)."""
+    """Current tier, and whether ads are on for this user (§8)."""
     return await asyncio.to_thread(billing.entitlement)
 
 
 @app.post("/entitlement")
 async def set_entitlement(payload: dict = Body(...)):
-    """Change tier. On desktop this is a local stub; on mobile it's gated by the
-    store's purchase flow through the thin cloud (D2)."""
+    """Cache the tier. On desktop this is the truth; on mobile the authority is the
+    store receipt (StoreKit / Play Billing), re-resolved on every cold start, and this
+    only records what it said."""
     ent = await asyncio.to_thread(billing.set_plan, payload.get("plan", "free"))
     await asyncio.to_thread(db.record_event, "plan_" + ent["plan"])
     return ent
