@@ -55,8 +55,6 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Poppys listens to your voice so it can talk with you. Audio is processed entirely on your device and never leaves it.</string>
 	<key>RCTNewArchEnabled</key>
