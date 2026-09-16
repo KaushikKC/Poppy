@@ -51,6 +51,11 @@
       bar.classList.toggle("hidden", v === "onboarding");
       markTab(v === "home" ? "you" : "thread");
     }
+    // Tell the phone where we are, so it knows whether a banner may be on screen.
+    // This is the only chokepoint every screen change goes through, which is why the
+    // call lives here rather than at a dozen call sites that would drift apart.
+    // Absent in a browser, where there is no native layer and nothing to tell.
+    window.PoppyNativeAds?.setScreen(v);
     if (v === "chat") {
       // The orb's container just became a 42px slot in the header; nudge it to refit.
       requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));

@@ -76,6 +76,19 @@ export const SHIM_JS = String.raw`
     done(msg.claims || null);
   };
 
+  // ── Ads ────────────────────────────────────────────────────────────────────
+  //
+  // One-way, and deliberately dumb: the page says which screen it is on and nothing
+  // else. It does not ask for an ad, does not know whether one is showing, and cannot
+  // be talked into showing one at the wrong moment, because the decision lives on the
+  // native side next to the entitlement. The page's only job is to be honest about
+  // where the user is.
+  window.PoppyNativeAds = {
+    setScreen: function (view) {
+      post({ t: 'ads:screen', view: String(view || '') });
+    },
+  };
+
   // ── The daily reminder ─────────────────────────────────────────────────────
   //
   // Handed to the operating system rather than kept in a timer here: the page cannot
