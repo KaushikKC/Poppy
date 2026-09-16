@@ -25,8 +25,13 @@ That is not a flaw to be patched, it is the shape of a local-first product, and 
 one thing for pricing: **a credit can only be enforced against something a server
 controls.** Cloud inference, sync, backups. Metering on-device inference is an honour
 system with extra steps. Until this ledger moves behind an API that also serves the
-thing being metered, treat these numbers as a UI affordance and a fair-use nudge, which
-is exactly what billing.FREE_DAILY_CALLS already is.
+thing being metered, treat these numbers as a UI affordance and a fair-use nudge.
+
+Worth contrasting with the one entitlement that *is* enforceable: billing.py's ad-free
+unlock. It is a store non-consumable, so the receipt is signed by Apple or Google and
+verified on-device, and it needs no server at all. The difference is not the storage,
+it is what is being sold. Nobody can forge "I paid", but anybody can forge "I have
+credits left" when the thing they buy runs on their own silicon.
 
 The shape is chosen so that move is a change of storage, not a change of callers.
 """
