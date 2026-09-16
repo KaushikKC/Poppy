@@ -246,7 +246,6 @@ export function registerHandlers(): void {
   route('POST', '/call/open', async (req): Promise<Res> => {
     const b = (req.body ?? {}) as { seed?: string; mode?: string; source?: string };
     const profile = await companion.profile();
-    await billing.recordCall();
     // The disclosure rotation and the pact's turn gate both count from here.
     resetCallTurns();
     memory.setCharacter(profile.character);
