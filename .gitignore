@@ -68,3 +68,7 @@ training/fused/
 mobile/android/keystore.properties
 mobile/android/*.keystore
 mobile/android/*.jks
+
+# Real AdMob ids. The public repo gets Google's sample ids via a git clean filter
+# (scripts/git_filter_admob.py); this mapping is what the filter reads.
+mobile/admob.local.json

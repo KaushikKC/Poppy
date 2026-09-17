@@ -1,0 +1,5 @@
+# Real AdMob ids are swapped for Google sample ids on the way into git. See
+# scripts/git_filter_admob.py for why and for the one-time setup.
+mobile/app.json filter=admob
+mobile/ios/PoppysSpike/Info.plist filter=admob
+mobile/src/bridge/ads.ts filter=admob
