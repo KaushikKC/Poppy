@@ -34,6 +34,7 @@ import { cancelRitual, scheduleRitual } from './bridge/notify';
 import { createMic } from './bridge/mic';
 import { UNIT_ID, startAds } from './bridge/ads';
 import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as billing from './core/billing';
 import { registerHandlers } from './core/handlers';
 import { createSocketHandler } from './core/socket';
@@ -383,6 +384,14 @@ export default function AppShell() {
 
   return (
     <View style={styles.root}>
+      {/*
+        The stage holds the page and everything that may be drawn over it. The ad is
+        deliberately outside it: an absolutely positioned overlay only covers its own
+        parent, so nothing here — the loading spinner, "Loading the language model",
+        a failure banner — can ever land on top of an ad. It did, before this wrapper,
+        and covering an ad is a policy violation, not just a looks problem.
+      */}
+      <View style={styles.stage}>
       <WebView
         ref={webRef}
         // The UI is loaded from the bundle, so file access has to be allowed and
@@ -411,26 +420,6 @@ export default function AppShell() {
         mediaPlaybackRequiresUserAction={false}
         style={styles.web}
       />
-      {/*
-        Home only, and only between conversations.
-
-        Not on 'chat', which is where a call happens: an ad beside someone mid
-        sentence, or mid vent, is the single fastest way to lose the trust this app
-        runs on. Not on 'onboarding' either, where the person has not yet decided
-        whether to care about any of this.
-
-        Rendered as a sibling of the WebView rather than an overlay, so it takes its
-        own space in the column and never covers a control the page drew.
-      */}
-      {adsAllowed && screen === 'home' && (
-        <View style={styles.adSlot}>
-          <BannerAd
-            unitId={UNIT_ID}
-            size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
-            requestOptions={{ requestNonPersonalizedAdsOnly: false }}
-          />
-        </View>
-      )}
       {!ready && (
         <View style={styles.loading}>
           <ActivityIndicator />
@@ -445,6 +434,29 @@ export default function AppShell() {
           </Text>
         </View>
       )}
+      </View>
+      {/*
+        Home only, and only between conversations.
+
+        Not on 'chat', which is where a call happens: an ad beside someone mid
+        sentence, or mid vent, is the single fastest way to lose the trust this app
+        runs on. Not on 'onboarding' either, where the person has not yet decided
+        whether to care about any of this.
+
+        Its own band below the stage, with a gap above it: the page's tab bar sits
+        directly over this, and a thumb aiming for "You" that lands on an ad is an
+        accidental click, which is exactly what AdMob penalises. The bottom safe area
+        keeps it clear of the home indicator.
+      */}
+      {adsAllowed && screen === 'home' && (
+        <SafeAreaView edges={['bottom']} style={styles.adSlot}>
+          <BannerAd
+            unitId={UNIT_ID}
+            size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+            requestOptions={{ requestNonPersonalizedAdsOnly: false }}
+          />
+        </SafeAreaView>
+      )}
     </View>
   );
 }
@@ -455,7 +467,11 @@ const styles = StyleSheet.create({
   // No border or shadow: an ad that tries to look like part of the app is both worse
   // design and against AdMob's own placement policy. It sits on the page's own ground
   // colour and is plainly a separate band.
-  adSlot: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#eaf1f8' },
+  stage: { flex: 1 },
+  adSlot: {
+    alignItems: 'center', justifyContent: 'center', backgroundColor: '#eaf1f8',
+    paddingTop: 10,
+  },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   err: { color: '#b3261e', textAlign: 'center' },
   loading: {
