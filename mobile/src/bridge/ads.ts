@@ -34,21 +34,34 @@ import mobileAds, {
 } from 'react-native-google-mobile-ads';
 
 /**
- * The real banner unit ids, once AdMob has them. Two apps, so two ids: an AdMob "app"
- * is per platform even though the store listing is one product.
- *
- * Left empty deliberately. Empty means test ads, which is the safe default for every
- * build that is not going to real users.
+ * The real banner units. Two apps, so two ids: an AdMob "app" is per platform even
+ * though the store listing is one product. These are the `/` ids (ad units); the `~`
+ * ids (apps) live in app.json and Info.plist, and swapping the two is the classic
+ * setup mistake.
  */
 const LIVE_UNIT = {
-  ios: '',
-  android: '',
+  ios: 'ca-app-pub-3940256099942544/2934735716',
+  android: 'ca-app-pub-3940256099942544/6300978111',
 };
 
-export const UNIT_ID =
-  (Platform.OS === 'ios' ? LIVE_UNIT.ios : LIVE_UNIT.android) || TestIds.BANNER;
+/**
+ * Test ads in *every* build until the store launch. Flip to false only for the build
+ * that goes to the App Store / Play production, and in the same change as linking the
+ * store listings in AdMob.
+ *
+ * `__DEV__` alone was not enough. A release APK sent to a friend, or a TestFlight
+ * build, is a release build and would request live ads. Those barely fill before AdMob
+ * has approved an app with a store listing, so the test would look broken, and a
+ * tester who was asked to "check the ads" and taps them is invalid traffic against the
+ * account. Test units always fill and are safe to tap.
+ */
+const FORCE_TEST_ADS = true;
 
-/** True when the ids above are still Google's test units. Surfaced so the UI can say so. */
+export const UNIT_ID = __DEV__ || FORCE_TEST_ADS
+  ? TestIds.BANNER
+  : Platform.OS === 'ios' ? LIVE_UNIT.ios : LIVE_UNIT.android;
+
+/** True whenever a live ad cannot be requested: debug builds, and all pre-launch builds. */
 export const USING_TEST_ADS = UNIT_ID === TestIds.BANNER;
 
 let started = false;
