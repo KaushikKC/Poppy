@@ -76,6 +76,13 @@ export const ADS_LIVE = true;
 const BILLING_LIVE = false;
 
 export async function plan(): Promise<string> {
+  // Nobody can have bought Plus while billing is not live, so a saved 'plus' cannot be
+  // a purchase. It is the old default: companion.ts shipped `plan: 'plus'` back when
+  // there was no price, and update() writes the whole profile, so every phone that ever
+  // ran that build has it persisted. Trusting it would mean no existing install ever
+  // sees an ad. Once billing is live the store receipt is re-resolved on every cold
+  // start and overwrites this field, so the saved value becomes meaningful again.
+  if (!BILLING_LIVE) return 'free';
   const p = await companion.profile();
   const saved = p.plan;
   return saved && TIERS[saved] ? saved : DEFAULT_PLAN;

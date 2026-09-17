@@ -115,7 +115,7 @@ export const DEFAULTS: Profile = {
   ritual_pact_declined: false,
   pact: null,
   closeness: 0,
-  plan: 'plus',
+  plan: 'free',
   model_tier: null,
   traits: null,
   calls_day: null,
