@@ -4,7 +4,6 @@
   "react-native-google-mobile-ads": {
     "android_app_id": "ca-app-pub-3940256099942544~3347511713",
     "ios_app_id": "ca-app-pub-3940256099942544~1458002511",
-    "user_tracking_usage_description": "Poppys asks so ads can be made more relevant to you. Your conversations are never used for this and never leave your device.",
     "sk_ad_network_items": [
       "cstr6suwn9.skadnetwork",
       "4fzdc2evr5.skadnetwork",
