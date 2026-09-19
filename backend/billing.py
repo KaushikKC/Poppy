@@ -68,7 +68,7 @@ _VULNERABLE_MODES = {"vent", "wind"}
 # would take no money and grant Plus anyway. So that one stays False until StoreKit and
 # Play Billing are wired. Ads with no purchase are merely annoying, not broken, and are
 # the thing being tested right now.
-ADS_LIVE = True
+ADS_LIVE = False
 BILLING_LIVE = False
 
 

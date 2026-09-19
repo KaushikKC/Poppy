@@ -72,7 +72,7 @@ const DEFAULT_PLAN = 'free';
  * would take no money and grant Plus anyway. That stays false until StoreKit and Play
  * Billing are wired. Ads without a purchase are merely annoying, not broken.
  */
-export const ADS_LIVE = true;
+export const ADS_LIVE = false;
 const BILLING_LIVE = false;
 
 export async function plan(): Promise<string> {
