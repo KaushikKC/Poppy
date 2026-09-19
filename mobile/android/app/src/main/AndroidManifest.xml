@@ -1,7 +1,12 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- The ads SDK merges this in. Ads are off until the store listing is live
+         (ADS_LIVE in billing), so the app does not use the advertising ID and Play's
+         declaration is "No". Delete this line in the build that turns ads on. -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
 
     <application
       android:name=".MainApplication"
