@@ -1,166 +1,160 @@
-# Private Companion
+# Poppys
 
-A fully local, offline AI voice companion with a full-page video avatar. Speak
-(or type) and it replies with streamed speech and a real, on-screen person — no
-data ever leaves your machine. Built for an Apple Silicon Mac (M3, 16 GB).
+A private AI voice companion that runs entirely on your own device. Speak or
+type, and it answers out loud in about a second. Nothing you say leaves the
+machine: no account needed to talk, no server, no cloud model.
+
+Ships as a macOS app, an iOS app, and an Android app, from one Python backend
+and one shared web UI.
 
 ## Pipeline
 
 ```
 mic ─▶ Whisper (STT) ─┬─▶ accent + gender + emotion detection
-                      │        (wav2vec2 classifiers + pitch)
-                      └─▶ llama3.1 8B via Ollama (LLM) ─▶ Kokoro (TTS) ─▶ Web Audio
-                                                                            │
-                                            full-page video avatar  ◀───────┘
-                                            (idle ⇆ talking, crossfaded)
+                      │
+                      └─▶ local LLM ─▶ Kokoro (TTS) ─▶ audio out
+                                              │
+                          audio-reactive orb  ◀┘
 ```
 
-Everything runs locally: Ollama serves the LLM, faster-whisper does
-speech-to-text, Kokoro synthesizes speech in the speaker's detected accent and
-gender, small classifiers read accent/gender/emotion from the voice, and a single
-FastAPI process serves both the API and the web UI. Replies stream out
-phrase-by-phrase so the first audio plays in ~1 s.
+Every stage is local. The LLM streams tokens, and the voice starts speaking the
+first clause while the rest is still generating, which is what keeps time to
+first audio near a second.
 
-## Features
+The engines differ per platform, deliberately: MLX (Metal) on Apple Silicon,
+llama.cpp/GGUF and sherpa-onnx on phones, Ollama for desktop development. Swap
+with `LLM_BACKEND` and `TTS_BACKEND`. See `CROSS_PLATFORM_PLAN.md`.
 
-**Voice loop**
-- **Speech-to-text** — faster-whisper (`small`), CPU-side to avoid GPU contention.
-- **Local LLM** — `llama3.1:8b-instruct-q4_K_M` via Ollama, streamed token-by-token.
-- **Streaming TTS** — Kokoro synthesizes each phrase as the LLM generates it, so
-  the avatar starts speaking before the full reply is ready.
-- **Push-to-talk** (mic button) **or auto-listen** (voice-activity detection).
-- **Barge-in** — start talking (or click the mic) mid-reply and it cuts the
-  current answer off and listens.
+## What it does
 
-**Adapts to you (all from your voice, offline)**
-- **Accent detection** — British / American / Indian → the reply is spoken in a
-  matching voice. Sticky across the session.
-- **Gender detection** — pitch-based male/female estimate → matching Kokoro voice.
-- **Emotion detection** — happy / sad / angry / neutral shades the reply's tone.
-- **Persona suggestion** — after a few spoken turns it may suggest the persona
-  that fits your speaking style (accept or dismiss the chip).
-- All three (accent / gender / emotion) appear as header badges.
+**The conversation**
+- Push-to-talk or hands-free auto-listen (voice-activity detection), or type.
+- Barge-in: start talking mid-reply and it stops and listens.
+- Replies stream phrase-by-phrase so speech begins before the reply is finished.
+- Short replies arrive as text; ones worth hearing are spoken (`reply_shape.py`).
 
-**Personas**
-- **Friendly / Professional / Playful** pills change the conversational tone and
-  accent color. Switching clears the current conversation. (The reply *voice* is
-  chosen by your detected accent + gender, not the persona.)
+**It adapts from your voice, offline**
+- Accent (British / American / Indian), gender, and emotion are read from the
+  audio by small local classifiers, and shade the voice and tone of the reply.
 
-**Avatar (full-page video presence)**
-- A real rendered person fills the screen: an **idle** loop plays while listening
-  or thinking and **crossfades to a talking** loop while the voice plays.
-- Falls back to a static poster until you add the clips — see
-  [`frontend/avatar/README.md`](frontend/avatar/README.md) for how to generate
-  them (Veo / Google Vids prompts and seamless-loop tips).
+**Who she is**
+- **Characters** — a cast with their own name, voice, look, and personality,
+  plus custom characters you write yourself.
+- **Vibes** — a stance for right now: a friend who listens, a hype voice, a calm
+  one.
+- **Traits** — the layer underneath, which persists across every vibe.
+- **Boundaries** — subjects she should never raise, and ones to always ask about.
 
-**Memory, safety & history**
-- **Encrypted long-term memory** — facts about you are stored encrypted at rest
-  (Fernet). The **🧠 button** shows what's remembered and can forget everything.
-- **Crisis signposting** — if a message signals serious distress, a
-  crisis-resources card appears and the reply tone shifts to supportive.
-- **Session history** — every conversation is saved to SQLite and can be exported
-  as JSON + text.
-- **Latency badge** — shows mic-stop → first-audio time for each turn.
+**The daily loop**
+- **Open loops** — she leaves an unresolved thread at the end of a call, and
+  picks it up at the start of the next one.
+- **Rituals** — a standing time to talk, reminded by a real OS notification.
+- **Streaks, daily quests, and a daily goal** — the reason to open it today.
+- **Bloom Points and levels** — all of the counting lives here, on purpose, and
+  none of it is attached to the relationship itself.
+- **The garden** — the long game: meaningful calls grow something you arrange
+  and label.
+- **Nudges** — earned return triggers in her voice, tied to your own life.
+- **Openers** — the first line is composed from the time of day, how long it has
+  been, and the hook she left last time.
 
-## Prerequisites
+**Memory, safety, history**
+- Facts about you are extracted, confirmed by you, and stored **encrypted at
+  rest** (Fernet). You can suppress or delete any of them, or forget everything.
+- Crisis signposting: a resources card when a message signals real distress.
+  A separate switch from the content guardrails, and on by default.
+- Every conversation is saved to SQLite and can be exported as JSON and text.
 
-- **macOS** on Apple Silicon (tested on M3 / 16 GB)
-- **Python 3.11+**
-- **[Ollama](https://ollama.com)** with the model pulled:
-  ```sh
-  ollama pull llama3.1:8b-instruct-q4_K_M
-  ```
-- **espeak-ng** (Kokoro's grapheme-to-phoneme backend):
-  ```sh
-  brew install espeak-ng
-  ```
+**Money**
+- Free is the whole app. A one-time purchase removes the ads. No feature gates,
+  no call limits. See `POPPY_RELEASE_PLAN.md`.
 
-## Setup
+## Build switches
+
+Three separate switches, because they are three different decisions:
+
+| Variable | Default | What it does |
+|---|---|---|
+| `POPPY_ADULT` | `1` | Lifts the brevity and content restraint in the prompt |
+| `POPPY_GUARDRAILS` | `0` | Adds the safety addendum (App Store builds set this) |
+| `POPPY_CRISIS_LAYER` | `1` | Crisis and distress handling. Independent of the above |
+
+Set them in `.env` (see `.env.example`). A real environment variable always wins
+over the file, so a release script can never be overridden by a stale `.env`.
+
+## Running the desktop app
+
+**Prerequisites:** macOS on Apple Silicon, Python 3.11+, `brew install espeak-ng`
+(Kokoro's phonemizer), and [Ollama](https://ollama.com) unless you run
+`LLM_BACKEND=mlx`.
 
 ```sh
 pip install -r backend/requirements.txt
+python3 backend/download_models.py    # once, online: caches every model
+./run.sh                               # then open http://localhost:8000
 ```
 
-Then download the speech models **once while online** (Kokoro TTS, the accent and
-emotion classifiers, and Whisper) so the app can run fully offline afterward:
+`run.sh` checks the models are cached and runs with network access disabled
+(`HF_HUB_OFFLINE`). Chrome needs `http://localhost`, not `file://`, for the mic.
 
-```sh
-python3 backend/download_models.py
-```
+The model is chosen by how much RAM the machine has (`model_tier.py`): 1B, 3B, or
+8B. Override with `OLLAMA_MODEL`, `MLX_LM_MODEL`, or `LLAMACPP_MODEL_REPO`.
 
-This caches everything in your Hugging Face cache and is safe to re-run. `run.sh`
-verifies they're present before starting (and then runs with no network access).
+## Layout
 
-## Run
+| Path | What lives there |
+|---|---|
+| `backend/` | FastAPI app: the API, the voice loop, and every product module |
+| `frontend/` | The web UI, served by the backend and reused by both phone apps |
+| `mobile/` | React Native app (iOS + Android), wrapping the UI in a WebView |
+| `desktop/` | macOS and Windows packaging, signing, and notarization |
+| `poppys-app/` | The design system: `src/styles/tokens.css` is the source of truth |
+| `training/` | Fine-tuning the small on-device model |
+| `landing-page/`, `poppy-website/` | The public site |
 
-```sh
-./run.sh
-```
-
-This checks that Ollama is up and the speech models are cached, then launches the
-app with network access disabled (`HF_HUB_OFFLINE`). Open
-**http://localhost:8000** in Chrome (mic access requires `http://localhost`, not
-`file://`).
-
-To start manually:
-```sh
-cd backend && python3 -m uvicorn main:app --host 127.0.0.1 --port 8000
-```
-
-## Add your avatar
-
-The avatar is pre-rendered video you generate once (it never runs a model at
-chat time). Put two looping clips of the same person/framing/background in
-`frontend/avatar/`:
-
-```
-frontend/avatar/idle.mp4    # sitting, breathing, blinking, mouth closed
-frontend/avatar/talk.mp4    # the same person speaking naturally
-```
-
-Full prompts, sizing, and loop tips are in
-[`frontend/avatar/README.md`](frontend/avatar/README.md). Until they're added the
-app shows the static `face.jpg` poster.
-
-## Validation
-
-With Ollama and the app running:
-```sh
-python3 backend/validate.py
-```
-Checks latency (≤1.5 s avg first-audio), stability (10 consecutive turns),
-and memory (<11 GB). The offline gate below is manual.
-
-### Offline test
-
-The app makes no external network calls — it only talks to local Ollama and
-serves local files. To confirm:
-1. Run `python3 backend/download_models.py` once online so every model is cached
-   (verify with `python3 backend/download_models.py --check`).
-2. Start Ollama and the app.
-3. Turn on **airplane mode** (or disable Wi-Fi/Ethernet).
-4. Reload **http://localhost:8000** and have a full spoken conversation.
-
-Everything should work with no network.
+**A trap worth knowing:** `mobile/web-overlay/` shadows files in `frontend/`. A
+change made only in `frontend/` will silently miss the phone builds.
 
 ## Endpoints
 
+`GET /health` and about fifty others. The ones that matter:
+
 | Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/health` | Liveness check |
-| WS | `/ws/chat` | Full voice loop: tokens + WAV audio chunks |
-| POST | `/stt` | Audio upload → transcript + detected accent + gender + emotion (+ persona suggestion) |
-| GET | `/personas` | List personas (name, description, colors) |
-| GET | `/memory` | Facts remembered about the user |
-| DELETE | `/memory` | Forget all remembered facts |
-| GET | `/sessions` | List saved conversation sessions |
-| GET | `/export/{id}` | Export a session as JSON + text |
-| DELETE | `/history` | Clear in-memory conversation + accent state |
+|---|---|---|
+| WS | `/ws/chat` | The voice loop: streamed tokens and audio |
+| POST | `/stt` | Audio → transcript, accent, gender, emotion |
+| GET | `/home` | Everything the home screen needs, in one call |
+| POST | `/call/open`, `/call/close` | Call lifecycle: openers, loops, streaks, bloom |
+| GET | `/characters`, `/personas` | The cast and the vibes |
+| GET/POST | `/memory`, `/memory/extract`, `/memory/confirm` | Remembered facts |
+| GET | `/garden`, `/streak`, `/quests`, `/bloom` | The daily loop |
+| GET | `/entitlement` | Plan, and whether ads may be shown |
 
-## Data & privacy
+## Tests and validation
 
-- Conversations are saved to `companion.db` (SQLite, gitignored).
-- Long-term memory is **encrypted at rest** with Fernet in
-  `companion_memory.enc`; the key is in `companion.key` (chmod 600, gitignored).
-- Your avatar poster/clips (`face.jpg`, `idle/talk.mp4`) are gitignored (private).
-- Nothing is sent off-device.
+```sh
+./tests/run_all.sh                 # every offline suite, no server needed
+cd mobile && npm test              # shared TS core
+python3 backend/validate.py        # latency, stability, memory, with the app running
+```
+
+### Offline check
+
+The app makes no external calls at runtime. To prove it: cache the models
+(`python3 backend/download_models.py --check`), start the app, turn on airplane
+mode, and have a full spoken conversation.
+
+## Data and privacy
+
+- Conversations are in `companion.db` (SQLite, gitignored).
+- Long-term memory is encrypted at rest per character
+  (`companion_memory_*.enc`); the key is `companion.key`, chmod 600, gitignored.
+- An account, when signed in, is a name and an email. Never a password.
+- Nothing is sent off-device. `PRIVACY_POLICY.md` is the public version.
+
+## The plans
+
+The `.md` files in the root are the working documents, and most of the reasoning
+lives there rather than here. Start with `PRODUCT_OVERVIEW.md` for what the
+product is, `POPPY_PRODUCT_PLAYBOOK.md` and `POPPY_RETENTION_ENGINE.md` for why
+the daily loop is shaped this way, and `POPPY_RELEASE_PLAN.md` for shipping.
