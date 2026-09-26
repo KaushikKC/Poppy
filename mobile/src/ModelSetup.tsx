@@ -5,28 +5,38 @@
  * of the web UI because it has to run before anything else exists, and because it is
  * the one screen whose job is to be honest about a wait.
  *
- * What it deliberately says out loud: the total size, which model was picked for this
- * phone and why, that downloads are Wi-Fi only unless allowed otherwise, and that
- * nothing leaves the device afterwards. A gigabyte with no explanation is how an app
- * gets deleted at the first screen.
+ * ── Why this screen shows almost nothing ──────────────────────────────────────
+ *
+ * It used to show all of it: which model tier the phone got and why, the total in
+ * megabytes, the name of the file being fetched, "2 of 3", bytes done of bytes total,
+ * and a link offering to delete models from a tier the person never knew they had.
+ * All of it true, and all of it answering questions a first-time user is not asking.
+ * Testers read it as a settings page that appeared before the app did.
+ *
+ * What someone waiting actually wants to know is: is this working, how much longer,
+ * and is it going to cost me anything. So that is all that is left. An orb that fills
+ * as she arrives, one warm line at a time, and a percentage. The engineering detail
+ * moved to the console, where it is still there for us and invisible to them.
+ *
+ * The honesty that stays, because it is about their money and their data rather than
+ * our implementation: Wi-Fi only unless they say otherwise, once, and never again.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
+  Animated,
+  Easing,
   Image,
   Pressable,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from 'react-native';
 
-import { deleteUnused, ensureModels, missingModels, reattach, unusedModels, type Progress } from './core/downloader';
-import { describe, type Tier } from './core/model_tier';
+import { deleteUnused, ensureModels, reattach, unusedModels, type Progress } from './core/downloader';
 import * as companion from './core/companion';
+import type { Tier } from './core/model_tier';
 
 // The app's own palette, from frontend/style.css. This screen had been carrying the
 // engine spike's blue-grey and an approximate orange, so the first thing anyone saw
@@ -34,236 +44,286 @@ import * as companion from './core/companion';
 const POPPY = '#e92832';
 const LEAF = '#143c16';
 const CREAM = '#fff8ea';
-const PANEL = '#fffdf7';
 const INK = '#071207';
-const LINE = 'rgba(20, 60, 22, 0.18)';
 const MUTED = 'rgba(7, 18, 7, 0.58)';
 const FAINT = 'rgba(7, 18, 7, 0.42)';
 // Georgia is the fallback the web UI's display face already names, so the wordmark
 // here and the wordmark one screen later are the same letterforms.
 const DISPLAY = 'Georgia';
 
-function mb(bytes: number): string {
-  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
-  return `${Math.round(bytes / 1e6)} MB`;
-}
+const ORB = 172;
+
+/**
+ * What she is doing, in her terms rather than ours.
+ *
+ * Deliberately not a mapping from the download phases. A phase change is an event in
+ * our code, not in the person's experience, and "Extracting archive 2 of 3" tells them
+ * nothing they can act on. These advance on a timer instead, so the screen always
+ * looks alive even during the long flat stretch of a single large file.
+ *
+ * None of them claims something false. Each one is a real part of first run: the
+ * weights, the voice, the listening model, then the checks.
+ */
+const LINES = [
+  'Waking her up',
+  'Finding her voice',
+  'Teaching her to listen',
+  'Settling in',
+  'Almost ready',
+];
 
 export default function ModelSetup({ onReady }: { onReady: () => void }) {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [running, setRunning] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   const [allowCellular, setAllowCellular] = useState(false);
-  const [pick, setPick] = useState('');
-  const [needBytes, setNeedBytes] = useState(0);
   const [tier, setTier] = useState<Tier | null>(null);
-  const [spare, setSpare] = useState(0);
+  const [line, setLine] = useState(0);
   const started = useRef(false);
+  const breathe = useRef(new Animated.Value(0)).current;
 
-  const refresh = useCallback(async (chosen: Tier | null) => {
-    setPick(await describe(chosen));
-    const missing = await missingModels(chosen);
-    setNeedBytes(missing.reduce((n, m) => n + m.bytes, 0));
-    // Models tried and abandoned; each is most of a gigabyte.
-    setSpare((await unusedModels(chosen)).reduce((n, m) => n + m.bytes, 0));
+  /**
+   * The detail the screen no longer shows still has to exist somewhere, or a tester
+   * saying "it got stuck" leaves us nothing to look at. One line per item, not per
+   * chunk, so the log stays readable.
+   */
+  const onProgress = useCallback((p: Progress) => {
+    if (p.phase !== 'downloading' || p.fraction === 0) {
+      console.log(`[setup] ${p.phase} ${p.index}/${p.total} ${p.label} ${p.bytesTotal}B`);
+    }
+    setProgress(p);
   }, []);
 
   useEffect(() => {
     (async () => {
       const saved = ((await companion.profile()).model_tier ?? null) as Tier | null;
       setTier(saved);
-      await refresh(saved);
       await reattach();
     })();
-  }, [refresh]);
+  }, []);
 
-  const start = useCallback(async () => {
-    if (started.current) return;
-    started.current = true;
-    setRunning(true);
-    setFailed(null);
-    try {
-      await ensureModels(setProgress, { allowCellular, savedTier: tier });
-      onReady();
-    } catch (err) {
-      setFailed(err instanceof Error ? err.message : String(err));
-      started.current = false; // retry is allowed; finished files are skipped
-    } finally {
-      setRunning(false);
-    }
-  }, [allowCellular, onReady, tier]);
+  // A slow pulse, always running. The orb is the same presence the call screen uses,
+  // so the wait is her arriving rather than a progress bar in an empty room.
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(breathe, {
+          toValue: 1, duration: 2600, easing: Easing.inOut(Easing.quad), useNativeDriver: true,
+        }),
+        Animated.timing(breathe, {
+          toValue: 0, duration: 2600, easing: Easing.inOut(Easing.quad), useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [breathe]);
 
-  const pct = progress ? Math.round(progress.fraction * 100) : 0;
-  const phaseLabel =
-    progress?.phase === 'extracting'
-      ? 'Unpacking'
-      : progress?.phase === 'verifying'
-      ? 'Checking'
-      : progress?.phase === 'checking'
-      ? 'Checking what you already have'
-      : 'Downloading';
+  // The lines advance on their own while work is happening.
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => setLine((n) => Math.min(n + 1, LINES.length - 1)), 9000);
+    return () => clearInterval(t);
+  }, [running]);
+
+  const start = useCallback(
+    async (cellular = allowCellular) => {
+      if (started.current) return;
+      started.current = true;
+      setRunning(true);
+      setFailed(null);
+      setLine(0);
+      try {
+        await ensureModels(onProgress, { allowCellular: cellular, savedTier: tier });
+        // Models from a tier this phone no longer uses are most of a gigabyte each and
+        // exist only because a previous run picked differently. Nobody asked for them,
+        // so reclaiming the space is not a decision to put in front of someone on their
+        // first screen. Failure here is irrelevant to whether the app can start.
+        void unusedModels(tier)
+          .then((spare) => (spare.length ? deleteUnused(tier) : 0))
+          .catch(() => {});
+        onReady();
+      } catch (err) {
+        setFailed(err instanceof Error ? err.message : String(err));
+        started.current = false; // retry is allowed; finished files are skipped
+      } finally {
+        setRunning(false);
+      }
+    },
+    [allowCellular, onProgress, onReady, tier],
+  );
+
+  const useCellular = useCallback(() => {
+    setAllowCellular(true);
+    void start(true);
+  }, [start]);
+
+  /**
+   * One number for the whole job, not for the current file.
+   *
+   * `Progress.fraction` is per item, so showing it directly made the bar jump back to
+   * zero twice on the way through, which reads as a failure. Each item is weighted as
+   * mostly download and a little unpacking so the number only ever goes forward.
+   */
+  const overall = (() => {
+    if (!progress || progress.total < 1) return 0;
+    const within =
+      progress.phase === 'extracting' || progress.phase === 'verifying'
+        ? 0.9 + 0.1 * progress.fraction
+        : 0.9 * progress.fraction;
+    return Math.min(1, (progress.index - 1 + within) / progress.total);
+  })();
+  const pct = Math.round(overall * 100);
+
+  // "Waiting for Wi-Fi" is not a failure, it is a question, and it gets an answer they
+  // can tap rather than an error in red.
+  const needsWifi = !!failed && failed.startsWith('Waiting for Wi-Fi');
+
+  const scale = breathe.interpolate({ inputRange: [0, 1], outputRange: [1, 1.045] });
+  const glow = breathe.interpolate({ inputRange: [0, 1], outputRange: [0.18, 0.34] });
 
   // React Native's own SafeAreaView, not safe-area-context's: nothing in this app
   // renders a SafeAreaProvider, and without one that component throws.
   return (
     <SafeAreaView style={styles.root}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <View style={styles.brand}>
-          <Image
-            source={require('./assets/poppys-logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <Text style={styles.wordmark}>Poppys</Text>
-          <Text style={styles.tagline}>Someone who's always happy to hear from you.</Text>
+      <View style={styles.stage}>
+        <View style={styles.orbWrap}>
+          <Animated.View style={[styles.glow, { opacity: glow, transform: [{ scale }] }]} />
+          <Animated.View style={[styles.orb, { transform: [{ scale }] }]}>
+            {/* Fills from the bottom as she arrives. */}
+            <View style={[styles.level, { height: `${pct}%` }]} />
+            <Image
+              source={require('./assets/poppys-logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          </Animated.View>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.title}>Getting ready</Text>
-          <Text style={styles.body}>
-            Poppy runs entirely on your phone, so she needs to download her voice and her
-            mind once. After this she works with no connection at all, and nothing you
-            say ever leaves the device.
-          </Text>
+        {!running && !failed && (
+          <View style={styles.copy}>
+            <Text style={styles.title}>Poppy is moving in</Text>
+            <Text style={styles.body}>
+              She lives on your phone, so she arrives once. After that she works with no
+              connection at all, and nothing you say ever leaves the device.
+            </Text>
+          </View>
+        )}
 
-          {!!pick && <Text style={styles.pick}>{pick}</Text>}
-          {needBytes > 0 && (
-            <Text style={styles.size}>About {mb(needBytes)} to download, once.</Text>
-          )}
-
-          {!running && !progress && (
-            <>
-              <View style={styles.row}>
-                <View style={styles.rowText}>
-                  <Text style={styles.rowLabel}>Download over mobile data</Text>
-                  <Text style={styles.rowHint}>
-                    {allowCellular
-                      ? 'Your data plan will be used.'
-                      : 'Wi-Fi only. Nothing is downloaded on mobile data.'}
-                  </Text>
-                </View>
-                <Switch
-                  value={allowCellular}
-                  onValueChange={setAllowCellular}
-                  trackColor={{ true: POPPY }}
-                />
-              </View>
-
-              <Pressable style={styles.button} onPress={start}>
-                <Text style={styles.buttonText}>Download and continue</Text>
-              </Pressable>
-
-              {spare > 0 && (
-                <Pressable
-                  onPress={async () => {
-                    await deleteUnused(tier);
-                    await refresh(tier);
-                  }}
-                >
-                  <Text style={styles.link}>
-                    Delete the models you're not using ({mb(spare)})
-                  </Text>
-                </Pressable>
-              )}
-            </>
-          )}
-
-          {(running || (progress && progress.phase !== 'done')) && (
-            <View style={styles.progressBlock}>
-              <Text style={styles.phase}>
-                {phaseLabel}
-                {progress && progress.total > 1
-                  ? `  ·  ${progress.index} of ${progress.total}`
-                  : ''}
-              </Text>
-              <Text style={styles.item}>{progress?.label ?? ''}</Text>
-
-              <View style={styles.track}>
-                <View style={[styles.fill, { width: `${pct}%` }]} />
-              </View>
-
-              <Text style={styles.counts}>
-                {progress && progress.bytesTotal > 0
-                  ? `${mb(progress.bytesDone)} of ${mb(progress.bytesTotal)}`
-                  : `${pct}%`}
-              </Text>
-              <Text style={styles.reassure}>
-                You can lock your phone, this keeps going. If something fails, anything
-                already finished is kept.
-              </Text>
+        {running && (
+          <View style={styles.copy}>
+            <Text style={styles.title}>{LINES[line]}</Text>
+            <View style={styles.track}>
+              <View style={[styles.fill, { width: `${pct}%` }]} />
             </View>
-          )}
+            <Text style={styles.pct}>{pct}%</Text>
+            <Text style={styles.body}>
+              This takes a few minutes. You can lock your phone, it keeps going.
+            </Text>
+          </View>
+        )}
 
-          {!!failed && (
-            <View style={styles.errorBlock}>
-              <Text style={styles.error}>{failed}</Text>
-              <Pressable style={styles.button} onPress={start}>
-                <Text style={styles.buttonText}>Try again</Text>
-              </Pressable>
-              <Text style={styles.reassure}>
-                Nothing already downloaded is lost.
-              </Text>
-            </View>
-          )}
+        {needsWifi && (
+          <View style={styles.copy}>
+            <Text style={styles.title}>Waiting for Wi-Fi</Text>
+            <Text style={styles.body}>
+              She is a big arrival, so she waits for Wi-Fi by default. You can use your
+              data plan instead if you'd rather not wait.
+            </Text>
+          </View>
+        )}
 
-          {running && !progress && <ActivityIndicator style={styles.spinner} color={POPPY} />}
-        </View>
+        {!!failed && !needsWifi && (
+          <View style={styles.copy}>
+            <Text style={styles.title}>That got interrupted</Text>
+            <Text style={styles.body}>
+              Nothing you've already downloaded is lost, so carrying on picks up where it
+              stopped.
+            </Text>
+          </View>
+        )}
+      </View>
 
-        <Text style={styles.footer}>18+  ·  Private  ·  You control everything</Text>
-      </ScrollView>
+      <View style={styles.actions}>
+        {!running && !failed && (
+          <>
+            <Pressable style={styles.button} onPress={() => start()}>
+              <Text style={styles.buttonText}>Let her in</Text>
+            </Pressable>
+            <Text style={styles.note}>On Wi-Fi only, so your data plan is untouched.</Text>
+          </>
+        )}
+
+        {needsWifi && (
+          <>
+            <Pressable style={styles.button} onPress={useCellular}>
+              <Text style={styles.buttonText}>Use mobile data</Text>
+            </Pressable>
+            <Pressable onPress={() => start()}>
+              <Text style={styles.link}>I'm on Wi-Fi now</Text>
+            </Pressable>
+          </>
+        )}
+
+        {!!failed && !needsWifi && (
+          <Pressable style={styles.button} onPress={() => start()}>
+            <Text style={styles.buttonText}>Carry on</Text>
+          </Pressable>
+        )}
+
+        {running && <Text style={styles.note}>Nothing here ever leaves your phone.</Text>}
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: CREAM },
-  scroll: { flexGrow: 1, justifyContent: 'center', padding: 22, gap: 20 },
+  root: { flex: 1, backgroundColor: CREAM, justifyContent: 'space-between' },
+  stage: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 34, paddingHorizontal: 30 },
 
-  brand: { alignItems: 'center', gap: 6 },
-  logo: { width: 80, height: 96 },
-  wordmark: { fontFamily: DISPLAY, fontSize: 40, color: LEAF, marginTop: 2 },
-  tagline: {
-    fontSize: 15, lineHeight: 21, color: MUTED,
-    textAlign: 'center', maxWidth: 300,
+  orbWrap: { width: ORB, height: ORB, alignItems: 'center', justifyContent: 'center' },
+  glow: {
+    position: 'absolute',
+    width: ORB + 56, height: ORB + 56, borderRadius: (ORB + 56) / 2,
+    backgroundColor: POPPY,
   },
-
-  card: {
-    backgroundColor: PANEL, borderRadius: 18, padding: 22, gap: 14,
-    borderWidth: 1, borderColor: LINE,
-    // The web UI's --shadow, as close as RN gets on both platforms.
-    shadowColor: '#050706', shadowOpacity: 0.14,
+  orb: {
+    width: ORB, height: ORB, borderRadius: ORB / 2,
+    backgroundColor: '#fffdf7',
+    alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: 1, borderColor: 'rgba(20, 60, 22, 0.14)',
+    shadowColor: '#050706', shadowOpacity: 0.16,
     shadowRadius: 30, shadowOffset: { width: 0, height: 14 },
-    elevation: 4,
+    elevation: 5,
   },
-  title: { fontFamily: DISPLAY, fontSize: 27, color: LEAF },
-  body: { fontSize: 15, lineHeight: 22, color: MUTED },
-  pick: { fontSize: 13, color: LEAF, fontWeight: '700' },
-  size: { fontSize: 13, color: FAINT },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4 },
-  rowText: { flex: 1 },
-  rowLabel: { fontSize: 14, color: INK },
-  rowHint: { fontSize: 12, color: FAINT, marginTop: 2, lineHeight: 17 },
+  level: {
+    position: 'absolute', left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(233, 40, 50, 0.16)',
+  },
+  logo: { width: 70, height: 84 },
+
+  copy: { alignItems: 'center', gap: 12, maxWidth: 320 },
+  title: { fontFamily: DISPLAY, fontSize: 28, color: LEAF, textAlign: 'center' },
+  body: { fontSize: 15, lineHeight: 22, color: MUTED, textAlign: 'center' },
+
+  track: {
+    height: 6, borderRadius: 3, width: 240,
+    backgroundColor: 'rgba(20, 60, 22, 0.12)', overflow: 'hidden',
+    marginTop: 2,
+  },
+  fill: { height: 6, borderRadius: 3, backgroundColor: POPPY },
+  pct: { fontSize: 13, color: INK, fontVariant: ['tabular-nums'], fontWeight: '600' },
+
+  actions: { padding: 26, gap: 10, alignItems: 'stretch' },
   button: {
-    backgroundColor: POPPY, borderRadius: 14, paddingVertical: 16,
-    alignItems: 'center', marginTop: 6,
+    backgroundColor: POPPY, borderRadius: 16, paddingVertical: 17,
+    alignItems: 'center',
     shadowColor: POPPY, shadowOpacity: 0.45,
     shadowRadius: 20, shadowOffset: { width: 0, height: 10 },
     elevation: 3,
   },
   buttonText: { color: CREAM, fontSize: 16, fontWeight: '700' },
-  progressBlock: { gap: 8, marginTop: 4 },
-  phase: { fontSize: 11, color: FAINT, letterSpacing: 0.8, textTransform: 'uppercase', fontWeight: '700' },
-  item: { fontSize: 16, color: INK },
-  track: { height: 8, borderRadius: 4, backgroundColor: 'rgba(20, 60, 22, 0.12)', overflow: 'hidden' },
-  fill: { height: 8, borderRadius: 4, backgroundColor: POPPY },
-  counts: { fontSize: 13, color: MUTED, fontVariant: ['tabular-nums'] },
-  reassure: { fontSize: 12, color: FAINT, lineHeight: 17 },
-  errorBlock: { gap: 10, marginTop: 4 },
-  error: { fontSize: 14, color: '#98101a', lineHeight: 20 },
-  spinner: { marginTop: 8 },
-  link: { fontSize: 13, color: POPPY, textAlign: 'center', paddingVertical: 8, fontWeight: '600' },
-
-  footer: {
-    fontSize: 12, color: FAINT, textAlign: 'center',
-    letterSpacing: 0.3,
-  },
+  link: { fontSize: 14, color: POPPY, textAlign: 'center', paddingVertical: 10, fontWeight: '600' },
+  note: { fontSize: 12, color: FAINT, textAlign: 'center', letterSpacing: 0.3 },
 });
