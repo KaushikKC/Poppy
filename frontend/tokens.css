@@ -133,6 +133,22 @@
   --lift-accent: 0 10px 24px -10px rgba(213, 61, 59, 0.55);
   --inner-top: inset 0 1px 0 var(--glass-edge);
 
+  /* ── Liquid glass ─────────────────────────────────────────────────────────
+     --glass-strong is 0.84 opaque, which is a panel with a blur wasted behind it.
+     Glass needs three things the old recipe had none of: enough transparency that
+     what is behind actually arrives, a gradient so the top edge catches light and
+     the bottom falls away, and a specular hairline where the pane meets the air.
+     Saturation and brightness are what make it read as *glass* rather than as
+     tracing paper: real glass carries the colour of what is under it, slightly
+     intensified. */
+  --lg-hi:   rgba(255, 253, 247, 0.38);
+  --lg-lo:   rgba(250, 246, 236, 0.12);
+  --lg-edge: rgba(255, 255, 255, 0.85);
+  --lg-rim:  rgba(11, 23, 9, 0.10);
+  --lg-blur: blur(26px) saturate(210%) brightness(1.04);
+  --lg-shadow: 0 2px 8px rgba(11, 23, 9, 0.06), 0 18px 40px -16px rgba(11, 23, 9, 0.30);
+
+
   /* --- Radii ---------------------------------------------------- */
   --r-xs: 8px;
   --r-sm: 12px;
@@ -225,6 +241,13 @@
     --glass-quiet: rgba(40, 47, 38, 0.30);
     --glass-edge: rgba(255, 255, 255, 0.14);
     --glass-edge-lo: rgba(0, 0, 0, 0.34);
+    --lg-hi:   rgba(58, 68, 55, 0.44);
+    --lg-lo:   rgba(26, 32, 25, 0.22);
+    --lg-edge: rgba(255, 255, 255, 0.22);
+    --lg-rim:  rgba(0, 0, 0, 0.45);
+    --lg-blur: blur(26px) saturate(190%) brightness(1.12);
+    --lg-shadow: 0 2px 8px rgba(0, 0, 0, 0.34), 0 18px 40px -16px rgba(0, 0, 0, 0.66);
+
     --cream-50: #262E24;
     --cream-100: #1B211A;
     --cream-200: #232A21;
