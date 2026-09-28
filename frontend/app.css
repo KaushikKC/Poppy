@@ -505,6 +505,9 @@ button.chip { cursor: pointer; }
   background: var(--surface-raised);
 }
 .tab--face[data-on="true"] .tab-face { border-color: var(--poppy-500); }
+/* The bubble's tail points down-left, towards the back button and away from the
+   thread it opens. Mirrored, it points into the conversation. */
+.tab[data-tab="thread"] svg { transform: scaleX(-1); }
 .tab--call { color: var(--poppy-500); }
 
 /* --- Call controls ------------------------------------------------- */

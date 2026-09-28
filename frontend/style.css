@@ -1079,7 +1079,10 @@ body[data-view="chat"] #memory-btn { display: none; }
 /* ─── The thread body ────────────────────────────────────────────────────── */
 .chat-thread {
   min-height: 0; display: flex; flex-direction: column;
-  position: relative; background: var(--surface);
+  /* Pure white in light mode, the app's surface in the dark ones. A thread is the
+     one screen that is mostly other people's words, and white is what every
+     messaging app puts behind them. */
+  position: relative; background: var(--chat-bg);
 }
 .chat-thread .rail-scroll {
   flex: 1; min-height: 0; overflow-y: auto;

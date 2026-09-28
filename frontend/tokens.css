@@ -90,7 +90,8 @@
 
   /* Colours that carry text get their own tokens, so no theme has to guess
      what a hue token means in the dark. */
-  --bubble-them:     #FBF9F4;
+  --chat-bg:         #FFFFFF;
+  --bubble-them:     #F2F0EA;
   --bubble-them-ink: #162814;
   --bubble-you:      #162814;
   --bubble-you-ink:  #FBF9F4;
@@ -259,6 +260,7 @@
     --amber-600: #DCC49B;
     --leaf-500: #7FA173;
     --accent-ink: #1A0C0B;
+    --chat-bg: var(--surface);
     --bubble-them: #242B22;
     --bubble-them-ink: #EFEDE4;
     --bubble-you: #3B6A33;
@@ -308,6 +310,7 @@
   --amber-600: #DCC49B;
   --leaf-500: #7FA173;
   --accent-ink: #1A0C0B;
+  --chat-bg: var(--surface);
   --bubble-them: #242B22;
   --bubble-them-ink: #EFEDE4;
   --bubble-you: #3B6A33;
@@ -351,6 +354,7 @@ body[data-mood="night"] {
   --cream-100: #1D3038;
   --cream-200: #24393F;
   --cream-400: rgba(237, 233, 222, 0.18);
+  --chat-bg: var(--surface);
   --bubble-them: #22383F;
   --bubble-them-ink: #EDE9DE;
   --bubble-you: #2A4E46;
