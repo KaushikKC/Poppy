@@ -97,6 +97,24 @@ export async function signInWithGoogle(): Promise<Claims | null> {
       // everybody to ignore this log.
       return null;
     }
+    // DEVELOPER_ERROR (code 10 on Android) has exactly one common cause and it is
+    // not visible from inside the app: the SHA-1 of the certificate this build is
+    // signed with is not on the Android OAuth client in Google Cloud. A build
+    // installed from Play is signed by Play's app signing key, not by the upload
+    // key, so registering only the upload key's SHA-1 produces an app that signs in
+    // from a local release build and fails for every tester. Worth naming in the
+    // log, because 'did not complete' sent us looking at the code instead.
+    // Not in this version's statusCodes enum, so compared as the raw value Android
+    // returns. DEVELOPER_ERROR is 10.
+    if (String(code) === '10' || String(code) === 'DEVELOPER_ERROR') {
+      console.log(
+        '[auth] google sign-in rejected this build: DEVELOPER_ERROR. The signing ' +
+          "certificate's SHA-1 is not registered on the Android OAuth client, or the " +
+          'package name does not match. A Play-installed build uses Play\'s app ' +
+          'signing key, whose SHA-1 is in Play Console under Setup > App signing.',
+      );
+      return null;
+    }
     console.log(`[auth] google sign-in did not complete: ${code ?? String(err)}`);
     return null;
   }
