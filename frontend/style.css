@@ -1426,7 +1426,7 @@ body[data-view="chat"] #memory-btn { display: none; }
 /* The design system passes a size to its Icon component; an inline SVG with no
    width or height instead fills whatever box it is given, which made every tab
    icon 87px and the bar tall enough to sit on top of the composer. */
-#tabbar .tab svg { flex: none; width: 25px; height: 25px; }
+#tabbar .tab svg { flex: none; width: 26px; height: 26px; }
 body[data-view="chat"] .chat-composer { margin-bottom: 74px; }
 /* ── The You screen ──────────────────────────────────────────────────────────
    Built like the memory vault, because that one renders correctly on a phone: a
@@ -1932,3 +1932,13 @@ body.mem-open #avatar3d { display: none; }
   color: var(--danger-key);
   font-weight: 600;
 }
+
+/* Her face on the You screen too. The card showed the initial on a tinted circle,
+   which is what a contacts app does for someone who has never sent a photo. */
+#home-avatar { overflow: hidden; padding: 0; }
+#home-avatar img {
+  width: 100%; height: 100%;
+  border-radius: 50%; object-fit: cover; object-position: 50% 12%;
+  display: block;
+}
+#home-avatar img.hidden { display: none; }

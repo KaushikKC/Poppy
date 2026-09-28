@@ -87,10 +87,13 @@
    */
   function facePortrait(character) {
     const src = `avatar/characters/${character || "poppy"}.jpg`;
-    for (const id of ["chat-portrait", "empty-portrait"]) {
+    for (const id of ["chat-portrait", "empty-portrait", "tab-portrait", "home-portrait"]) {
       const img = document.getElementById(id);
       if (!img) continue;
       img.onerror = () => {
+        // The bar cannot lose a tab because a custom character has no portrait, so
+        // that one keeps its element and falls back to the app mark.
+        if (id === "tab-portrait") { img.src = "poppys-logo.png"; img.onerror = null; return; }
         img.classList.add("hidden");
         document.body.classList.remove("has-portrait");
       };
@@ -489,8 +492,14 @@
         label,
       ].filter(Boolean).join(" · ");
     }
+    // The initial is the fallback, not the default: it wrote textContent
+    // unconditionally, which deleted the portrait <img> on every render of this
+    // screen. A letter on a tinted circle is what a contacts app shows for someone
+    // who has never sent a photo, and she has one.
     const av = document.getElementById("home-avatar");
-    if (av) av.textContent = (h.companion_name || "P").trim()[0] || "P";
+    if (av && !av.querySelector("img")) {
+      av.textContent = (h.companion_name || "P").trim()[0] || "P";
+    }
     // "she knows N things", which is the number the closeness stage is built on and
     // the one thing on this screen that is hers rather than the app's.
     const knows = document.getElementById("home-knows");
@@ -962,6 +971,8 @@
       // tab silently did nothing on every new account. A tab the user taps has to
       // answer, even if the answer is "nothing has grown here yet".
       openGarden();
+    } else if (tab === "cast") {
+      openCharacterSwitch();
     } else if (tab === "memory") {
       // The panel lives inside #app. Opening it from the You screen rendered it
       // into a hidden container, so the tap looked ignored.

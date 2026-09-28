@@ -442,24 +442,39 @@ button.chip { cursor: pointer; }
 .tabbar {
   flex: none;
   margin: 0 14px 6px;
-  padding: 8px;
+  padding: 6px 10px;
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
   gap: 2px;
-  border-radius: 26px;
-  background: var(--glass-strong);
-  backdrop-filter: var(--blur-lg);
-  -webkit-backdrop-filter: var(--blur-lg);
+  border-radius: 28px;
+  /* Real glass, rather than a tinted panel.
+     --glass-strong is 0.84 opaque, which is a cream slab with a blur behind it
+     that nothing can be seen through. Glass reads as glass only when the content
+     under it is visible and bent: a lower alpha, a gradient so the top edge
+     catches light, a wide blur with saturation so colour bleeds up through it,
+     and a bright hairline on the top edge with a dark one underneath. */
+  background:
+    linear-gradient(180deg, var(--glass-strong), var(--glass-quiet));
+  backdrop-filter: blur(30px) saturate(190%);
+  -webkit-backdrop-filter: blur(30px) saturate(190%);
   border: 1px solid var(--glass-edge-lo);
-  box-shadow: var(--lift-3), var(--inner-top);
+  border-top-color: var(--glass-edge);
+  box-shadow:
+    var(--lift-3),
+    inset 0 1px 0 var(--glass-edge),
+    inset 0 -1px 0 rgba(11, 23, 9, 0.05);
 }
 .tab {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 4px;
-  padding: 7px 2px 5px;
+  /* Icons carry the bar now, so the target is a square rather than a label's
+     width. 48px keeps it above the 44pt minimum in every orientation. */
+  min-height: 48px;
+  padding: 6px 2px;
   border: 0;
   border-radius: 18px;
   background: none;
@@ -469,9 +484,32 @@ button.chip { cursor: pointer; }
   font-weight: 500;
   letter-spacing: 0.005em;
   cursor: pointer;
-  transition: color var(--dur-fast), background var(--dur-fast);
+  transition: color var(--dur-fast), transform var(--dur-fast);
 }
+.tab:active { transform: scale(0.92); }
+/* Outline when resting, filled when you are there. The platform's own way of
+   saying which one you are on, and the reason no pill is needed behind it. */
+.tab .gl-fill { display: none; }
+.tab[data-on="true"] .gl-fill { display: block; }
+.tab[data-on="true"] .gl-line { display: none; }
 .tab[data-on="true"] { color: var(--poppy-500); font-weight: 600; }
+
+/* Her face, at the end of the bar. A portrait is a photograph, so it gets a ring
+   rather than a tint: a colour laid over a face would just look like a filter. */
+.tab--face .tab-face {
+  width: 29px; height: 29px;
+  border-radius: 50%;
+  padding: 2px;
+  border: 1.5px solid transparent;
+  transition: border-color var(--dur-fast);
+  display: grid; place-items: center;
+}
+.tab--face img {
+  width: 100%; height: 100%;
+  border-radius: 50%; object-fit: cover; object-position: 50% 12%;
+  background: var(--surface-raised);
+}
+.tab--face[data-on="true"] .tab-face { border-color: var(--poppy-500); }
 .tab--call { color: var(--poppy-500); }
 
 /* --- Call controls ------------------------------------------------- */
