@@ -528,6 +528,10 @@
        home, so the app opens on it, and everything that used to be a row on a hub
        screen is a destination here instead. Present on every screen except
        onboarding, which is a sequence and has no navigation. -->
+  <!-- Tab icons are Phosphor Icons (MIT), (c) 2023 Phosphor Icons.
+       https://github.com/phosphor-icons/core — see THIRD_PARTY.md.
+       Drawn as matched regular/fill pairs on one 256 grid, which is the pairing an
+       iOS tab bar needs and the thing hand-drawing kept getting wrong. -->
   <nav class="tabbar hidden" id="tabbar" aria-label="Primary">
     <!-- Instagram's shape, on purpose: five icons, no labels, the round portrait at
          the end, and the active tab told by a filled glyph rather than a background.
@@ -542,20 +546,20 @@
          how the platform draws selection, and it is what makes a tint legible
          without a pill behind it. -->
     <button type="button" class="tab" data-tab="thread" data-on="true" aria-label="Poppy">
-      <svg class="gl-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M6.6 4.6h10.8A3.6 3.6 0 0 1 21 8.2v5.4a3.6 3.6 0 0 1-3.6 3.6h-6.2l-4.06 2.96a.55.55 0 0 1-.88-.44v-2.52H6.6A3.6 3.6 0 0 1 3 13.6V8.2a3.6 3.6 0 0 1 3.6-3.6z"/></svg>
-      <svg class="gl-fill" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6.6 4.6h10.8A3.6 3.6 0 0 1 21 8.2v5.4a3.6 3.6 0 0 1-3.6 3.6h-6.2l-4.06 2.96a.55.55 0 0 1-.88-.44v-2.52H6.6A3.6 3.6 0 0 1 3 13.6V8.2a3.6 3.6 0 0 1 3.6-3.6z"/></svg>
+      <svg class="gl-line" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M128,24A104,104,0,0,0,36.18,176.88L24.83,210.93a16,16,0,0,0,20.24,20.24l34.05-11.35A104,104,0,1,0,128,24Zm0,192a87.87,87.87,0,0,1-44.06-11.81,8,8,0,0,0-6.54-.67L40,216,52.47,178.6a8,8,0,0,0-.66-6.54A88,88,0,1,1,128,216Z"/></svg>
+      <svg class="gl-fill" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M232,128A104,104,0,0,1,79.12,219.82L45.07,231.17a16,16,0,0,1-20.24-20.24l11.35-34.05A104,104,0,1,1,232,128Z"/></svg>
     </button>
     <button type="button" class="tab" data-tab="garden" data-on="false" aria-label="Garden">
-      <svg class="gl-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="7.4" r="2.7"/><circle cx="15.99" cy="10.3" r="2.7"/><circle cx="14.47" cy="15" r="2.7"/><circle cx="9.53" cy="15" r="2.7"/><circle cx="8.01" cy="10.3" r="2.7"/><circle cx="12" cy="11.6" r="1.9"/></svg>
-      <svg class="gl-fill" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="7.4" r="2.7"/><circle cx="15.99" cy="10.3" r="2.7"/><circle cx="14.47" cy="15" r="2.7"/><circle cx="9.53" cy="15" r="2.7"/><circle cx="8.01" cy="10.3" r="2.7"/><circle cx="12" cy="11.6" r="1.9"/></svg>
+      <svg class="gl-line" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M210.35,129.36c-.81-.47-1.7-.92-2.62-1.36.92-.44,1.81-.89,2.62-1.36a40,40,0,1,0-40-69.28c-.81.47-1.65,1-2.48,1.59.08-1,.13-2,.13-3a40,40,0,0,0-80,0c0,.94,0,1.94.13,3-.83-.57-1.67-1.12-2.48-1.59a40,40,0,1,0-40,69.28c.81.47,1.7.92,2.62,1.36-.92.44-1.81.89-2.62,1.36a40,40,0,1,0,40,69.28c.81-.47,1.65-1,2.48-1.59-.08,1-.13,2-.13,2.95a40,40,0,0,0,80,0c0-.94-.05-1.94-.13-2.95.83.57,1.67,1.12,2.48,1.59A39.79,39.79,0,0,0,190.29,204a40.43,40.43,0,0,0,10.42-1.38,40,40,0,0,0,9.64-73.28ZM104,128a24,24,0,1,1,24,24A24,24,0,0,1,104,128Zm74.35-56.79a24,24,0,1,1,24,41.57c-6.27,3.63-18.61,6.13-35.16,7.19A40,40,0,0,0,154.53,98.1C163.73,84.28,172.08,74.84,178.35,71.21ZM128,32a24,24,0,0,1,24,24c0,7.24-4,19.19-11.36,34.06a39.81,39.81,0,0,0-25.28,0C108,75.19,104,63.24,104,56A24,24,0,0,1,128,32ZM44.86,80a24,24,0,0,1,32.79-8.79c6.27,3.63,14.62,13.07,23.82,26.89A40,40,0,0,0,88.81,120c-16.55-1.06-28.89-3.56-35.16-7.18A24,24,0,0,1,44.86,80ZM77.65,184.79a24,24,0,1,1-24-41.57c6.27-3.63,18.61-6.13,35.16-7.19a40,40,0,0,0,12.66,21.87C92.27,171.72,83.92,181.16,77.65,184.79ZM128,224a24,24,0,0,1-24-24c0-7.24,4-19.19,11.36-34.06a39.81,39.81,0,0,0,25.28,0C148,180.81,152,192.76,152,200A24,24,0,0,1,128,224Zm83.14-48a24,24,0,0,1-32.79,8.79c-6.27-3.63-14.62-13.07-23.82-26.89A40,40,0,0,0,167.19,136c16.55,1.06,28.89,3.56,35.16,7.18A24,24,0,0,1,211.14,176Z"/></svg>
+      <svg class="gl-fill" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M210.35,129.36c-.81-.47-1.7-.92-2.62-1.36.92-.44,1.81-.89,2.62-1.36a40,40,0,1,0-40-69.28c-.81.47-1.65,1-2.48,1.59.08-1,.13-2,.13-3a40,40,0,0,0-80,0c0,.94,0,1.94.13,3-.83-.57-1.67-1.12-2.48-1.59a40,40,0,1,0-40,69.28c.81.47,1.7.92,2.62,1.36-.92.44-1.81.89-2.62,1.36a40,40,0,1,0,40,69.28c.81-.47,1.65-1,2.48-1.59-.08,1-.13,2-.13,2.95a40,40,0,0,0,80,0c0-.94-.05-1.94-.13-2.95.83.57,1.67,1.12,2.48,1.59A39.79,39.79,0,0,0,190.29,204a40.43,40.43,0,0,0,10.42-1.38,40,40,0,0,0,9.64-73.28ZM128,156a28,28,0,1,1,28-28A28,28,0,0,1,128,156Z"/></svg>
     </button>
     <button type="button" class="tab" data-tab="memory" data-on="false" aria-label="Memory">
-      <svg class="gl-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.8 3h10.4a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6.8A2.3 2.3 0 0 1 4.5 18.7V5.3A2.3 2.3 0 0 1 6.8 3z"/><path d="M4.5 17.6h13.7"/><path d="M11 3v5.4l1.7-1.2 1.7 1.2V3"/></svg>
-      <svg class="gl-fill" viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" aria-hidden="true"><path d="M6.8 3h3.4v6.4a.6.6 0 0 0 .95.5l1.55-1.1 1.55 1.1a.6.6 0 0 0 .95-.5V3h2a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6.8a2.3 2.3 0 0 1-2.3-2.3V5.3A2.3 2.3 0 0 1 6.8 3zm-.6 15.05a.85.85 0 0 0 0 1.7h10.9v-1.7H6.2z"/></svg>
+      <svg class="gl-line" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M184,112a8,8,0,0,1-8,8H112a8,8,0,0,1,0-16h64A8,8,0,0,1,184,112Zm-8,24H112a8,8,0,0,0,0,16h64a8,8,0,0,0,0-16Zm48-88V208a16,16,0,0,1-16,16H48a16,16,0,0,1-16-16V48A16,16,0,0,1,48,32H208A16,16,0,0,1,224,48ZM48,208H72V48H48Zm160,0V48H88V208H208Z"/></svg>
+      <svg class="gl-fill" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM80,208H48V48H80Zm96-56H112a8,8,0,0,1,0-16h64a8,8,0,0,1,0,16Zm0-32H112a8,8,0,0,1,0-16h64a8,8,0,0,1,0,16Z"/></svg>
     </button>
     <button type="button" class="tab" data-tab="you" data-on="false" aria-label="You">
-      <svg class="gl-line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.9"/><path d="M4.9 20.2c0-3.2 3.2-5.4 7.1-5.4s7.1 2.2 7.1 5.4"/></svg>
-      <svg class="gl-fill" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="8" r="3.9"/><path d="M12 14.6c-4 0-7.2 2.2-7.2 5.1 0 .6.5 1.1 1.1 1.1h12.2c.6 0 1.1-.5 1.1-1.1 0-2.9-3.2-5.1-7.2-5.1z"/></svg>
+      <svg class="gl-line" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M230.92,212c-15.23-26.33-38.7-45.21-66.09-54.16a72,72,0,1,0-73.66,0C63.78,166.78,40.31,185.66,25.08,212a8,8,0,1,0,13.85,8c18.84-32.56,52.14-52,89.07-52s70.23,19.44,89.07,52a8,8,0,1,0,13.85-8ZM72,96a56,56,0,1,1,56,56A56.06,56.06,0,0,1,72,96Z"/></svg>
+      <svg class="gl-fill" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M230.93,220a8,8,0,0,1-6.93,4H32a8,8,0,0,1-6.92-12c15.23-26.33,38.7-45.21,66.09-54.16a72,72,0,1,1,73.66,0c27.39,8.95,50.86,27.83,66.09,54.16A8,8,0,0,1,230.93,220Z"/></svg>
     </button>
     <!-- Who you are talking to, and the way to change it. It was a row buried in the
          You screen, which made the cast the least visible thing in an app whose whole
