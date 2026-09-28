@@ -1,122 +1,116 @@
 /**
- * First run: getting her onto the phone.
+ * First run: she arrives by talking to you.
  *
- * The mobile counterpart of the desktop setup screen. It is native rather than part
- * of the web UI because it has to run before anything else exists, and because it is
- * the one screen whose job is to be honest about a wait.
+ * ── Three attempts, and why this is the third ─────────────────────────────────
  *
- * ── Why this screen is a seed growing ─────────────────────────────────────────
+ * 1. A status report: model tier and why it was picked, total megabytes, the filename
+ *    in flight, "2 of 3", bytes of bytes, an offer to delete models from a tier nobody
+ *    knew they had. True, and read by testers as a settings page that turned up before
+ *    the app did.
+ * 2. A seed growing in soil, watered by tapping. It looked like a placeholder on a real
+ *    phone, and asking someone to play a tapping game they did not come for is worse
+ *    than an honest bar.
  *
- * It started as a status report: the model tier and why it was picked, the total in
- * megabytes, the filename in flight, "2 of 3", bytes done of bytes total, an offer to
- * delete models from a tier nobody knew they had. Every line true, none of it what a
- * first-time user is asking, and testers read the whole thing as a settings page that
- * arrived before the app did.
+ * Both failed the same way: they *decorated* the wait instead of removing it. The wait
+ * is only unbearable because nothing is happening, so the fix is to make something
+ * happen, and the only thing anyone came here for is her.
  *
- * A progress bar is the same mistake in a smaller font. It tells someone to watch a
- * number, which makes the wait the subject, and the wait is the worst thing we have to
- * offer on day zero. So the download is not reported here, it is *dramatised*: a seed
- * goes into the soil, roots take, leaves unfurl, a bud forms, and it blooms as the last
- * bytes land. The growth IS the progress indicator, which is why there is no percentage
- * and no byte count anywhere on this screen.
+ * So this screen is a conversation. She types, the way she will for the rest of the
+ * app's life, and asks the two questions onboarding was going to ask anyway: what to
+ * call you, and what is on your mind. Both answers are written to real storage, so the
+ * minutes are not a waiting room, they are the first two minutes of knowing her. The
+ * download runs underneath and is reported by nothing louder than a hairline at the top
+ * of the screen.
  *
- * The garden is the product's own long game (backend/garden.py, POPPY_RETENTION_ENGINE
- * §3.1), so this is not decoration borrowed from somewhere: the first thing you ever
- * grow in Poppys is her, and the mechanic that keeps people two months later is being
- * taught in the two minutes where we would otherwise be apologising.
- *
- * Tapping waters it. That is a pastime, not a speed-up, and the copy never implies
- * otherwise. It exists because a screen you can touch is one you stay on.
+ * The payoff is deliberate: the last message arrives only when the models are on disk,
+ * and it is her saying she is here. The wait ends with an arrival rather than a
+ * progress bar hitting 100%.
  *
  * What stays honest, because it is about their money rather than our implementation:
- * Wi-Fi only unless they say otherwise. The engineering detail moved to the console,
- * where it is still there for us and invisible to them.
+ * Wi-Fi only unless they say otherwise, in her voice rather than in an error box. The
+ * engineering detail moved to the console, where it is still there for us and invisible
+ * to them.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 
 import { deleteUnused, ensureModels, reattach, unusedModels, type Progress } from './core/downloader';
 import * as companion from './core/companion';
+import * as memory from './core/memory_store';
 import type { Tier } from './core/model_tier';
 
-// The app's own palette, from frontend/style.css. This screen had been carrying the
-// engine spike's blue-grey and an approximate orange, so the first thing anyone saw
-// was a different product from the one behind it.
+// The app's own palette, from frontend/style.css.
 const POPPY = '#e92832';
-const POPPY_DEEP = '#c01f28';
 const LEAF = '#143c16';
-const LEAF_LIGHT = '#2f6b32';
 const CREAM = '#fff8ea';
-const SOIL = 'rgba(20, 60, 22, 0.13)';
+const PANEL = '#fffdf7';
+const INK = '#071207';
+const LINE = 'rgba(20, 60, 22, 0.16)';
 const MUTED = 'rgba(7, 18, 7, 0.58)';
 const FAINT = 'rgba(7, 18, 7, 0.42)';
 // Georgia is the fallback the web UI's display face already names, so the wordmark
 // here and the wordmark one screen later are the same letterforms.
 const DISPLAY = 'Georgia';
 
-/** Height of the stage the plant grows in. */
-const STAGE = 300;
-/** How tall the stem gets at full growth. */
-const STEM = 150;
-const PETALS = 6;
+type Bubble = { id: string; from: 'her' | 'you'; text: string };
 
 /**
- * What she is doing, in her terms rather than ours, keyed to how grown the plant is.
+ * A beat between her messages.
  *
- * Deliberately not a mapping from download phases: "Extracting archive 2 of 3" is an
- * event in our code, not in the person's experience. These are tied to what is on
- * screen, so the words and the picture always agree.
+ * Long enough to read as typing rather than as a dump, short enough that nobody taps
+ * the screen to see if it is stuck. Her longer lines get longer beats, which is the
+ * one detail that makes typing look like typing.
  */
-const STAGES: { at: number; line: string }[] = [
-  { at: 0.0, line: 'A seed goes in' },
-  { at: 0.18, line: 'Roots taking hold' },
-  { at: 0.42, line: 'First leaves' },
-  { at: 0.68, line: 'A bud, almost' },
-  { at: 0.9, line: 'She is about to bloom' },
-];
-
-function lineFor(growth: number): string {
-  let out = STAGES[0].line;
-  for (const s of STAGES) if (growth >= s.at) out = s.line;
-  return out;
-}
+const beat = (text: string) => Math.min(2200, 620 + text.length * 22);
 
 export default function ModelSetup({ onReady }: { onReady: () => void }) {
+  const [bubbles, setBubbles] = useState<Bubble[]>([]);
+  const [typing, setTyping] = useState(false);
+  const [awaiting, setAwaiting] = useState<'name' | 'seed' | null>(null);
+  const [draft, setDraft] = useState('');
   const [progress, setProgress] = useState<Progress | null>(null);
-  const [running, setRunning] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+  const [started, setStarted] = useState(false);
   const [allowCellular, setAllowCellular] = useState(false);
-  const [tier, setTier] = useState<Tier | null>(null);
-  const [stageLine, setStageLine] = useState(STAGES[0].line);
-  const started = useRef(false);
 
-  // ── The animated values ────────────────────────────────────────────────────
-  // grow drives everything the plant does; the rest are ambient or reactions.
-  const grow = useRef(new Animated.Value(0)).current;
-  const sway = useRef(new Animated.Value(0)).current;
-  const sun = useRef(new Animated.Value(0)).current;
-  const wobble = useRef(new Animated.Value(0)).current;
-  // A small pool, so a fast tapper cannot allocate animations without limit.
-  const drops = useRef([0, 1, 2, 3].map(() => new Animated.Value(0))).current;
-  const nextDrop = useRef(0);
-  const motes = useMemo(
-    () => [0, 1, 2, 3, 4, 5].map((i) => ({
-      v: new Animated.Value(0),
-      x: 26 + ((i * 47) % 200),
-      delay: i * 900,
-      size: 4 + (i % 3),
-    })),
-    [],
-  );
+  const tier = useRef<Tier | null>(null);
+  const running = useRef(false);
+  const scroller = useRef<ScrollView>(null);
+  const mounted = useRef(true);
+  const bar = useRef(new Animated.Value(0)).current;
+  const dots = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => () => { mounted.current = false; }, []);
+
+  // ── Her side of the conversation ───────────────────────────────────────────
+
+  const say = useCallback(async (text: string) => {
+    setTyping(true);
+    await new Promise<void>((r) => setTimeout(r, beat(text)));
+    if (!mounted.current) return;
+    setTyping(false);
+    setBubbles((b) => [...b, { id: `h${b.length}${Date.now()}`, from: 'her', text }]);
+  }, []);
+
+  const youSaid = useCallback((text: string) => {
+    setBubbles((b) => [...b, { id: `y${b.length}${Date.now()}`, from: 'you', text }]);
+  }, []);
 
   /**
    * The detail the screen no longer shows still has to exist somewhere, or a tester
@@ -130,50 +124,125 @@ export default function ModelSetup({ onReady }: { onReady: () => void }) {
     setProgress(p);
   }, []);
 
+  /**
+   * The download, started underneath the conversation and never awaited by it.
+   *
+   * Two things are happening at once on purpose: she keeps talking whatever the network
+   * is doing, and the network keeps going whatever she is saying. The only place they
+   * meet is `done`, which unlocks the last message.
+   */
+  const fetchModels = useCallback(
+    async (cellular: boolean) => {
+      if (running.current) return;
+      running.current = true;
+      setFailed(null);
+      try {
+        await ensureModels(onProgress, { allowCellular: cellular, savedTier: tier.current });
+        // Models from a tier this phone no longer uses are most of a gigabyte each and
+        // exist only because a previous run picked differently. Nobody asked for them,
+        // so reclaiming the space is not a decision to put in front of anyone here.
+        void unusedModels(tier.current)
+          .then((spare) => (spare.length ? deleteUnused(tier.current) : 0))
+          .catch(() => {});
+        if (mounted.current) setDone(true);
+      } catch (err) {
+        if (mounted.current) setFailed(err instanceof Error ? err.message : String(err));
+      } finally {
+        running.current = false;
+      }
+    },
+    [onProgress],
+  );
+
+  const begin = useCallback(async () => {
+    setStarted(true);
+    void fetchModels(allowCellular);
+    await say("Hi. I'm Poppy.");
+    await say("I'm moving onto your phone right now, which takes a few minutes. After this I work with no internet at all.");
+    await say('While that happens: what should I call you?');
+    if (mounted.current) setAwaiting('name');
+  }, [allowCellular, fetchModels, say]);
+
   useEffect(() => {
     (async () => {
-      const saved = ((await companion.profile()).model_tier ?? null) as Tier | null;
-      setTier(saved);
+      tier.current = ((await companion.profile()).model_tier ?? null) as Tier | null;
       await reattach();
     })();
   }, []);
 
-  // ── Ambient motion, running from the first frame ───────────────────────────
-  // The screen is never still, including before the download starts and during the
-  // long flat stretch of a single large file, which is exactly where a bar looks dead.
+  // ── The last message waits for the disk, not for the clock ─────────────────
   useEffect(() => {
-    const cycle = (v: Animated.Value, ms: number) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(v, { toValue: 1, duration: ms, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-          Animated.timing(v, { toValue: 0, duration: ms, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        ]),
-      );
-    const loops = [cycle(sway, 3200), cycle(sun, 5200)];
-    // Pollen drifting up. Each one restarts from the bottom, staggered, so the air
-    // has motion in it without anything looking mechanical.
-    for (const m of motes) {
-      loops.push(
-        Animated.loop(
-          Animated.sequence([
-            Animated.delay(m.delay),
-            Animated.timing(m.v, { toValue: 1, duration: 7000, easing: Easing.linear, useNativeDriver: true }),
-            Animated.timing(m.v, { toValue: 0, duration: 0, useNativeDriver: true }),
-          ]),
-        ),
-      );
-    }
-    loops.forEach((l) => l.start());
-    return () => loops.forEach((l) => l.stop());
-  }, [motes, sun, sway]);
+    if (!done || !started) return;
+    (async () => {
+      await say("There. I'm here, and I'm all yours.");
+    })();
+  }, [done, say, started]);
 
-  /**
-   * One number for the whole job, not for the current file.
-   *
-   * `Progress.fraction` is per item, so following it directly made growth lurch back at
-   * each file, which reads as something going wrong. Each item is weighted as mostly
-   * download and a little unpacking, so the plant only ever grows.
-   */
+  const answer = useCallback(
+    async (text: string) => {
+      const clean = text.trim();
+      if (!clean) return;
+      Keyboard.dismiss();
+      setDraft('');
+      youSaid(clean);
+      const step = awaiting;
+      setAwaiting(null);
+
+      if (step === 'name') {
+        // How the opener finds it: opening.py matches a "Name:" fact out of memory.
+        await memory.remember(`Name: ${clean}`, 'profile', 'They told me when we met.');
+        await say(`${clean}. Good to meet you.`);
+        await say("One more, and then I'll leave you alone until I'm ready. What's on your mind today?");
+        if (mounted.current) setAwaiting('seed');
+        return;
+      }
+
+      if (step === 'seed') {
+        await memory.remember(clean, 'ongoing', 'The first thing they told me.');
+        await say("Thank you. I'll hold onto that, and I'll ask you about it.");
+      }
+    },
+    [awaiting, say, youSaid],
+  );
+
+  const skip = useCallback(async () => {
+    const step = awaiting;
+    setAwaiting(null);
+    if (step === 'name') {
+      await say("That's alright, you can tell me later.");
+      await say("Anything on your mind today?");
+      if (mounted.current) setAwaiting('seed');
+      return;
+    }
+    await say("That's alright. We can start wherever you like.");
+  }, [awaiting, say]);
+
+  // ── Wi-Fi, in her voice ────────────────────────────────────────────────────
+  const needsWifi = !!failed && failed.startsWith('Waiting for Wi-Fi');
+  const toldWifi = useRef(false);
+  useEffect(() => {
+    if (!failed || toldWifi.current) return;
+    toldWifi.current = true;
+    (async () => {
+      await say(
+        needsWifi
+          ? "I'm waiting for Wi-Fi, so I never land on your data plan by surprise."
+          : "Something interrupted me on the way in. Nothing I've already brought is lost.",
+      );
+    })();
+  }, [failed, needsWifi, say]);
+
+  const retry = useCallback(
+    (cellular: boolean) => {
+      toldWifi.current = false;
+      setFailed(null);
+      setAllowCellular(cellular);
+      void fetchModels(cellular);
+    },
+    [fetchModels],
+  );
+
+  // ── Progress, as a hairline and nothing else ───────────────────────────────
   const overall = (() => {
     if (!progress || progress.total < 1) return 0;
     const within =
@@ -183,351 +252,229 @@ export default function ModelSetup({ onReady }: { onReady: () => void }) {
     return Math.min(1, (progress.index - 1 + within) / progress.total);
   })();
 
-  // Growth eases toward the real figure rather than jumping to it, so a chunk landing
-  // shows up as the plant moving rather than as a step change.
   useEffect(() => {
-    Animated.timing(grow, {
-      toValue: overall,
-      duration: 900,
+    Animated.timing(bar, {
+      toValue: done ? 1 : overall,
+      duration: 800,
       easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
+      useNativeDriver: false, // width percentage: layout, not transform
     }).start();
-    setStageLine(lineFor(overall));
-  }, [grow, overall]);
+  }, [bar, done, overall]);
 
-  const water = useCallback(() => {
-    const v = drops[nextDrop.current % drops.length];
-    nextDrop.current += 1;
-    v.setValue(0);
-    Animated.sequence([
-      Animated.timing(v, { toValue: 1, duration: 780, easing: Easing.in(Easing.quad), useNativeDriver: true }),
-      Animated.timing(v, { toValue: 0, duration: 0, useNativeDriver: true }),
-    ]).start();
-    // The plant notices. Native driver on a rotation, so a tap costs nothing even
-    // while three files are downloading.
-    wobble.setValue(0);
-    Animated.sequence([
-      Animated.timing(wobble, { toValue: 1, duration: 140, useNativeDriver: true }),
-      Animated.spring(wobble, { toValue: 0, friction: 4, tension: 90, useNativeDriver: true }),
-    ]).start();
-  }, [drops, wobble]);
+  // The three dots, the one piece of motion on the screen.
+  useEffect(() => {
+    if (!typing) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(dots, { toValue: 1, duration: 500, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(dots, { toValue: 0, duration: 500, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [dots, typing]);
 
-  const start = useCallback(
-    async (cellular = allowCellular) => {
-      if (started.current) return;
-      started.current = true;
-      setRunning(true);
-      setFailed(null);
-      try {
-        await ensureModels(onProgress, { allowCellular: cellular, savedTier: tier });
-        // Models from a tier this phone no longer uses are most of a gigabyte each and
-        // exist only because a previous run picked differently. Nobody asked for them,
-        // so reclaiming the space is not a decision to put on someone's first screen.
-        // Failure here is irrelevant to whether the app can start.
-        void unusedModels(tier)
-          .then((spare) => (spare.length ? deleteUnused(tier) : 0))
-          .catch(() => {});
-        // Let the bloom finish before the screen is taken away. It is a second, and it
-        // is the payoff for the whole wait.
-        Animated.timing(grow, { toValue: 1, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-        setTimeout(onReady, 1100);
-      } catch (err) {
-        setFailed(err instanceof Error ? err.message : String(err));
-        started.current = false; // retry is allowed; finished files are skipped
-      } finally {
-        setRunning(false);
-      }
-    },
-    [allowCellular, grow, onProgress, onReady, tier],
-  );
+  useEffect(() => {
+    const t = setTimeout(() => scroller.current?.scrollToEnd({ animated: true }), 60);
+    return () => clearTimeout(t);
+  }, [bubbles, typing]);
 
-  const useCellular = useCallback(() => {
-    setAllowCellular(true);
-    void start(true);
-  }, [start]);
-
-  // "Waiting for Wi-Fi" is not a failure, it is a question, and it gets an answer they
-  // can tap rather than an error in red.
-  const needsWifi = !!failed && failed.startsWith('Waiting for Wi-Fi');
-
-  // ── Derived transforms ─────────────────────────────────────────────────────
-  // Every one of these is native-driver safe (transform and opacity only), which is
-  // what lets the whole scene keep moving while the CPU is busy unpacking archives.
-  const stemScale = grow.interpolate({ inputRange: [0, 1], outputRange: [0.04, 1] });
-  const swayDeg = sway.interpolate({ inputRange: [0, 1], outputRange: ['-2.2deg', '2.2deg'] });
-  const wobbleDeg = wobble.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '5deg'] });
-
-  const leafOne = grow.interpolate({ inputRange: [0.22, 0.46], outputRange: [0, 1], extrapolate: 'clamp' });
-  const leafTwo = grow.interpolate({ inputRange: [0.4, 0.64], outputRange: [0, 1], extrapolate: 'clamp' });
-  const budScale = grow.interpolate({ inputRange: [0.6, 0.86], outputRange: [0, 1], extrapolate: 'clamp' });
-  const bloom = grow.interpolate({ inputRange: [0.84, 1], outputRange: [0, 1], extrapolate: 'clamp' });
-  const bloomScale = bloom.interpolate({ inputRange: [0, 1], outputRange: [0.2, 1] });
-  const sunScale = sun.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] });
-  // The bud and the flower sit at the top of the plant container, which is where the
-  // stem reaches only at full growth. Without this they would hang in the air above a
-  // half-grown stem: they ride the tip down by however much stem is still missing.
-  const tip = grow.interpolate({ inputRange: [0, 1], outputRange: [STEM, 0] });
-  const sunGlow = sun.interpolate({ inputRange: [0, 1], outputRange: [0.14, 0.26] });
+  const status = done
+    ? 'here'
+    : failed
+    ? 'waiting'
+    : started
+    ? 'moving in'
+    : 'about to arrive';
 
   return (
     <SafeAreaView style={styles.root}>
-      {/* The whole scene is the touch target: watering should not require aim. */}
-      <Pressable style={styles.stage} onPress={water} android_disableSound>
-        <Animated.View style={[styles.sun, { opacity: sunGlow, transform: [{ scale: sunScale }] }]} />
-
-        {motes.map((m, i) => (
+      <KeyboardAvoidingView
+        style={styles.fill}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        {/* The only report of the download anywhere on the screen. */}
+        <View style={styles.hairline}>
           <Animated.View
-            key={`mote-${i}`}
             style={[
-              styles.mote,
-              {
-                left: m.x,
-                width: m.size,
-                height: m.size,
-                borderRadius: m.size / 2,
-                opacity: m.v.interpolate({ inputRange: [0, 0.15, 0.8, 1], outputRange: [0, 0.5, 0.35, 0] }),
-                transform: [
-                  { translateY: m.v.interpolate({ inputRange: [0, 1], outputRange: [0, -STAGE + 40] }) },
-                  { translateX: m.v.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 14, -8] }) },
-                ],
-              },
+              styles.hairFill,
+              { width: bar.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) },
             ]}
           />
-        ))}
+        </View>
 
-        {drops.map((d, i) => (
-          <Animated.View
-            key={`drop-${i}`}
-            style={[
-              styles.drop,
-              {
-                opacity: d.interpolate({ inputRange: [0, 0.1, 0.85, 1], outputRange: [0, 0.9, 0.9, 0] }),
-                transform: [
-                  { translateY: d.interpolate({ inputRange: [0, 1], outputRange: [-STAGE * 0.42, -18] }) },
-                  { scaleY: d.interpolate({ inputRange: [0, 0.8, 1], outputRange: [1, 1.5, 0.4] }) },
-                ],
-              },
-            ]}
-          />
-        ))}
+        <View style={styles.header}>
+          <View style={styles.avatar}>
+            <Image source={require('./assets/poppys-logo.png')} style={styles.mark} resizeMode="contain" />
+          </View>
+          <View>
+            <Text style={styles.name}>Poppy</Text>
+            <Text style={styles.status}>{status}</Text>
+          </View>
+        </View>
 
-        {/* The plant. Anchored to the soil line, and everything above grows out of it. */}
-        <Animated.View
-          style={[
-            styles.plant,
-            {
-              // Pivot at the base rather than the container's centre: shift down, turn,
-              // shift back. A stem that rotates about its middle slides through the soil.
-              transform: [
-                { translateY: STEM / 2 },
-                { rotate: swayDeg },
-                { rotate: wobbleDeg },
-                { translateY: -STEM / 2 },
-              ],
-            },
-          ]}
+        <ScrollView
+          ref={scroller}
+          style={styles.fill}
+          contentContainerStyle={styles.thread}
+          keyboardShouldPersistTaps="handled"
         >
-          <Animated.View
-            style={[
-              styles.stem,
-              {
-                // translate, scale, translate back: keeps the base pinned to the soil
-                // while the stem lengthens upward.
-                transform: [{ translateY: STEM / 2 }, { scaleY: stemScale }, { translateY: -STEM / 2 }],
-              },
-            ]}
-          />
+          {bubbles.map((b) => (
+            <View
+              key={b.id}
+              style={[styles.bubble, b.from === 'her' ? styles.fromHer : styles.fromYou]}
+            >
+              <Text style={b.from === 'her' ? styles.herText : styles.youText}>{b.text}</Text>
+            </View>
+          ))}
 
-          <Animated.View
-            style={[
-              styles.leafLeft,
-              {
-                opacity: leafOne,
-                transform: [
-                  { scale: leafOne },
-                  { rotate: '-34deg' },
-                ],
-              },
-            ]}
-          />
-          <Animated.View
-            style={[
-              styles.leafRight,
-              {
-                opacity: leafTwo,
-                transform: [
-                  { scale: leafTwo },
-                  { rotate: '34deg' },
-                ],
-              },
-            ]}
-          />
+          {typing && (
+            <View style={[styles.bubble, styles.fromHer, styles.typing]}>
+              {[0, 1, 2].map((i) => (
+                <Animated.View
+                  key={i}
+                  style={[
+                    styles.dot,
+                    {
+                      opacity: dots.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: i === 1 ? [0.25, 0.9] : i === 0 ? [0.9, 0.25] : [0.5, 0.6],
+                      }),
+                    },
+                  ]}
+                />
+              ))}
+            </View>
+          )}
+        </ScrollView>
 
-          {/* Bud, then the petals opening out of it. */}
-          <Animated.View style={[styles.bud, { transform: [{ translateY: tip }, { scale: budScale }] }]} />
-          <Animated.View style={[styles.flower, { transform: [{ translateY: tip }, { scale: bloomScale }] }]}>
-            {Array.from({ length: PETALS }).map((_, i) => (
-              <Animated.View
-                key={`petal-${i}`}
-                style={[
-                  styles.petal,
-                  {
-                    opacity: bloom,
-                    transform: [
-                      { rotate: `${(360 / PETALS) * i}deg` },
-                      {
-                        translateY: bloom.interpolate({ inputRange: [0, 1], outputRange: [0, -15] }),
-                      },
-                      { scale: bloom },
-                    ],
-                  },
-                ]}
+        <View style={styles.foot}>
+          {!started && (
+            <Pressable style={styles.button} onPress={begin}>
+              <Text style={styles.buttonText}>Say hello</Text>
+            </Pressable>
+          )}
+
+          {needsWifi && (
+            <View style={styles.chips}>
+              <Pressable style={styles.chip} onPress={() => retry(true)}>
+                <Text style={styles.chipText}>Use mobile data</Text>
+              </Pressable>
+              <Pressable style={styles.chip} onPress={() => retry(false)}>
+                <Text style={styles.chipText}>I'm on Wi-Fi now</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {!!failed && !needsWifi && (
+            <View style={styles.chips}>
+              <Pressable style={styles.chip} onPress={() => retry(allowCellular)}>
+                <Text style={styles.chipText}>Keep going</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {!!awaiting && !done && (
+            <View style={styles.composer}>
+              <TextInput
+                style={styles.input}
+                value={draft}
+                onChangeText={setDraft}
+                placeholder={awaiting === 'name' ? 'Your name' : 'Anything at all'}
+                placeholderTextColor={FAINT}
+                returnKeyType="send"
+                onSubmitEditing={() => answer(draft)}
+                autoCapitalize={awaiting === 'name' ? 'words' : 'sentences'}
               />
-            ))}
-            <Animated.View style={[styles.heart, { opacity: bloom }]} />
-          </Animated.View>
-        </Animated.View>
+              <Pressable
+                style={[styles.send, !draft.trim() && styles.sendOff]}
+                onPress={() => (draft.trim() ? answer(draft) : skip())}
+              >
+                <Text style={styles.sendText}>{draft.trim() ? 'Send' : 'Skip'}</Text>
+              </Pressable>
+            </View>
+          )}
 
-        <View style={styles.soil} />
-      </Pressable>
-
-      <View style={styles.copy}>
-        {!running && !failed && (
-          <>
-            <Text style={styles.title}>Plant her</Text>
-            <Text style={styles.body}>
-              Poppy grows on your phone rather than in someone's data centre. It takes a
-              few minutes once, and then she is yours, offline, for good.
-            </Text>
-          </>
-        )}
-
-        {running && (
-          <>
-            <Text style={styles.title}>{stageLine}</Text>
-            <Text style={styles.body}>Tap anywhere to water her. You can lock your phone, she keeps growing.</Text>
-          </>
-        )}
-
-        {needsWifi && (
-          <>
-            <Text style={styles.title}>Waiting for Wi-Fi</Text>
-            <Text style={styles.body}>
-              She waits for Wi-Fi by default, so a big first day never lands on your data
-              plan by surprise.
-            </Text>
-          </>
-        )}
-
-        {!!failed && !needsWifi && (
-          <>
-            <Text style={styles.title}>She stopped growing</Text>
-            <Text style={styles.body}>
-              Something interrupted it. Nothing already planted is lost, so carrying on
-              picks up where it stopped.
-            </Text>
-          </>
-        )}
-      </View>
-
-      <View style={styles.actions}>
-        {!running && !failed && (
-          <>
-            <Pressable style={styles.button} onPress={() => start()}>
-              <Text style={styles.buttonText}>Plant the seed</Text>
+          {done && (
+            <Pressable style={styles.button} onPress={onReady}>
+              <Text style={styles.buttonText}>Start talking</Text>
             </Pressable>
+          )}
+
+          {started && !done && !awaiting && !failed && (
+            <Text style={styles.note}>She keeps arriving while your phone is locked.</Text>
+          )}
+
+          {!started && (
             <Text style={styles.note}>On Wi-Fi only, so your data plan is untouched.</Text>
-          </>
-        )}
-
-        {needsWifi && (
-          <>
-            <Pressable style={styles.button} onPress={useCellular}>
-              <Text style={styles.buttonText}>Use mobile data</Text>
-            </Pressable>
-            <Pressable onPress={() => start()}>
-              <Text style={styles.link}>I'm on Wi-Fi now</Text>
-            </Pressable>
-          </>
-        )}
-
-        {!!failed && !needsWifi && (
-          <Pressable style={styles.button} onPress={() => start()}>
-            <Text style={styles.buttonText}>Keep going</Text>
-          </Pressable>
-        )}
-
-        {running && <Text style={styles.note}>Nothing here ever leaves your phone.</Text>}
-      </View>
+          )}
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: CREAM, justifyContent: 'space-between' },
+  root: { flex: 1, backgroundColor: CREAM },
+  fill: { flex: 1 },
 
-  stage: { height: STAGE, alignItems: 'center', justifyContent: 'flex-end', overflow: 'hidden' },
-  sun: {
-    position: 'absolute', top: 18, right: 26,
-    width: 130, height: 130, borderRadius: 65, backgroundColor: POPPY,
-  },
-  mote: { position: 'absolute', bottom: 40, backgroundColor: LEAF_LIGHT },
-  drop: {
-    position: 'absolute', bottom: 40,
-    width: 6, height: 10, borderRadius: 3,
-    backgroundColor: 'rgba(47, 107, 50, 0.55)',
-  },
+  hairline: { height: 2, backgroundColor: 'rgba(20, 60, 22, 0.10)' },
+  hairFill: { height: 2, backgroundColor: POPPY },
 
-  soil: {
-    position: 'absolute', bottom: 0, left: 0, right: 0, height: 40,
-    backgroundColor: SOIL,
-    borderTopLeftRadius: 200, borderTopRightRadius: 200,
+  header: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 18, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: LINE,
   },
-  plant: { position: 'absolute', bottom: 34, alignItems: 'center', width: 160, height: STEM },
-  stem: {
-    position: 'absolute', bottom: 0,
-    width: 7, height: STEM, borderRadius: 4,
-    backgroundColor: LEAF,
+  avatar: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: PANEL, borderWidth: 1, borderColor: LINE,
+    alignItems: 'center', justifyContent: 'center',
   },
-  leafLeft: {
-    position: 'absolute', bottom: STEM * 0.3, right: 80,
-    width: 46, height: 22, borderRadius: 22,
-    backgroundColor: LEAF_LIGHT,
-  },
-  leafRight: {
-    position: 'absolute', bottom: STEM * 0.52, left: 80,
-    width: 46, height: 22, borderRadius: 22,
-    backgroundColor: LEAF_LIGHT,
-  },
-  bud: {
-    position: 'absolute', top: -6,
-    width: 24, height: 30, borderRadius: 14,
-    backgroundColor: POPPY_DEEP,
-  },
-  flower: { position: 'absolute', top: -34, width: 96, height: 96, alignItems: 'center', justifyContent: 'center' },
-  petal: {
-    position: 'absolute',
-    width: 30, height: 40, borderRadius: 18,
-    backgroundColor: POPPY,
-  },
-  heart: {
-    width: 20, height: 20, borderRadius: 10,
-    backgroundColor: '#ffe9a8',
-  },
+  mark: { width: 26, height: 30 },
+  name: { fontFamily: DISPLAY, fontSize: 20, color: LEAF },
+  status: { fontSize: 12, color: FAINT, marginTop: 1 },
 
-  copy: { alignItems: 'center', gap: 10, paddingHorizontal: 34, maxWidth: 380, alignSelf: 'center' },
-  title: { fontFamily: DISPLAY, fontSize: 29, color: LEAF, textAlign: 'center' },
-  body: { fontSize: 15, lineHeight: 22, color: MUTED, textAlign: 'center' },
+  thread: { padding: 18, gap: 10, paddingBottom: 26 },
+  bubble: { maxWidth: '84%', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 12 },
+  fromHer: {
+    alignSelf: 'flex-start', backgroundColor: PANEL,
+    borderWidth: 1, borderColor: LINE, borderBottomLeftRadius: 8,
+  },
+  fromYou: { alignSelf: 'flex-end', backgroundColor: POPPY, borderBottomRightRadius: 8 },
+  herText: { fontSize: 16, lineHeight: 23, color: INK },
+  youText: { fontSize: 16, lineHeight: 23, color: CREAM },
+  typing: { flexDirection: 'row', gap: 5, alignItems: 'center', paddingVertical: 15 },
+  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: LEAF },
 
-  actions: { padding: 26, gap: 10, alignItems: 'stretch' },
+  foot: { padding: 18, gap: 10, borderTopWidth: 1, borderTopColor: LINE },
+  composer: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  input: {
+    flex: 1, backgroundColor: PANEL, borderRadius: 22,
+    borderWidth: 1, borderColor: LINE,
+    paddingHorizontal: 18, paddingVertical: Platform.OS === 'ios' ? 13 : 9,
+    fontSize: 16, color: INK,
+  },
+  send: {
+    backgroundColor: POPPY, borderRadius: 22,
+    paddingHorizontal: 20, paddingVertical: 13,
+  },
+  sendOff: { backgroundColor: 'rgba(20, 60, 22, 0.28)' },
+  sendText: { color: CREAM, fontSize: 15, fontWeight: '700' },
+
+  chips: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+  chip: {
+    borderWidth: 1, borderColor: POPPY, borderRadius: 20,
+    paddingHorizontal: 16, paddingVertical: 10,
+  },
+  chipText: { color: POPPY, fontSize: 14, fontWeight: '600' },
+
   button: {
-    backgroundColor: POPPY, borderRadius: 16, paddingVertical: 17,
-    alignItems: 'center',
-    shadowColor: POPPY, shadowOpacity: 0.45,
-    shadowRadius: 20, shadowOffset: { width: 0, height: 10 },
+    backgroundColor: POPPY, borderRadius: 16, paddingVertical: 16, alignItems: 'center',
+    shadowColor: POPPY, shadowOpacity: 0.4,
+    shadowRadius: 18, shadowOffset: { width: 0, height: 8 },
     elevation: 3,
   },
   buttonText: { color: CREAM, fontSize: 16, fontWeight: '700' },
-  link: { fontSize: 14, color: POPPY, textAlign: 'center', paddingVertical: 10, fontWeight: '600' },
   note: { fontSize: 12, color: FAINT, textAlign: 'center', letterSpacing: 0.3 },
 });
