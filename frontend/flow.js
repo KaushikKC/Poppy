@@ -77,6 +77,59 @@
     if (tab) tab.textContent = who;
   }
 
+  /**
+   * Her face, in the header and in the empty thread.
+   *
+   * The portraits have existed since July and nothing ever displayed them, so the
+   * app showed a coloured orb instead — purple, for Poppy, in a red and green app.
+   * A custom character has no portrait to find, and onerror is what quietly puts the
+   * orb back for that case rather than leaving a broken image in the header.
+   */
+  function facePortrait(character) {
+    const src = `avatar/characters/${character || "poppy"}.jpg`;
+    for (const id of ["chat-portrait", "empty-portrait"]) {
+      const img = document.getElementById(id);
+      if (!img) continue;
+      img.onerror = () => {
+        img.classList.add("hidden");
+        document.body.classList.remove("has-portrait");
+      };
+      img.onload = () => {
+        img.classList.remove("hidden");
+        document.body.classList.add("has-portrait");
+      };
+      img.src = src;
+    }
+  }
+
+  /**
+   * The thread's empty state hides the moment there is anything in the thread.
+   *
+   * A MutationObserver rather than a call inside addBubble: bubbles are appended
+   * from four places in chat.js (typed, spoken, streamed reply, restored history),
+   * and a rule that has to be remembered in four places is a rule that will be
+   * forgotten in one of them.
+   */
+  function watchThread() {
+    const transcript = document.getElementById("transcript");
+    const empty = document.getElementById("thread-empty");
+    if (!transcript || !empty) return;
+    const sync = () => empty.classList.toggle("hidden", transcript.children.length > 0);
+    new MutationObserver(sync).observe(transcript, { childList: true });
+    sync();
+
+    document.getElementById("empty-chips")?.addEventListener("click", (e) => {
+      const chip = e.target.closest(".empty-chip");
+      if (!chip) return;
+      const field = document.getElementById("user-input");
+      const form = document.getElementById("chat-form");
+      if (!field || !form) return;
+      field.value = chip.dataset.say || chip.textContent.trim();
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      form.requestSubmit();
+    });
+  }
+
   function setAvatarGender(gender) {
     const g = gender === "male" ? "male" : "female";
     window._gender = g;
@@ -103,6 +156,8 @@
       // in. Opening straight onto the thread meant it kept the default name while
       // the tab beside it said who you were actually talking to.
       nameCompanion(profile.companion_name);
+      facePortrait(profile.character);
+      watchThread();
       try { await loadHome(); } catch (e) { console.error("[flow] loadHome failed", e); }
     } else {
       startOnboarding();

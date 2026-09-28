@@ -432,9 +432,15 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
 
-      <!-- The orb is positioned into this slot by CSS; the canvas itself lives in
-           #avatar3d, which is a full-page layer in every other view. -->
-      <span class="chat-orb-slot" aria-hidden="true"></span>
+      <!-- Her face, not a coloured ball.
+           The orb takes the character's own colour, and Poppy's is #7c6ef0, so the
+           first thing anyone saw in an app called Poppys was a purple glass sphere
+           from some other product. The portraits have been sitting in
+           avatar/characters/ unused since July. The orb slot stays as the fallback
+           for a custom character, which has no portrait to find. -->
+      <span class="chat-orb-slot" aria-hidden="true">
+        <img id="chat-portrait" class="chat-portrait hidden" alt="" />
+      </span>
 
       <div class="chat-id">
         <strong id="call-name">Poppy</strong>
@@ -459,7 +465,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg>
         </button>
         <button type="button" id="vad-btn" class="chat-icon-btn" title="Auto-listen" aria-label="Toggle auto-listen">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3a9 9 0 0 0-9 9 9 9 0 0 0 9 9 9 9 0 0 0 9-9 9 9 0 0 0-9-9zm0 2a7 7 0 0 1 7 7 7 7 0 0 1-7 7 7 7 0 0 1-7-7 7 7 0 0 1 7-7zm0 3a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4zm0 2a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 10v4M9.5 6.5v11M14.5 8.5v7M19 11v2"/></svg>
         </button>
         <button type="button" id="memory-btn" class="chat-icon-btn" title="What she remembers about you" aria-label="What she remembers about you" data-pro-label="What {subj} remembers about you">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
@@ -470,8 +476,28 @@
     <section class="chat-thread" aria-label="Conversation">
       <div class="rail-scroll">
         <div id="memory-consent" class="hidden"></div>
+
+        <!-- The screen before anything is said.
+             It used to be two thirds of empty cream with one line of grey text at
+             the bottom, which reads as an app that failed to load rather than one
+             waiting for you. A thread with nothing in it still has a subject: her.
+             So the empty state is her, looking at you, with three ways in. The
+             chips are not suggestions of what to type, they are the opening move
+             someone cannot think of at 11pm, which is the whole reason the screen
+             was blank in the first place. -->
+        <div id="thread-empty">
+          <img id="empty-portrait" class="empty-portrait" alt="" />
+          <p class="empty-line" id="empty-line">I'm here whenever you are.</p>
+          <p class="empty-sub" id="empty-sub">Talk or type, whichever is easier right now.</p>
+          <div class="empty-chips" id="empty-chips">
+            <button type="button" class="empty-chip" data-say="Honestly, today was a lot.">Today was a lot</button>
+            <button type="button" class="empty-chip" data-say="Something good happened and I want to tell someone.">Something good happened</button>
+            <button type="button" class="empty-chip" data-say="I can't switch my head off tonight.">I can't switch off</button>
+          </div>
+        </div>
+
         <div id="transcript"></div>
-        <div id="hint">Tap the mic and just start speaking</div>
+        <div id="hint" class="hidden">Tap the mic and just start speaking</div>
       </div>
     </section>
 
@@ -508,11 +534,11 @@
       <span id="tab-thread-label">Poppy</span>
     </button>
     <button type="button" class="tab" data-tab="garden" data-on="false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M12 8c-3 0-5-2-5-4 3 0 5 1.5 5 4zM12 8c3 0 5-2 5-4-3 0-5 1.5-5 4zM12 15c-3.2 0-5.5-2.2-5.5-4.5 3.4 0 5.5 1.8 5.5 4.5zM12 15c3.2 0 5.5-2.2 5.5-4.5-3.4 0-5.5 1.8-5.5 4.5z"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21v-9"/><path d="M12 12c0-3.4 2.4-5.8 5.8-5.8C17.8 9.6 15.4 12 12 12z"/><path d="M12 16.5c0-2.9-2-4.9-4.9-4.9 0 2.9 2 4.9 4.9 4.9z"/></svg>
       Garden
     </button>
     <button type="button" class="tab" data-tab="memory" data-on="false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M9 7.5h7"/></svg>
       Memory
     </button>
     <button type="button" class="tab" data-tab="you" data-on="false">

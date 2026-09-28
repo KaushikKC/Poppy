@@ -922,7 +922,67 @@ body[data-view="chat"] #stage::before,
 body[data-view="chat"] #aurora,
 body[data-view="chat"] #stage-shade { display: none; }
 
-.chat-orb-slot { flex: none; width: 40px; height: 40px; }
+.chat-orb-slot { flex: none; width: 40px; height: 40px; position: relative; }
+.chat-portrait {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  border-radius: 50%; object-fit: cover;
+  /* The portraits are head-and-shoulders on a tall canvas, so a plain cover crop
+     centres on her collarbone. Pulling the frame up puts her face in the circle. */
+  object-position: 50% 12%;
+  box-shadow: var(--lift-1), inset 0 1px 0 rgba(255,255,255,0.28);
+  z-index: 8;
+}
+/* When there is a real portrait the orb underneath is not a fallback, it is a
+   purple ball behind her face. */
+body.has-portrait[data-view="chat"] #avatar3d { display: none; }
+
+/* ── The empty thread ─────────────────────────────────────────────────────
+   Two thirds of this screen was blank cream with one grey line at the bottom.
+   She is the subject of an empty thread as much as a full one, so she is what
+   is in it, with three openings for the person who cannot think of one. */
+#thread-empty {
+  /* Centred in the thread rather than sitting at the top of it: the dead space
+     was below the content, which is what made the screen look unfinished. */
+  min-height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 24px 22px;
+  text-align: center;
+  animation: fade-up var(--dur) var(--ease-out) both;
+}
+#thread-empty.hidden { display: none; }
+.empty-portrait {
+  width: 104px; height: 104px;
+  border-radius: 50%; object-fit: cover; object-position: 50% 12%;
+  box-shadow: var(--lift-2), inset 0 1px 0 rgba(255,255,255,0.28);
+}
+.empty-portrait.hidden { display: none; }
+.empty-line {
+  font-family: var(--font-display);
+  font-size: var(--t-h2); line-height: 1.3; color: var(--ink);
+  margin-top: 4px;
+}
+.empty-sub { font-size: var(--t-sm); color: var(--ink-muted); max-width: 25ch; }
+.empty-chips {
+  /* Stacked, not wrapped. Three pills of different widths wrapping two-and-one
+     reads as a layout accident; a column reads as a list of ways in. */
+  display: flex; flex-direction: column; align-items: stretch;
+  gap: 8px; margin-top: 12px; width: min(300px, 100%);
+}
+.empty-chip {
+  padding: 12px 16px; border-radius: var(--r-pill);
+  background: var(--glass-strong); border: 1px solid var(--glass-edge-lo);
+  box-shadow: var(--lift-1), var(--inner-top);
+  font-family: var(--font-ui); font-size: var(--t-sm); color: var(--ink-soft);
+  cursor: pointer;
+  transition: transform var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast);
+}
+.empty-chip:hover { color: var(--ink); border-color: var(--poppy-500); }
+.empty-chip:active { transform: scale(0.96); }
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
 body[data-view="chat"] #avatar3d {
   position: fixed; z-index: 6;
   top: calc(11px + env(safe-area-inset-top, 0px));
@@ -994,6 +1054,9 @@ body[data-view="chat"] #avatar3d {
   from { transform: scale(0.7) translateY(4px); opacity: 0; }
   to   { transform: none; opacity: 1; }
 }
+/* The book icon opened the memory panel, which is also what the Memory tab does,
+   two inches below it. Two doors to one room, one of them an unlabelled glyph. */
+body[data-view="chat"] #memory-btn { display: none; }
 #latency-badge {
   display: none; align-items: center; gap: 5px;
   height: 27px; padding: 0 10px; border-radius: var(--r-pill);
@@ -1027,8 +1090,12 @@ body[data-view="chat"] #avatar3d {
 .chat-thread .rail-scroll::-webkit-scrollbar { display: none; }
 #transcript {
   display: flex; flex-direction: column; gap: 10px;
-  /* The newest message is what you land on; history scrolls up behind it. */
-  margin-top: auto;
+  /* Starts at the top, the way every messaging app does.
+     This used to be margin-top:auto, which pinned a two-message conversation to
+     the composer and left the rest of the screen blank above it: the same void the
+     empty state had, except it survived the first reply. Landing on the newest
+     message is handled where it belongs, by chat.js scrolling to the end on every
+     append. */
 }
 #transcript:empty { display: none; }
 

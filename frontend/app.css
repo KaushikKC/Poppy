@@ -471,7 +471,8 @@ button.chip { cursor: pointer; }
   cursor: pointer;
   transition: color var(--dur-fast), background var(--dur-fast);
 }
-.tab[data-on="true"] { color: var(--ink); background: var(--surface-raised); }
+.tab[data-on="true"] { color: var(--poppy-500); font-weight: 600; }
+.tab[data-on="true"] svg { stroke-width: 2.1; }
 .tab--call { color: var(--poppy-500); }
 
 /* --- Call controls ------------------------------------------------- */
