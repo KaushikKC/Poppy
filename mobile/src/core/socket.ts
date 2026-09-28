@@ -306,9 +306,44 @@ export function createSocketHandler(): SocketHandler {
       const who = fullName ? fullName.split(/\s+/)[0] : undefined;
       const youAre = who ? ` You are talking to ${who}. Call them by their name.` : '';
 
+      // ── When it is, and whether you have met ───────────────────────────────
+      //
+      // Both reported by the same tester in the same session, and both are the same
+      // hole: the prompt stated neither, so a small model filled in whatever was
+      // plausible. Asked something at 7pm it answered "how's the morning been", and
+      // on the second message of a first conversation it opened "I remember our last
+      // conversation, we were talking about our weekend plans" — about a weekend
+      // that had never been mentioned.
+      //
+      // A model does not know it is ignorant. Left unsaid, "no shared history" is
+      // indistinguishable from "history I should recall", and inventing is the more
+      // cooperative-looking answer. Saying it outright costs about twenty tokens.
+      //
+      // These are facts, not placement instructions, which is why they can sit
+      // alongside the one instruction the on-device model will actually follow: they
+      // describe the world rather than asking for a shape of reply.
+      const hour = new Date().getHours();
+      const partOfDay =
+        hour < 5 ? 'the middle of the night'
+        : hour < 12 ? 'morning'
+        : hour < 17 ? 'afternoon'
+        : hour < 22 ? 'evening'
+        : 'late evening';
+      const weekday = new Date().toLocaleDateString(undefined, { weekday: 'long' });
+      const when = ` It is ${weekday} ${partOfDay} where they are.`;
+
+      // Empty history and no remembered facts is a first conversation. Saying so is
+      // what stops the fabricated callback.
+      const met =
+        session.history.length === 0 && !remembered
+          ? ' You have never spoken with them before. You have no shared history, so do not refer to earlier conversations or claim to remember anything about them yet.'
+          : '';
+
       let system =
         char.system_prompt +
         youAre +
+        when +
+        met +
         ' ' +
         persona.flavor +
         traits.asPromptBlock(profile.traits) +
