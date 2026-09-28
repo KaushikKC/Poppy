@@ -1426,7 +1426,7 @@ body[data-view="chat"] #memory-btn { display: none; }
 /* The design system passes a size to its Icon component; an inline SVG with no
    width or height instead fills whatever box it is given, which made every tab
    icon 87px and the bar tall enough to sit on top of the composer. */
-#tabbar .tab svg { flex: none; width: 21px; height: 21px; }
+#tabbar .tab svg { flex: none; width: 25px; height: 25px; }
 body[data-view="chat"] .chat-composer { margin-bottom: 74px; }
 /* ── The You screen ──────────────────────────────────────────────────────────
    Built like the memory vault, because that one renders correctly on a phone: a

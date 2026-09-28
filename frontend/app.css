@@ -465,14 +465,13 @@ button.chip { cursor: pointer; }
   background: none;
   color: var(--ink-muted);
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.005em;
   cursor: pointer;
   transition: color var(--dur-fast), background var(--dur-fast);
 }
 .tab[data-on="true"] { color: var(--poppy-500); font-weight: 600; }
-.tab[data-on="true"] svg { stroke-width: 2.1; }
 .tab--call { color: var(--poppy-500); }
 
 /* --- Call controls ------------------------------------------------- */
