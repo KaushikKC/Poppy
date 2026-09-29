@@ -1054,9 +1054,17 @@ body[data-view="chat"] #avatar3d {
   from { transform: scale(0.7) translateY(4px); opacity: 0; }
   to   { transform: none; opacity: 1; }
 }
-/* The book icon opened the memory panel, which is also what the Memory tab does,
-   two inches below it. Two doors to one room, one of them an unlabelled glyph. */
-body[data-view="chat"] #memory-btn { display: none; }
+/* Three buttons in the header, none of which earned the space.
+   The book opened the memory panel, which is what the Memory tab does two inches
+   below it. The phone opened a thread, so it promised a call and delivered a chat
+   — a tester said "when it said call I thought I have to call, but it suddenly
+   started the chat". The target glyph armed hands-free listening, which nobody
+   guessed from the icon and nobody had asked for.
+   Hidden rather than deleted: chat.js still binds all three, and a removed element
+   would be a null reference on a screen that has to work. */
+body[data-view="chat"] #memory-btn,
+body[data-view="chat"] #call-btn,
+body[data-view="chat"] #vad-btn { display: none; }
 #latency-badge {
   display: none; align-items: center; gap: 5px;
   height: 27px; padding: 0 10px; border-radius: var(--r-pill);
