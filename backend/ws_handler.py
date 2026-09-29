@@ -1,3 +1,4 @@
+import re
 import asyncio
 import io
 import uuid
@@ -40,6 +41,18 @@ conversation_history: list[dict] = []
 # answer a question the user resolved yesterday.
 _call_turn_base = 0
 
+
+# Mirrors GREETING in mobile/src/core/reply_shape.ts. Kept in step by hand: one regex
+# with one job, and a generator would be more machinery than the thing it generates.
+_GREETING = re.compile(
+    r"^\s*(hi|hey|hello|yo|hiya|good (morning|afternoon|evening)|how are you|"
+    r"how'?s it going|what'?s up|sup)\b[\s!,.?]*$",
+    re.I,
+)
+
+
+def _is_greeting(text: str) -> bool:
+    return bool(_GREETING.match(text or ""))
 
 def _to_last_sentence(reply: str) -> str:
     """Cut a capped reply back to its last whole sentence.
@@ -323,9 +336,30 @@ async def handle_chat(ws: WebSocket):
             # are who she is, so they apply in every mode instead of being re-picked
             # each call. See traits.py.
             traits_block = traits.as_prompt_block(profile.get("traits"))
+            # "Hi" was coming back as weather. The prompt invites her to bring her own
+            # day in, and with nothing else to go on that invitation is the loudest
+            # thing in a greeting turn, so hello got scenery instead of hello.
+            # Bottom of the ranking, like mobile: a greeting is never the turn where
+            # safety or the pact wants the slot. Kept in step with socket.ts.
+            greet_block = (
+                " They have just greeted you. Greet them back in one short line and ask"
+                " how they are. Do not describe where you are, what you are doing, or"
+                " how the day looks."
+                if not pact_block and _is_greeting(user_text)
+                else ""
+            )
+            # A greeting outranks disclosure, which is the block that says to open with
+            # a sentence of your own life and then a question. That is the everyday
+            # behaviour and it is right for the everyday turn; on "Hi" it is what
+            # produced "I've been thinking about my flower orders all week... what's been
+            # on your mind?" — an answer to a question nobody asked. Disclosure happens
+            # every call and loses nothing by yielding this one.
+            if greet_block:
+                disclosure_block = ""
             system_prompt = (
                 char["system_prompt"] + traits_block + identity_block + disclosure_block
                 + pact_block + rules_block + SAFETY_ADDENDUM + memory_block
+                + greet_block
             )
             # Detection always runs (it is what holds the pact block back on a
             # heavy turn), but everything the user sees or the model is told is on

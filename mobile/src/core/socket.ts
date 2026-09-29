@@ -17,7 +17,7 @@
  */
 
 import { runTurn } from './turn';
-import { speakIt } from './reply_shape';
+import { isGreeting, speakIt } from './reply_shape';
 import { awaitEngines } from './engines';
 import { playback } from './playback';
 import type { SocketHandler, SocketReply } from '../bridge/host';
@@ -284,6 +284,28 @@ export function createSocketHandler(): SocketHandler {
       // every call and loses nothing by yielding — and a 1B cannot follow it anyway.
       // Desktop keeps it: a 3B has the room and does follow it.
       const disclosureBlock = '';
+
+      // ── "Hi" ──────────────────────────────────────────────────────────────
+      //
+      // reply_shape.isGreeting() already caps a greeting at forty tokens, which fixed
+      // the paragraph but not what the paragraph was about: "Hi" still came back as
+      // "The sun's just beginning to set, and the world is still a blur of color."
+      // Short scenery instead of long scenery. Nobody answers hello like that, and it
+      // is the first thing a new user sees.
+      //
+      // The training set has eleven examples of the right shape — "Hey Kaushik! How's
+      // it going?" — so the model can do it; there are just eleven of them against
+      // thousands of rows where she talks about her day. This is the cheapest way to
+      // reach for the ones that exist.
+      //
+      // It enters the ranking rather than being appended, because the model follows
+      // exactly one placement instruction per turn. Bottom of the ranking: a greeting
+      // is never the turn where safety or the pact needs the slot, so in practice it
+      // only ever takes a slot nothing else wanted.
+      const greetBlock =
+        risk0.level === null && !pactDue && isGreeting(msg.text)
+          ? ' They have just greeted you. Greet them back in one short line and ask how they are. Do not describe where you are, what you are doing, or how the day looks.'
+          : '';
       // Her persona prompt carries the whole of who she is, so it replaces the
       // placeholder rather than being appended to it.
       // Traits sit with identity rather than with the momentary stance: they are who
@@ -351,7 +373,8 @@ export function createSocketHandler(): SocketHandler {
         SAFETY_ADDENDUM +
         remembered +
         pactBlock +
-        disclosureBlock;
+        disclosureBlock +
+        greetBlock;
 
       // Tone is momentary, so it is applied per turn and never remembered. With no
       // emotion (the iOS default, since voice detection is not shipped) this adds
