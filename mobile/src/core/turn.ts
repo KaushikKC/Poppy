@@ -59,6 +59,13 @@ export type TurnEvents = {
 
 export type TurnOptions = {
   system: string;
+  /**
+   * A reply written by code rather than generated, used for the one turn that must
+   * never be wrong. Set by the caller, which is where the decision belongs: this
+   * function's job is to turn text into a reply, spoken or typed, and it does not
+   * care whether the text came from a model. See greeting.ts.
+   */
+  greeting?: string;
   /** The user's own name, if known. See fixVocative() for what it is used for. */
   userName?: string;
   history?: Array<{ role: 'user' | 'assistant'; content: string }>;
@@ -258,6 +265,14 @@ export async function runTurn(
   let reply = '';
   let streamed = '';
   try {
+    // Hello does not go to the model. See greeting.ts for the three attempts that came
+    // before this and what each one came back with. Everything that is not an exact
+    // greeting falls straight through to generation, unchanged.
+    const canned = opts.greeting;
+    if (canned) {
+      reply = canned;
+      events.onToken?.(canned);
+    } else
     reply = await llm.complete(
       opts.system,
       [...(opts.history ?? []), { role: 'user', content: text }],

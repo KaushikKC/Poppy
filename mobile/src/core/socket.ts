@@ -18,6 +18,7 @@
 
 import { runTurn } from './turn';
 import { isGreeting, speakIt } from './reply_shape';
+import * as greeting from './greeting';
 import { awaitEngines } from './engines';
 import { playback } from './playback';
 import type { SocketHandler, SocketReply } from '../bridge/host';
@@ -405,11 +406,27 @@ export function createSocketHandler(): SocketHandler {
         // Measured per turn: the character, the message and history are all sized
         // against the 2048 window before anything is sent, so a long reply or a
         // pasted block can never push the system prompt off the left edge.
+        // Hello is answered here, not by the model. Three prompt attempts are recorded
+        // in greeting.ts; the short version is that a 0.6B does not hold an instruction
+        // reliably, and this is the first thing a new user ever sees.
+        //
+        // Still goes through runTurn so nothing else changes shape: it is spoken if
+        // they spoke, typed if they typed, and it lands in history the same way.
+        const greetText =
+          greetBlock
+            ? greeting.greetingReply(
+                char.name ?? 'Poppy',
+                new Date().getHours(),
+                session.history.length === 0 && (profile.total_calls ?? 0) <= 1,
+              )
+            : undefined;
+
         const sized = fitContext(session.history, system, msg.text);
         const said = await runTurn(
           sized.text,
           {
             system,
+            greeting: greetText,
             history: sized.history,
             // So a reply that opens "Sam, …" is corrected to their own name. See
             // fixVocative() in turn.ts for why the model needs this.
