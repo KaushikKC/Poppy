@@ -304,6 +304,30 @@ async function loadOnce(onProgress: (msg: string) => void): Promise<void> {
           messages: [{ role: 'system', content: system }, ...messages],
           n_predict: maxTokens ?? MAX_TOKENS_SPOKEN,
           temperature: 0.7,
+          // ── Sampling, which was left at llama.cpp's defaults ──────────────
+          //
+          // Only temperature was ever set, so there was no repetition penalty at
+          // all. On a 0.6B that is most of what testers called "templatey" and
+          // "blabbering": with nothing pushing tokens it has already used down,
+          // the cheapest continuation is the text nearest to hand, which is the
+          // system prompt. Hence Leo answering "what can you do for me" with "I've
+          // been working on fixing bicycles out of a garage in Chicago" — his
+          // character card, read back almost verbatim — and replies that circle the
+          // same clause twice in three sentences.
+          //
+          // A penalty is not a quality setting on a model this size, it is the
+          // difference between a reply and an echo. 1.12 over the last 128 tokens
+          // is the usual small-model figure: high enough to stop the echo, low
+          // enough that it can still say someone's name twice in a paragraph.
+          penalty_repeat: 1.12,
+          penalty_last_n: 128,
+          // Cutting the tail matters more here than temperature does. Without it
+          // 0.7 still samples from the whole vocabulary, and a small model's tail
+          // is where the non-sequiturs live ("watching the lights go down on the
+          // TV").
+          top_p: 0.92,
+          top_k: 40,
+          min_p: 0.05,
           stop: ['</s>', '<|eot_id|>'],
         },
         (data: { token: string }) => {
