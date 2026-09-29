@@ -41,6 +41,28 @@ conversation_history: list[dict] = []
 _call_turn_base = 0
 
 
+def _to_last_sentence(reply: str) -> str:
+    """Cut a capped reply back to its last whole sentence.
+
+    The mirror of toLastSentence() in mobile/src/core/turn.ts, and here for the same
+    reason: a generation that stops because it hit the token cap ends mid-clause, and
+    "Biscuit, who's been sleeping on my lap, is snuggled into" reads as the app breaking
+    rather than as her being brief. Reported by a tester on the phone; desktop had the
+    same hole and no trim at all.
+
+    Kept in step by hand rather than generated: it is one rule with one constant, and a
+    generator would be more machinery than the thing it generates. The forty is the
+    same on both sides — below that there is no sentence worth keeping on its own, so
+    the raw text is the better of two bad options.
+    """
+    text = (reply or "").strip()
+    if not text or text[-1] in ".!?…\"')":
+        return text
+    cut = max(text.rfind(". "), text.rfind("! "), text.rfind("? "))
+    if cut < 40:
+        return text
+    return text[: cut + 1]
+
 def mark_call_start() -> None:
     """Called from /call/open so per-call reads have a boundary to work from."""
     global _call_turn_base
@@ -343,7 +365,7 @@ async def handle_chat(ws: WebSocket):
                 async for token in stream_reply(sized_history, sized_text, system_prompt):
                     full_reply.append(token)
                     await ws.send_json({"type": "token", "text": token})
-                assistant_text = "".join(full_reply)
+                assistant_text = _to_last_sentence("".join(full_reply))
                 await _reply_video(ws, assistant_text, reply_voice)
 
                 conversation_history.append({"role": "user", "content": user_text})
@@ -353,7 +375,12 @@ async def handle_chat(ws: WebSocket):
                     _db_save(session_id, "user", user_text),
                     _db_save(session_id, "assistant", assistant_text),
                 )
-                await ws.send_json({"type": "done", "sessionId": session_id})
+                # The finished reply, not the token stream: a capped generation is
+                # trimmed back to its last whole sentence, and the page builds its
+                # bubble by accumulating tokens, so without this the severed tail
+                # stays on screen while the voice and the history have the clean
+                # version. Kept in step with mobile/src/core/socket.ts.
+                await ws.send_json({"type": "done", "sessionId": session_id, "text": assistant_text})
                 continue
 
             # How it came in decides how it goes out: speak to her and she speaks
@@ -377,7 +404,7 @@ async def handle_chat(ws: WebSocket):
                     if not spoken:
                         await ws.send_json({"type": "token", "text": token})
 
-                assistant_text = "".join(full_reply)
+                assistant_text = _to_last_sentence("".join(full_reply))
 
                 # Decided on the finished reply, because that is the only point the
                 # length is known — and it is known for free, before a sound is made.
@@ -403,7 +430,12 @@ async def handle_chat(ws: WebSocket):
                 # Memory is no longer captured silently here. Nothing durable is
                 # stored without consent (§5): after the turn the frontend calls
                 # /memory/extract to get candidates and asks the user to Save them.
-                await ws.send_json({"type": "done", "sessionId": session_id})
+                # The finished reply, not the token stream: a capped generation is
+                # trimmed back to its last whole sentence, and the page builds its
+                # bubble by accumulating tokens, so without this the severed tail
+                # stays on screen while the voice and the history have the clean
+                # version. Kept in step with mobile/src/core/socket.ts.
+                await ws.send_json({"type": "done", "sessionId": session_id, "text": assistant_text})
             except Exception:
                 # On barge-in the socket closes mid-stream. Nothing is queued now
                 # that synthesis happens once, after generation, so there is nothing

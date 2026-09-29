@@ -441,7 +441,16 @@ export function createSocketHandler(): SocketHandler {
         const tip = suggest.observe(msg.text, persona.key);
         if (tip) reply.text(JSON.stringify({ type: 'suggestion', ...tip }));
 
-        reply.text(JSON.stringify({ type: 'done' }));
+        // The finished reply, not the stream.
+        //
+        // A capped generation stops mid-sentence, and turn.ts already trims that back
+        // to the last whole sentence — but only for what gets spoken and stored. The
+        // page builds its bubble by accumulating tokens, so the tail the trim removed
+        // stayed on screen: "Biscuit, who's been sleeping on my lap, is snuggled into",
+        // reported from a real conversation. Sending the trimmed text with done lets
+        // the page replace what it accumulated, so screen, voice and history are the
+        // same sentence.
+        reply.text(JSON.stringify({ type: 'done', text: said }));
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         reply.text(JSON.stringify({ type: 'error', message }));

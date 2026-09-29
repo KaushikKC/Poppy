@@ -713,6 +713,17 @@ window.sendMessage = async function sendMessage(text, spoken = false, opts = {})
       // "done" = the LLM finished generating (all audio is now sent); the voice
       // may still play for many seconds. Mark it and let the audio-synced reveal
       // loop finish the text and reset the avatar when the voice truly ends.
+      //
+      // done carries the finished reply, which is not always what the tokens added up
+      // to: a capped generation ends mid-sentence and is trimmed back to the last whole
+      // one before it is spoken or stored. Without this the bubble kept the severed
+      // tail while the voice and the history had the clean version. Shorter text also
+      // means the reveal has to be pulled back, or it would sit past the end.
+      if (msg.text) {
+        target = msg.text;
+        if (shownF > target.length) shownF = target.length;
+        renderShown();
+      }
       llmDone = true;
       replyBubble.classList.remove("streaming");
       ws.close();
