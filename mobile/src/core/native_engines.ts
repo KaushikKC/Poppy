@@ -320,7 +320,16 @@ async function loadOnce(onProgress: (msg: string) => void): Promise<void> {
           // is the usual small-model figure: high enough to stop the echo, low
           // enough that it can still say someone's name twice in a paragraph.
           penalty_repeat: 1.12,
-          penalty_last_n: 128,
+          // 128 covers one reply and nothing before it, so it stopped her repeating
+          // herself inside an answer and did nothing about repeating herself across
+          // answers. With history now actually reaching the model, that is the visible
+          // failure: "get you out of bed and feeling fresh" came back in three
+          // consecutive replies, each time to a different question.
+          //
+          // 512 reaches back over roughly the last two exchanges, which is where the
+          // echo comes from. Further would start penalising the user's own words and
+          // her character's vocabulary, which is not repetition, it is her.
+          penalty_last_n: 512,
           // Cutting the tail matters more here than temperature does. Without it
           // 0.7 still samples from the whole vocabulary, and a small model's tail
           // is where the non-sequiturs live ("watching the lights go down on the

@@ -92,6 +92,12 @@ export const DEFAULTS: Profile = {
   current_streak: 0,
   longest_streak: 0,
   total_calls: 0,
+  // In DEFAULTS, not only in the type: update() writes a key only if it is here, so a
+  // field declared on Profile alone is dropped on every save without a word. The
+  // comment on streak_* above records the same bug costing a day; this one cost a
+  // build, with her introducing herself on every turn because the flag saying she
+  // already had never survived being written.
+  greeted_once: false,
   streak_last_date: null,
   streak_freezes: 1, // one in hand from the start, so a first miss is soft
   streak_fragments: 0,
