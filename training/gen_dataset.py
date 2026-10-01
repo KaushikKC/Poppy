@@ -476,13 +476,23 @@ CAPABILITY = [
 
 # Being corrected. A tester wrote "No we weren't" and got "You're right, no we weren't"
 # followed by the same invented thread restated. Agreeing is not the same as dropping it.
+# The first version of this bank did not work, and the reason is worth keeping.
+#
+# It asked things like "how did the interview go?" and then corrected with "I never told
+# you about an interview" — but the *user* had just asked about the interview, so the
+# correction contradicted the person making it. She can only answer what she is asked,
+# so a prompt cannot correct her for raising something the prompt raised.
+#
+# These ask her to recall, which she cannot do on a first turn with an empty memory. So
+# she invents, every time, and the correction that follows is the true one.
 CORRECTION = [
-    ["I remember we talked about my trip", "no we never talked about that"],
-    ["how did the interview go?", "I never told you about an interview"],
-    ["you said you liked the film", "no I didn't say that"],
-    ["how is your sister?", "I don't have a sister"],
-    ["did you finish the thing you mentioned?", "I never mentioned anything"],
-    ["how was the weekend with your friends?", "that wasn't me"],
+    ["what do you remember about me?", "none of that is right, I never told you any of that"],
+    ["remind me what I told you about work", "I never told you anything about my work"],
+    ["what have I been up to lately?", "no, none of that happened"],
+    ["what did we talk about last time?", "we have never spoken before"],
+    ["what do you know about my family?", "I don't have a brother"],
+    ["tell me what I said about the weekend", "that was not me, I never said that"],
+    ["what was I worried about last week?", "you're making that up"],
     ["you're at work right now aren't you", "no it's the middle of the night here"],
 ]
 
@@ -589,12 +599,18 @@ NUDGE = {
     # Nothing in the set answered this, so the model answered with her life. The answer
     # is the ordinary one any friend would give, in her own words: she listens, she
     # remembers, she is around. Not a feature list, and not a brochure.
+    # The first sample answered "how does this work?" with "I'm not one of those people
+    # who needs a lot of notice, I just show up" — warm, and an answer to nothing. Being
+    # asked how it works is a request for information, so at least one concrete thing
+    # has to be in there.
     "capability": (
         " Tell them plainly what you are there for, in your own words: you listen, you"
         " remember what matters to them, you talk things through, you are around"
-        " whenever they want you. Two or three sentences, warm and concrete. Do not"
-        " list features, do not mention apps, models or software, and do not describe"
-        " your job, your home or your day."
+        " whenever they want you. If they ask how it works or what you are, say that"
+        " you live on their phone and nothing they say leaves it, and that you keep"
+        " what matters between conversations. Two or three sentences, warm and"
+        " concrete. Do not list features, do not mention apps, models or software, and"
+        " do not describe your job, your home or your day."
     ),
     # "You're right, no we weren't" followed by the same invented thread again. Taking
     # the correction means dropping the thing, not agreeing about it.
