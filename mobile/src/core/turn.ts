@@ -189,8 +189,18 @@ function visibleSoFar(acc: string): string {
 function withoutReasoning(reply: string): string {
   const left = reply.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<think>[\s\S]*$/i, '').trim();
   // A reply that was nothing but reasoning leaves nothing to say. Better the raw text
-  // than an empty turn that looks like she ignored them.
-  return left || reply.trim();
+  // than an empty turn that looks like she ignored them — but raw with the markers
+  // taken out, not raw as it came.
+  //
+  // This is how "<think>" ended up on screen three times in one conversation, and read
+  // out loud in a voice note. The model opened with the tag and then simply answered,
+  // never closing it: the second replace deletes an unclosed block to the end, which
+  // took the whole reply, and the fallback handed back the original — tag and all.
+  //
+  // v4 did not do this and the longer-trained model does, which is the base showing
+  // through: Qwen3 has a thinking mode, and more training on top of it surfaced the
+  // habit rather than removing it.
+  return left || reply.replace(/<\/?think>/gi, '').trim();
 }
 
 /**
