@@ -211,7 +211,33 @@ export class PcmPlayer {
     this.ctx = new AudioContext({ sampleRate: preferredRate });
   }
 
-  play(samples: number[], sampleRate: number): Promise<void> {
+  async play(samples: number[], sampleRate: number): Promise<void> {
+    // ── Why this is here ──────────────────────────────────────────────────────
+    //
+    // Reported from a phone: her voice note appeared with a transcript and played no
+    // sound, while the user's own recording played back fine. No error was logged,
+    // because nothing failed: a suspended context accepts a buffer, starts it, and
+    // makes no sound.
+    //
+    // iOS suspends an AudioContext when the audio session is reconfigured, and the
+    // log shows that happening on every single recording:
+    // "[AudioSessionManager] Configured audio session: PlayAndRecord". So the context
+    // that was running when the app started is not necessarily running by the time
+    // she answers — and a reply that follows a voice message is exactly the case that
+    // has just reconfigured it.
+    //
+    // onEnded never fires for a source on a suspended context either, so the playback
+    // queue would wait on that phrase for good: the second symptom, a reply after
+    // which nothing else is ever spoken.
+    if (this.ctx.state !== 'running') {
+      console.log(`[audio] context was ${this.ctx.state}; resuming before playback`);
+      try {
+        await this.ctx.resume();
+      } catch (err) {
+        console.log(`[audio] could not resume the context: ${err}`);
+      }
+    }
+
     const target = this.ctx.sampleRate || sampleRate;
 
     if (!this.logged) {
@@ -221,6 +247,11 @@ export class PcmPlayer {
         (target === sampleRate ? '' : ' -> resampling to keep the pitch right'),
       );
     }
+
+    console.log(
+      `[audio] playing ${(samples.length / sampleRate).toFixed(1)}s at ${sampleRate}Hz` +
+      ` (context ${this.ctx.state})`,
+    );
 
     const data = target === sampleRate ? samples : resampleTo(samples, sampleRate, target);
     const buf = this.ctx.createBuffer(1, data.length, target);
