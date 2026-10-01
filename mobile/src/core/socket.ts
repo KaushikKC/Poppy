@@ -412,14 +412,23 @@ export function createSocketHandler(): SocketHandler {
         //
         // Still goes through runTurn so nothing else changes shape: it is spoken if
         // they spoke, typed if they typed, and it lands in history the same way.
-        const greetText =
-          greetBlock
-            ? greeting.greetingReply(
-                char.name ?? 'Poppy',
-                new Date().getHours(),
-                session.history.length === 0 && (profile.total_calls ?? 0) <= 1,
-              )
-            : undefined;
+        // "Have we met" cannot be read from the session. Every message opens its own,
+        // so session.history is empty on all of them, and she introduced herself three
+        // times in a row on a tester's phone: "Hey, I'm Poppy. Good to finally hear
+        // from you" to "Hi", then again to "How are you?", then again.
+        //
+        // It is a fact about the relationship, not about the connection, so it lives
+        // where the rest of those facts live.
+        const greetText = greetBlock
+          ? greeting.greetingReply(
+              char.name ?? 'Poppy',
+              new Date().getHours(),
+              !profile.greeted_once,
+            )
+          : undefined;
+        if (greetText && !profile.greeted_once) {
+          await companion.update({ greeted_once: true });
+        }
 
         const sized = fitContext(session.history, system, msg.text);
         const said = await runTurn(

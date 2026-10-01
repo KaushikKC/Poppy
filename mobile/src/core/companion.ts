@@ -27,6 +27,12 @@ export type Profile = {
   longest_streak: number;
   total_calls: number;
   update_check_off?: boolean;
+  /**
+   * Whether she has ever introduced herself. See greeting.ts: the first hello names
+   * her, every later one does not, and "first" cannot be read from the session
+   * because each message opens its own.
+   */
+  greeted_once?: boolean;
   update_seen?: Record<string, unknown>;
 
   // Streak state, owned by streak.ts. Declared here because update() writes only

@@ -67,8 +67,21 @@ function firstEver(name: string): string[] {
   ];
 }
 
+/**
+ * Never the same line twice running.
+ *
+ * Reported from a phone: three greetings in a row came back word for word identical,
+ * which reads as a recording rather than a person. Random choice from five lines
+ * repeats about one time in five, and a repeat is exactly the tell this screen cannot
+ * afford.
+ */
+let last = '';
+
 function pick(list: string[]): string {
-  return list[Math.floor(Math.random() * list.length)];
+  const fresh = list.filter((l) => l !== last);
+  const from = fresh.length ? fresh : list;
+  last = from[Math.floor(Math.random() * from.length)];
+  return last;
 }
 
 /**
