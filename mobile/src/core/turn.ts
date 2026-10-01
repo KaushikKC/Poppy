@@ -285,7 +285,23 @@ export async function runTurn(
     } else
     reply = await llm.complete(
       opts.system,
-      [...(opts.history ?? []), { role: 'user', content: text }],
+      // ── /no_think ─────────────────────────────────────────────────────────
+      //
+      // Qwen3 is a thinking model and the fine-tune sits on top of that, so it
+      // reasons before answering whether or not anyone wants it to. Stripping the
+      // <think> markers afterwards cleans up the tags and leaves the reasoning, which
+      // is written *about* the user rather than to them: "I think I should tell him
+      // about the movie… His name is Kaushik, and he's feeling a bit bored today."
+      // Her own notes, read out in a voice note, in the third person.
+      //
+      // The flag is what the Qwen3 chat template reads to skip thinking entirely, and
+      // it goes on the user turn because that is where the template looks for it.
+      // Measured against the shipped weights: without it the reply is reasoning, with
+      // it the reply is an answer.
+      //
+      // Appended here and nowhere else, so the text stored in history, shown on screen
+      // and spoken aloud never contains it.
+      [...(opts.history ?? []), { role: 'user', content: `${text} /no_think` }],
       (token) => {
         reply += token;
         // A spoken turn sends nothing at all while it generates. A reply that can be
