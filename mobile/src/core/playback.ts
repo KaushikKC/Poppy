@@ -72,7 +72,13 @@ export class Playback {
   }
 
   push(samples: Float32Array | number[], sampleRate: number): void {
-    if (this.stopped) return;
+    if (this.stopped) {
+      // Said out loud, because this is the one failure here that produces no error,
+      // no sound and a perfectly normal-looking voice note on screen. It cost two
+      // rounds of device logs to find the first time.
+      console.log('[audio] dropped a reply: the queue is latched off until the next turn');
+      return;
+    }
     // Kept as it is played, so the bubble can offer it again afterwards. Desktop gets
     // this for free by holding the bytes the socket delivered; here the samples never
     // leave this side, so this is the only copy there will be.
@@ -117,6 +123,25 @@ export class Playback {
     this.stopped = true;
     this.queue = [];
     this.sink?.({ t: 'audio:end', bargeIn: true });
+  }
+
+  /**
+   * Silence what is sounding without latching the queue off.
+   *
+   * stop() is barge-in: it means "she is wrong, do not say the rest", and the latch is
+   * what makes that stick until the next turn arms it again. Pausing or finishing a
+   * voice note means nothing of the kind, but it was calling the same method — so
+   * playing back your own recording turned her off, and the reply already being
+   * synthesised was dropped by push() on arrival. Silently, because a dropped push is
+   * not an error.
+   *
+   * That is the shape of the report: her voice note arrives with a transcript and no
+   * sound, while the user's own recording plays perfectly, and from then on nothing
+   * she says is ever heard.
+   */
+  silence(): void {
+    this.queue = [];
+    this.sink?.({ t: 'audio:end' });
   }
 
   /** Ready for another turn. */

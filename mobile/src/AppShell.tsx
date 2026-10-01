@@ -323,12 +323,17 @@ export default function AppShell() {
         // Both, because the page cannot know which one is making the sound. A reply is
         // played by the live queue as it is synthesised and by the clip player on every
         // pass after that, and the pause button is the same button either way.
-        playback.stop();
+        //
+        // silence() rather than stop(): stop() latches the queue off until a turn
+        // arms it again, which is right for barge-in and wrong for a pause button.
+        // Tapping play on your own voice note sent this, and every reply after it was
+        // dropped before it reached the speaker.
+        playback.silence();
         clipPlayer.pause();
         return true;
       }
       if (msg.t === 'clip:stop') {
-        playback.stop();
+        playback.silence();
         clipPlayer.stop();
         return true;
       }
