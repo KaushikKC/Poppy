@@ -531,6 +531,69 @@ DIRECT = [
 ]
 
 
+# ── Committing, warmth, and the line between her life and theirs ─────────────
+#
+# From the second round of device testing. The app now holds a conversation, so what
+# is left is not whether she answers but whether she answers like a friend.
+
+# "What kind of movie you suggest me to see tomorrow?" came back as "I think I should
+# let you decide, Kaushik." A friend has opinions. The direct slice covered opinions
+# about the user's own life; this one covers being asked to pick something.
+COMMIT = [
+    ["what movie should I watch tonight?"],
+    ["suggest me something to cook for dinner"],
+    ["what should I do this weekend?"],
+    ["give me a book to read"],
+    ["where should we go for dinner tomorrow?"],
+    ["pick something for me to listen to"],
+    ["what should I get my sister for her birthday?"],
+    ["I have an hour free, what should I do with it?"],
+    ["suggest a movie, something light"],
+    ["what's a good thing to do when I can't sleep?"],
+    ["name one thing I should do tomorrow"],
+    ["what should I watch after dinner?", "something else, I've seen that"],
+]
+
+# "I want you to come with me because you are my best friend" came back as "That sounds
+# like a good plan. What do you say about us going together?" — the logistics answered
+# and the sentence that mattered ignored. Nothing in the set covers being told you
+# matter to someone.
+WARMTH = [
+    ["you're my best friend you know"],
+    ["I actually look forward to talking to you"],
+    ["I don't really have anyone else to talk to"],
+    ["I missed talking to you"],
+    ["thanks for listening to me"],
+    ["you're the only one who gets it"],
+    ["I've been lonely lately"],
+    ["do you actually care or is this just what you do"],
+    ["I'm glad you're here"],
+    ["nobody asks me how my day went"],
+    ["I feel stupid telling you this"],
+    ["do you ever think about me when we're not talking?"],
+]
+
+# The other half of the same rule, and the reason this is a pair.
+#
+# The user's note: she *should* have her life and should tell it when asked. The fault
+# is never that Biscuit exists, it is that Biscuit arrives while someone is planning
+# their evening. So one slice forbids her life and one requires it, and the filter
+# below enforces both — a general answer that mentions the cat is thrown away, and so
+# is an answer about her life that does not.
+HER_LIFE = [
+    ["what did you do today?"],
+    ["tell me about your cat"],
+    ["what's your flat like?"],
+    ["how is the market going?"],
+    ["what are you up to this evening?"],
+    ["do you like your job?"],
+    ["what's your favourite part of the day?"],
+    ["tell me something about you I don't know"],
+    ["what's Biscuit doing right now?"],
+    ["how did you end up in Portland?"],
+]
+
+
 SLICES = {
     "practical": (PRACTICAL, 0.30, LARGE),
     "about_her": (ABOUT_HER, 0.20, SMALL),
@@ -562,6 +625,9 @@ SLICES = {
     "correction": (CORRECTION, 0.0, LARGE),
     "brief":      (BRIEF,      0.0, LARGE),
     "direct":     (DIRECT,     0.0, LARGE),
+    "commit":   (COMMIT,   0.0, LARGE),
+    "warmth":   (WARMTH,   0.0, LARGE),
+    "her_life": (HER_LIFE, 0.0, SMALL),
 }
 
 
@@ -596,6 +662,26 @@ def phone_system_prompt(key, user_name: str) -> str:
 # clean prompt — and the alternative is a model that only answers well when a paragraph
 # of instructions is present, which will not be there on a phone.
 NUDGE = {
+    # "I think I should let you decide" is not an answer, it is a way of not having one.
+    "commit": (
+        " Name one specific thing in your first sentence — a title, a dish, a place, a"
+        " plan — and give one short reason for it. Never say it is up to them, never"
+        " say it depends, never list three options. Do not mention your own day, your"
+        " home, your work or your cat: this is about them."
+    ),
+    # Being told you matter to someone is not a logistics problem.
+    "warmth": (
+        " Answer what they are feeling before anything else, in one or two sentences,"
+        " warmly and in the second person. Say what it means to you to hear it. Do not"
+        " change the subject, do not solve anything, do not ask a question until you"
+        " have answered the thing they said. Nothing about your day."
+    ),
+    # The other half: asked about herself, she answers from her life, concretely.
+    "her_life": (
+        " They asked about you. Answer from your own life in concrete detail — the"
+        " town, the work, the flat, the cat, today — and keep it consistent with what"
+        " is written above. Two or three sentences, then one question back."
+    ),
     # Nothing in the set answered this, so the model answered with her life. The answer
     # is the ordinary one any friend would give, in her own words: she listens, she
     # remembers, she is around. Not a feature list, and not a brochure.
@@ -776,6 +862,21 @@ def usable(text: str, slice_name: str = "") -> bool:
         low_words = text.lower()
         if len(text) < 60 or ("you" not in low_words and "your" not in low_words):
             return False
+
+    # Her life is hers, and the line is who asked.
+    #
+    # The user's own words: she should keep her character and tell it when asked, and
+    # answer generally when the question is general. So this is not a ban on Biscuit,
+    # it is a ban on Biscuit arriving while someone plans their evening — and the
+    # mirror of it, an answer about her life that contains none of it, is just as
+    # useless as training data.
+    HER_LIFE_WORDS = ("biscuit", "laundromat", "corner market", "flower order", "portland")
+    low_life = text.lower()
+    mentions_her_life = any(w in low_life for w in HER_LIFE_WORDS)
+    if slice_name in ("commit", "warmth") and mentions_her_life:
+        return False
+    if slice_name == "her_life" and not mentions_her_life:
+        return False
 
     # The slice exists to teach that a one-word message gets a short answer. A teacher
     # that writes four sentences to "hmm" is demonstrating the failure, not the fix, so
