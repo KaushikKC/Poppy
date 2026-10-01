@@ -41,10 +41,23 @@ const SYSTEM_PROMPT =
   'You are {name}, a warm, calm voice companion. Reply in 2 to 4 short spoken ' +
   'sentences. Be gentle and natural, never clinical.';
 
+/**
+ * The conversation, which outlives any one socket.
+ *
+ * It used to live on the session, and the page opens a socket per message and closes
+ * it on done — so close() deleted the history every time and the next message arrived
+ * with none. Every turn on a phone was turn one. That is the whole of "the chat is not
+ * understanding what I am saying": she was not forgetting, she was never told.
+ *
+ * Module level, exactly like conversation_history in ws_handler.py, which is why
+ * desktop never had this. Cleared by clearHistory() when the companion changes, the
+ * same as there.
+ */
+const history: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+
 type Session = {
   reply: SocketReply;
   abort: AbortController;
-  history: Array<{ role: 'user' | 'assistant'; content: string }>;
   /** Turns in this call, so the pact is raised at the right moment. */
   turns: number;
 };
@@ -190,7 +203,7 @@ export function createSocketHandler(): SocketHandler {
       // Only the chat socket exists so far. Anything else is refused rather than
       // silently accepted, so a typo in a URL fails visibly.
       if (!url.includes('/ws/chat')) return false;
-      sessions.set(id, { reply, abort: new AbortController(), history: [], turns: 0 });
+      sessions.set(id, { reply, abort: new AbortController(), turns: 0 });
       return true;
     },
 
@@ -358,7 +371,7 @@ export function createSocketHandler(): SocketHandler {
       // Empty history and no remembered facts is a first conversation. Saying so is
       // what stops the fabricated callback.
       const met =
-        session.history.length === 0 && !remembered
+        history.length === 0 && !remembered
           ? ' You have never spoken with them before. You have no shared history, so do not refer to earlier conversations or claim to remember anything about them yet.'
           : '';
 
@@ -430,7 +443,7 @@ export function createSocketHandler(): SocketHandler {
           await companion.update({ greeted_once: true });
         }
 
-        const sized = fitContext(session.history, system, msg.text);
+        const sized = fitContext(history, system, msg.text);
         const said = await runTurn(
           sized.text,
           {
@@ -467,8 +480,11 @@ export function createSocketHandler(): SocketHandler {
           },
         );
 
-        session.history.push({ role: 'user', content: msg.text });
-        session.history.push({ role: 'assistant', content: said });
+        history.push({ role: 'user', content: msg.text });
+        history.push({ role: 'assistant', content: said });
+        // Bounded here as well as in fitContext: that one sizes what is sent, this one
+        // stops the array itself growing for the life of the app.
+        while (history.length > MAX_HISTORY_TURNS * 2) history.shift();
 
         // Did they just agree a time out loud? Read it from what they said, not from
         // a form. A decline is recorded separately so she stops asking.
@@ -532,7 +548,7 @@ export function createSocketHandler(): SocketHandler {
  * switches; this is the in-memory context, which did not.
  */
 export function clearHistory(): void {
-  for (const session of sessions.values()) session.history = [];
+  history.length = 0;
 }
 
 export function activeSessions(): number {
