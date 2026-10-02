@@ -60,10 +60,11 @@ export type TurnEvents = {
 export type TurnOptions = {
   system: string;
   /**
-   * A reply written by code rather than generated, used for the one turn that must
-   * never be wrong. Set by the caller, which is where the decision belongs: this
-   * function's job is to turn text into a reply, spoken or typed, and it does not
-   * care whether the text came from a model. See greeting.ts.
+   * A reply written by code rather than generated, used for the two kinds of turn
+   * that must never be wrong: hello, and someone saying they have no one. Set by the
+   * caller, which is where the decision belongs: this function's job is to turn text
+   * into a reply, spoken or typed, and it does not care whether the text came from a
+   * model. See greeting.ts and warmth.ts.
    */
   greeting?: string;
   /** The user's own name, if known. See fixVocative() for what it is used for. */

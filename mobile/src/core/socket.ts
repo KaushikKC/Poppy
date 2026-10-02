@@ -19,6 +19,7 @@
 import { runTurn } from './turn';
 import { isGreeting, speakIt } from './reply_shape';
 import * as greeting from './greeting';
+import * as warmth from './warmth';
 import { awaitEngines } from './engines';
 import { playback } from './playback';
 import type { SocketHandler, SocketReply } from '../bridge/host';
@@ -439,6 +440,17 @@ export function createSocketHandler(): SocketHandler {
               !profile.greeted_once,
             )
           : undefined;
+
+        // The other turn code owns, for the opposite reason to hello. Hello is written
+        // because the model is bad at something easy; this is written because the model
+        // is unreliable at something that matters, and the bad tail does real harm —
+        // "I'm the only person you've ever been with" to someone saying they are alone.
+        // See warmth.ts for the measurement.
+        //
+        // Below safety in the ranking and above everything else: someone in the acute
+        // tier gets the crisis path, not a warm line.
+        const warmText =
+          !greetText && risk0.level === null ? warmth.warmthReply(msg.text) : null;
         if (greetText && !profile.greeted_once) {
           await companion.update({ greeted_once: true });
         }
@@ -448,7 +460,7 @@ export function createSocketHandler(): SocketHandler {
           sized.text,
           {
             system,
-            greeting: greetText,
+            greeting: greetText ?? warmText ?? undefined,
             history: sized.history,
             // So a reply that opens "Sam, …" is corrected to their own name. See
             // fixVocative() in turn.ts for why the model needs this.
