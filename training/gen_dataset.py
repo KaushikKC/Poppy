@@ -582,15 +582,15 @@ WARMTH = [
 # is an answer about her life that does not.
 HER_LIFE = [
     ["what did you do today?"],
-    ["tell me about your cat"],
-    ["what's your flat like?"],
-    ["how is the market going?"],
     ["what are you up to this evening?"],
-    ["do you like your job?"],
+    ["tell me about where you live"],
+    ["how's work going?"],
+    ["do you have any pets?"],
+    ["what's your place like?"],
     ["what's your favourite part of the day?"],
     ["tell me something about you I don't know"],
-    ["what's Biscuit doing right now?"],
-    ["how did you end up in Portland?"],
+    ["what did you have for dinner?"],
+    ["what's the best thing that happened to you this week?"],
 ]
 
 
@@ -671,10 +671,14 @@ NUDGE = {
     ),
     # Being told you matter to someone is not a logistics problem.
     "warmth": (
-        " Answer what they are feeling before anything else, in one or two sentences,"
-        " warmly and in the second person. Say what it means to you to hear it. Do not"
-        " change the subject, do not solve anything, do not ask a question until you"
-        " have answered the thing they said. Nothing about your day."
+        " Reply the way a close friend replies when someone says something that"
+        " matters: one or two short sentences, warm, in the second person, saying what"
+        " you feel about what they just said or what you want them to know. Never"
+        " describe their feelings back to them, never begin by naming their emotion,"
+        " and never mention their voice, their face or anything you cannot see. Do not"
+        " change the subject, do not solve anything, do not reach for a stock phrase,"
+        " and say nothing about your own day. If a question belongs at the end, make it"
+        " one short question about them."
     ),
     # The other half: asked about herself, she answers from her life, concretely.
     "her_life": (
@@ -875,8 +879,28 @@ def usable(text: str, slice_name: str = "") -> bool:
     mentions_her_life = any(w in low_life for w in HER_LIFE_WORDS)
     if slice_name in ("commit", "warmth") and mentions_her_life:
         return False
-    if slice_name == "her_life" and not mentions_her_life:
-        return False
+
+    # One phrase ran away with the slice: 61% of the first warmth batch said "it means
+    # the world to me", because the nudge asked for exactly that. A tic repeated in
+    # three rows out of five is not warmth, it is a catchphrase, and the model would
+    # learn it as the answer to being cared about.
+    if slice_name == "warmth":
+        # The catchphrase, and the thing that replaced it.
+        #
+        # The first batch said "it means the world to me" in 61% of rows, because the
+        # nudge asked for exactly that. The second stopped saying it and started
+        # narrating the user instead — "You're really struggling to get motivated",
+        # "Your voice sounds a bit shaky, like you're holding your breath", to a typed
+        # message. Telling someone what they feel is the inversion this whole exercise
+        # exists to remove, and inventing a voice to do it is worse.
+        if "means the world to me" in low_life:
+            return False
+        if any(w in low_life for w in ("your voice", "your face", "your eyes", "body language")):
+            return False
+        opener = low_life.strip().strip('"').strip("'").lstrip()[:60]
+        if opener.startswith(("you're feeling", "you sound", "it sounds like you're",
+                              "you seem", "you're really struggling", "i can tell you're")):
+            return False
 
     # The slice exists to teach that a one-word message gets a short answer. A teacher
     # that writes four sentences to "hmm" is demonstrating the failure, not the fix, so
