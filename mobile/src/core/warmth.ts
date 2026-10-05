@@ -63,8 +63,10 @@ const ALONE_RE = new RegExp(
     // loneliness, and a written line arriving there is the tell this exists to avoid.
     "i (?:don'?t|do not|dont) (?:really )?have (?:anyone|anybody|no one|nobody)(?: else)?(?: to talk to)?\\s*[.!]?$",
     "i have (?:no one|nobody|no friends)\\b",
+    // "I'm feeling lonely" was missed: the first line allowed no verb after "I'm" and
+    // the second wanted "I am feeling" spelled out, and a voice transcript never is.
     "i(?:'?m| am)(?: so| really)? lonely",
-    "i (?:feel|am feeling)(?: so| really)? lonely",
+    "i(?:'?m| am)? (?:feel|feeling)(?: so| really| a bit| kind of| pretty)? (?:lonely|alone)",
     "i'?ve been (?:so |really )?lonely",
     "there'?s no ?-?one (?:else )?to talk to",
   ].join('|'),
