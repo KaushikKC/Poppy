@@ -121,13 +121,13 @@ const LLM: Record<Tier, ModelSpec> = {
  * the tier logic changes and reverting is one line.
  */
 const DEV_MODEL_URL =
-  'https://huggingface.co/Kaushikk17/poppys-0.6b-gguf/resolve/main/poppys-0.6b-v4-q4_k_m.gguf';
+  'https://huggingface.co/Kaushikk17/poppys-0.6b-gguf/resolve/main/poppys-0.6b-v7a-q4_k_m.gguf';
 const DEV_MODEL_BYTES = 396_704_896;
 
 const LLM_ADULT: Partial<Record<Tier, ModelSpec>> = {
   '1b': DEV_MODEL_URL
     ? {
-        path: 'models/llm/poppys-0.6b-v4-q4.gguf',
+        path: 'models/llm/poppys-0.6b-v7a-q4.gguf',
         url: DEV_MODEL_URL,
         bytes: DEV_MODEL_BYTES,
         label: 'Poppys 0.6B (local)',
