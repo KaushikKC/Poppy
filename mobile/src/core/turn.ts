@@ -123,6 +123,37 @@ function toLastSentence(reply: string): string {
 }
 
 /**
+ * Two sentences, then she stops.
+ *
+ * Measured on v7a on a phone: every reply ran 11 to 13 seconds as a voice note, and
+ * the length was where it went wrong. Past the second sentence the 0.6B stops
+ * answering and starts inventing — "laundromat this morning" on a Monday afternoon,
+ * "flower orders before lunch" repeated word for word at dinner, a plan for tonight
+ * quietly moved to tomorrow. Less room is less of that, and a friend's text is one or
+ * two sentences anyway.
+ *
+ * Code rather than the prompt, because the 3B already showed a small model follows one
+ * structural instruction per turn and the slot is taken.
+ *
+ * A boundary is a full stop, ! or ? followed by the capital that starts the next
+ * sentence. "everything... what's new" carries on in lowercase and is one sentence.
+ * While streaming, the next capital is what confirms the boundary, so `final` decides
+ * whether the end of the text counts as one.
+ */
+const MAX_SENTENCES = 2;
+const BOUNDARY = /[.!?…]+["'”’)\]]*(?=\s+["'“‘(]?[A-Z])/g;
+
+export function capSentences(text: string, final = true): string | null {
+  BOUNDARY.lastIndex = 0;
+  let seen = 0;
+  let m: RegExpExecArray | null;
+  while ((m = BOUNDARY.exec(text))) {
+    if (++seen === MAX_SENTENCES) return text.slice(0, m.index + m[0].length);
+  }
+  return final ? text : null;
+}
+
+/**
  * Drop a reasoning trace, if the model emitted one.
  *
  * Qwen3 — the base the fine-tune is built on — has a thinking mode that wraps its
@@ -305,6 +336,18 @@ export async function runTurn(
       [...(opts.history ?? []), { role: 'user', content: `${text} /no_think` }],
       (token) => {
         reply += token;
+        // Two sentences are confirmed once the third begins. Stop there, and do not
+        // show the word that started it.
+        const capped = capSentences(visibleSoFar(reply), false);
+        if (capped !== null) {
+          reply = capped;
+          if (!spoken && capped.length > streamed.length) {
+            const delta = capped.slice(streamed.length);
+            streamed = capped;
+            events.onToken?.(streamed.length === delta.length ? delta.replace(/^\s+/, '') : delta);
+          }
+          return true;
+        }
         // A spoken turn sends nothing at all while it generates. A reply that can be
         // read while it is being recorded is read, and then the recording is only
         // something to sit through. A typed turn is the mirror: tokens, never a sound.
@@ -329,7 +372,10 @@ export async function runTurn(
     );
 
     // Ending mid-phrase is the cap's doing, not hers.
-    reply = fixVocative(toLastSentence(withoutReasoning(reply)), opts.userName);
+    // The cap is for what she generates. A written line (hello, warmth) is exactly as
+    // long as it was written to be, and the warm ones are three sentences.
+    const clean = withoutReasoning(reply);
+    reply = fixVocative(toLastSentence(canned ? clean : capSentences(clean) ?? clean), opts.userName);
 
     // Decided here, on the finished reply, because that is the only point at which
     // the length is known — and it is known for free, before a sound is made.

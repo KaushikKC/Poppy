@@ -38,11 +38,14 @@ export type Llm = {
    *
    * `maxTokens` defaults to the spoken cap: a caller that does not care is a caller
    * making a recording.
+   *
+   * `onToken` returning true means "that is enough": generation stops there and the
+   * text so far is returned, rather than running on to the token cap unseen.
    */
   complete: (
     system: string,
     messages: Array<{ role: 'user' | 'assistant'; content: string }>,
-    onToken: (token: string) => void,
+    onToken: (token: string) => boolean | void,
     signal?: AbortSignal,
     maxTokens?: number,
   ) => Promise<string>;

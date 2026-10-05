@@ -294,11 +294,12 @@ async function loadOnce(onProgress: (msg: string) => void): Promise<void> {
     complete: serialized(async (
       system: string,
       messages: Array<{ role: 'user' | 'assistant'; content: string }>,
-      onToken: (token: string) => void,
+      onToken: (token: string) => boolean | void,
       signal?: AbortSignal,
       maxTokens?: number,
     ) => {
       let acc = '';
+      let enough = false;
       await llama.completion(
         {
           messages: [{ role: 'system', content: system }, ...messages],
@@ -340,9 +341,18 @@ async function loadOnce(onProgress: (msg: string) => void): Promise<void> {
           stop: ['</s>', '<|eot_id|>'],
         },
         (data: { token: string }) => {
-          if (signal?.aborted) return;
+          if (signal?.aborted || enough) return;
           acc += data.token;
-          onToken(data.token);
+          // The caller has what it needs. Tokens can still arrive while the stop is
+          // in flight, so they are dropped rather than appended.
+          if (onToken(data.token) === true) {
+            enough = true;
+            // Typed as a promise, but the JSI call underneath returns undefined, so
+            // `.catch` on it threw inside the token callback on every capped reply.
+            try {
+              Promise.resolve(llama.stopCompletion()).catch(() => {});
+            } catch {}
+          }
         },
       );
       if (signal?.aborted) throw new Error('aborted');
