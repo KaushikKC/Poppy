@@ -17,7 +17,7 @@
  */
 
 import { runTurn } from './turn';
-import { isGreeting, speakIt } from './reply_shape';
+import { asDirectQuestion, isGreeting, speakIt } from './reply_shape';
 import * as greeting from './greeting';
 import * as warmth from './warmth';
 import { awaitEngines } from './engines';
@@ -455,7 +455,10 @@ export function createSocketHandler(): SocketHandler {
           await companion.update({ greeted_once: true });
         }
 
-        const sized = fitContext(history, system, msg.text);
+        // "good what about u" reaches the model as a direct question. Only the model
+        // sees it: history, memory and the screen keep what they actually typed. See
+        // asDirectQuestion() for why this and not an instruction.
+        const sized = fitContext(history, system, asDirectQuestion(msg.text));
         const said = await runTurn(
           sized.text,
           {

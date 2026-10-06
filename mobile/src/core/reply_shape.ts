@@ -92,3 +92,30 @@ const GREETING = /^\s*(hi|hey|hello|yo|hiya|good (morning|afternoon|evening)|how
 export function isGreeting(userText: string): boolean {
   return GREETING.test((userText || '').trim());
 }
+
+/**
+ * They turned the question back on her: "good what about u", "wbu", "you tell me
+ * about u". Rewritten, for the model only, into the direct question she can answer.
+ *
+ * A tester asked it four times in one conversation and got four questions back and
+ * nothing about her ("I'm all set. What's going on with you today?"). The training set
+ * has 3419 user turns and not one of them is this bounce: she was only ever asked
+ * about herself out of the blue ("what are you up to?"), never after answering.
+ *
+ * An instruction in the system prompt was tried first. It worked on a short prompt on
+ * the Mac (8 of 12) and did nothing on the phone (0 of 3), where it sat at the end of
+ * the full prompt. The rewrite puts the question where the model is looking: replayed
+ * on v7a with Luna's card, 15 of 15 answered from her own life, against about 3 of 10
+ * as typed.
+ *
+ * Written for how people text: u, abt, bout, waht, wbu, hbu.
+ */
+const ABOUT_HER =
+  /\b(?:you )?tell me about (?:you|u|urself|yourself)\b\s*\??|\b(?:what|wat|waht|how|and|n)\s*(?:about|abt|bout)\s*(?:you|u|urself|yourself)\b\s*\??|\b(?:wbu|hbu)\b\s*\??|\b(?:and|n)\s+(?:you|u)\s*\??\s*$/i;
+
+export function asDirectQuestion(userText: string): string {
+  const t = (userText || '').trim();
+  if (!ABOUT_HER.test(t)) return userText;
+  const rest = t.replace(ABOUT_HER, '').trim().replace(/^[\s,.?]+|[\s,.?]+$/g, '');
+  return (rest ? `${rest}. ` : '') + 'How about you, what have you been doing today?';
+}
