@@ -241,6 +241,16 @@ export function createSocketHandler(): SocketHandler {
         return;
       }
 
+      // The iPhone keyboard types ’ for an apostrophe, and every pattern here was
+      // written with '. So "I don’t want to live anymore", typed on a phone, got no
+      // crisis response at all, and "I don’t really have anyone to talk to" missed the
+      // written answer and reached the model. Found on a test phone, not in a test:
+      // everything typed on a Mac or pasted from code is straight.
+      //
+      // Normalised once, here, before safety, warmth, greeting or memory see it, so no
+      // matcher can be written that forgets.
+      msg.text = msg.text.replace(/[‘’‚‛′]/g, "'").replace(/[“”„″]/g, '"');
+
       playback.reset();
       const profile = await companion.profile();
       memory.setCharacter(profile.character);
