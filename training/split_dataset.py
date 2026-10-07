@@ -20,6 +20,12 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 DATA = ROOT / "training" / "data"
 RAW = DATA / "raw.jsonl"
 
+# Slices repeated in the training split, because a few hundred rows in three thousand
+# are not enough to move a habit. v7a did this by hand for warmth (x3, 6% of the set to
+# 17%); it lives here now so the next run can be reproduced from the file alone.
+# Train only: a repeated validation row measures nothing new.
+REPEAT = {"warmth": 3, "bounce": 2, "acks": 2}
+
 
 def main() -> None:
     if not RAW.exists():
@@ -46,8 +52,10 @@ def main() -> None:
         random.shuffle(rows)
         cut = max(1, round(len(rows) * 0.1)) if len(rows) > 9 else 0
         valid.extend(rows[:cut])
-        train.extend(rows[cut:])
-        print(f"  {name:10} {len(rows):5}  ({len(rows) - cut} train, {cut} valid)")
+        times = REPEAT.get(name, 1)
+        train.extend(rows[cut:] * times)
+        print(f"  {name:10} {len(rows):5}  ({len(rows) - cut} train, {cut} valid)"
+              + (f"  x{times} in train" if times > 1 else ""))
 
     random.shuffle(train)
     random.shuffle(valid)

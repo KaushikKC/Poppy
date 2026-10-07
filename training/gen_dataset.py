@@ -593,6 +593,92 @@ HER_LIFE = [
     ["what's the best thing that happened to you this week?"],
 ]
 
+# ── The question turned back on her ──────────────────────────────────────────
+#
+# Two testers, two phones, the same failure: "good what about u" answered with "I'm all
+# set. What's going on with you today?", four times in one conversation. Of 3419 user
+# turns in the v7a set, not one turns the question around. HER_LIFE only ever asks about
+# her out of the blue, so she never learned that "what about u" is a question about her.
+#
+# Written the way people actually text it, because that is the whole gap: the phone has
+# a rewrite for these now (reply_shape.asDirectQuestion), and this is what lets it go.
+# Each row opens on her own greeting, so the bounce arrives where it does in the app:
+# after she asked first.
+GREETS = [
+    "Hey {user}! How are you doing?",
+    "Hey {user}, how's your day going?",
+    "Hi {user}! What are you up to?",
+    "Hey you. How are you?",
+]
+BOUNCES = [
+    "good what about u", "good, how about you?", "I'm good wbu", "fine, and you?",
+    "not much hbu", "good n u", "I dont have any plans what about u",
+    "Im chilling waht bout u", "just got home. what about you?", "nothing much, u?",
+    "tired lol wbu", "pretty good, how about urself", "all good. and u",
+    "You tell me about u", "same old. what about you", "busy day, what about yours?",
+    "eh okay. you?", "just watching tv, wbu", "I'm at work rn, what about u",
+    "doing nothing what about you", "good good. hbu", "meh. what about u?",
+    "chilling at home wbu", "had lunch, what about u",
+]
+BOUNCE = [
+    {"seed": GREETS[i % len(GREETS)], "turns": [b], "nudges": ["bounce"]}
+    for i, b in enumerate(BOUNCES)
+]
+
+# ── One word back ────────────────────────────────────────────────────────────
+#
+# "Ohh okay" got "So, that's all the conversation you've got. Just let me know what
+# needs to be done." "Nothing" got "Your silence is my cue." "Okay great" got advice on
+# breaking a routine into manageable chunks. The set has 77 short replies in 8 forms;
+# none of these. A friend handed one word keeps it going with something of her own.
+#
+# The first turn is there to give the one word something to answer, and it is nudged
+# too, because every assistant turn is trained on, not just the last.
+ACK_WORDS = [
+    "ohh okay", "okay great", "yes", "yeah", "cool", "nice", "ok", "hmm", "lol",
+    "nothing", "oh nice", "haha", "really?", "I see", "sure", "right", "ya", "okay",
+    "not much", "mm",
+]
+ACK_FIRSTS = [
+    ("what did you do today?", "her_life_short"),
+    ("what are you up to?", "her_life_short"),
+    ("tell me something about you", "her_life_short"),
+    ("good what about u", "bounce"),
+    ("I'm just chilling at home today", "about_them_short"),
+    ("work was long today", "about_them_short"),
+    ("I had pasta for dinner", "about_them_short"),
+    ("I don't have any plans today", "about_them_short"),
+]
+ACKS = [
+    {"seed": GREETS[i % len(GREETS)],
+     "turns": [ACK_FIRSTS[i % len(ACK_FIRSTS)][0], ACK_WORDS[i % len(ACK_WORDS)]],
+     "nudges": [ACK_FIRSTS[i % len(ACK_FIRSTS)][1], "ack"]}
+    # 40 is the least common multiple of 8 and 20, so every first turn meets every
+    # word it can meet without the pairs repeating.
+    for i in range(40)
+]
+
+# Words from each character's life. A bounce answer that contains none of them did not
+# answer from her life, whatever else it did. Matched lowercase, as substrings.
+LIFE_WORDS = {
+    "poppy": ("biscuit", "laundromat", "flower", "market", "portland"),
+    "luna": ("radio", "show", "astoria", "ocean", "swim", "water", "broadcast", "listeners"),
+    "zoe": ("climb", "gym", "drum", "band", "second breakfast", "austin"),
+    "leo": ("bike", "bicycle", "garage", "chicago", "comedy", "open mic", "open-mic", "waffle"),
+    "kai": ("sprint", "coach", "track", "san diego", "hamstring", "athlete", "runner", "race", "practice"),
+    "ravi": ("bridge", "engineer", "chai", "chess", "pune", "seattle", "father", "dad"),
+}
+
+# Said instead of saying anything. Every one of these came off a tester's phone.
+EMPTY = (
+    "all ears", "here to listen", "i'm here for you", "i'm here with you", "all set",
+    "take a deep breath", "you should", "silence", "let me know", "what's on your mind",
+    "what needs to be done", "that's all", "feel free", "manageable", "i'm just here",
+)
+
+PARTS_OF_DAY = ["morning", "afternoon", "evening", "late evening"]
+WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
 
 SLICES = {
     "practical": (PRACTICAL, 0.30, LARGE),
@@ -628,7 +714,15 @@ SLICES = {
     "commit":   (COMMIT,   0.0, LARGE),
     "warmth":   (WARMTH,   0.0, LARGE),
     "her_life": (HER_LIFE, 0.0, SMALL),
+    # LARGE: both are discipline (answer, then stop; keep it going without advice), and
+    # the 3B is the model that deflects.
+    "bounce": (BOUNCE, 0.0, LARGE),
+    "acks":   (ACKS,   0.0, LARGE),
 }
+
+# Slices whose rows carry the phone's time line. The rest of the set predates it and is
+# left alone; these two are where "a tough morning" at noon was seen.
+TIMED = {"bounce", "acks"}
 
 
 def phone_system_prompt(key, user_name: str) -> str:
@@ -679,6 +773,30 @@ NUDGE = {
         " change the subject, do not solve anything, do not reach for a stock phrase,"
         " and say nothing about your own day. If a question belongs at the end, make it"
         " one short question about them."
+    ),
+    # "good what about u" is a question about her. Answer it, from her life, then stop.
+    "bounce": (
+        " They just turned the question back on you. Answer it from your own life: one"
+        " specific thing you did or are doing, taken from what is written above about"
+        " you, and true to the time of day stated above. One or two short sentences."
+        " You may end with one short question back. Never answer with a question alone,"
+        " never say you are here for them, never say you are all set."
+    ),
+    "her_life_short": (
+        " They asked about you. Answer from your own life, from what is written above,"
+        " true to the time of day stated above. One or two short sentences."
+    ),
+    "about_them_short": (
+        " Reply to what they said like a friend texting: one or two short sentences,"
+        " about them, no advice, and nothing about your own day."
+    ),
+    # One word back. Keep it going, lightly, with something of hers.
+    "ack": (
+        " They replied with only a word or two. Keep the conversation going the way a"
+        " friend does over text: add one small, specific thing of your own that follows"
+        " from what was just said, or ask one light question about it. One or two short"
+        " sentences. No advice, no telling them what to do, no comment on them being"
+        " quiet or brief, and never say you are listening or here for them."
     ),
     # The other half: asked about herself, she answers from her life, concretely.
     "her_life": (
@@ -908,6 +1026,19 @@ def usable(text: str, slice_name: str = "") -> bool:
     if slice_name == "brief" and len(text) > 220:
         return False
 
+    # Both new slices teach a short reply with something in it. The phone cuts at two
+    # sentences, so a teacher writing four is teaching text that will never be shown.
+    if slice_name in ("bounce", "acks"):
+        if len(text) > 260 or len(re.findall(r"[.!?](?:\s|$)", text)) > 3:
+            return False
+        if any(e in text.lower() for e in EMPTY):
+            return False
+        # A life for them, invented: "Your brother's still got his job lined up, right?"
+        # to someone who had said only "cool". Nobody in these rows mentions family.
+        if re.search(r"\byour (brother|sister|mom|mum|dad|mother|father|boss|wife|husband|"
+                     r"girlfriend|boyfriend|kids?|son|daughter|commute)\b", text, re.I):
+            return False
+
     low = text.lower()
     if any(b in low for b in BAD):
         return False
@@ -1057,16 +1188,30 @@ def run(plan: list, done: set) -> None:
             # A memory entry is {"facts": [...], "turns": [...]} rather than a plain
             # list of turns: the facts belong in the system prompt, not the dialogue.
             facts: list[str] = []
+            seed = ""
+            nudges: list[str] = []
             if isinstance(convo, dict):
-                facts = convo["facts"]
+                facts = convo.get("facts", [])
+                seed = convo.get("seed", "")
+                nudges = convo.get("nudges", [])
                 convo = convo["turns"]
 
             system = phone_system_prompt(char_key, user_name) + memory_block(facts)
+            if slice_name in TIMED:
+                # The phone's own sentence, word for word (socket.ts `when`).
+                rnd = random.Random(key)
+                system += f" It is {rnd.choice(WEEKDAYS)} {rnd.choice(PARTS_OF_DAY)} where they are."
             messages = [{"role": "system", "content": system}]
-            # What the teacher is told, and what gets written, differ by this one line.
-            nudge = NUDGE.get(slice_name, "")
+            # Her opening line, written rather than generated: the hello turn is code on
+            # the phone too, so this is the exact shape the conversation arrives in.
+            # A user turn has to come first or the chat template has nothing to answer.
+            if seed:
+                messages.append({"role": "user", "content": "hi"})
+                messages.append({"role": "assistant", "content": seed.format(user=user_name)})
             ok = True
-            for turn in convo:
+            for t_i, turn in enumerate(convo):
+                # What the teacher is told, and what gets written, differ by this one line.
+                nudge = NUDGE.get(nudges[t_i], "") if nudges else NUDGE.get(slice_name, "")
                 messages.append({"role": "user", "content": turn.format(user=user_name)})
                 try:
                     asked = messages if not nudge else (
@@ -1081,6 +1226,14 @@ def run(plan: list, done: set) -> None:
                     rejected += 1
                     ok = False
                     break
+                # Asked about her, so her life has to be in it. Opening on "You" is the
+                # deflection itself: "You're all set, Dharani!"
+                if nudges and nudges[t_i] in ("bounce", "her_life_short"):
+                    words = LIFE_WORDS.get(who, ())
+                    if (words and not any(w in reply.lower() for w in words)) or reply.startswith("You"):
+                        rejected += 1
+                        ok = False
+                        break
                 messages.append({"role": "assistant", "content": reply})
 
             if not ok:
