@@ -208,7 +208,7 @@ Differs from internal only in that an External group triggers **Beta App Review*
 (~24–48h, first build of each version number). 10,000 testers, public link.
 
 1. **TestFlight → Test Information** (once, not per build): beta description, feedback
-   email `poppysdotsocial@gmail.com`, privacy policy URL.
+   email `team@poppys.social`, privacy policy URL.
 2. **Sign-In Required: Yes** + a working demo account. You have a sign-in gate now; a
    reviewer who cannot get past it rejects the build.
 3. `Info.plist` → `ITSAppUsesNonExemptEncryption = false`, or every upload stops to ask.

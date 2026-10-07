@@ -42,7 +42,7 @@ export default function Privacy() {
         </p>
         <p className={P}>
           If anything here is unclear, contact us at{" "}
-          <strong>poppysdotsocial@gmail.com</strong>.
+          <strong>team@poppys.social</strong>.
         </p>
 
         <h2 className={H2}>The one-line summary</h2>
@@ -162,7 +162,7 @@ export default function Privacy() {
 
         <h2 className={H2}>Contact</h2>
         <p className={P}>
-          Questions about privacy? Email us at <strong>poppysdotsocial@gmail.com</strong>.
+          Questions about privacy? Email us at <strong>team@poppys.social</strong>.
         </p>
 
         <div className="mt-[40px] border-t border-[color:var(--line)] pt-[20px]">

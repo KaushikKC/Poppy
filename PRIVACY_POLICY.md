@@ -10,7 +10,7 @@ data.** There are no accounts, no cloud servers, and no third-party AI services.
 The app makes **one** network request, and only if you leave it switched on: a check
 for whether a newer version has been released. It is described in full below.
 
-If anything here is unclear, contact us at **poppysdotsocial@gmail.com**.
+If anything here is unclear, contact us at **team@poppys.social**.
 
 ---
 
@@ -111,4 +111,4 @@ it is used.
 
 ## Contact
 
-Questions about privacy? Email us at **poppysdotsocial@gmail.com**.
+Questions about privacy? Email us at **team@poppys.social**.

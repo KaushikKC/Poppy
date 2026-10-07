@@ -4,7 +4,7 @@
  */
 
 export const SITE_URL = "https://www.poppys.social";
-export const CONTACT = "poppysdotsocial@gmail.com";
+export const CONTACT = "team@poppys.social";
 
 // The public TestFlight invite. iPhone is the only platform with an open beta.
 export const TESTFLIGHT = "https://testflight.apple.com/join/6cHu33a3";

@@ -29,4 +29,4 @@
 
 - [Home](https://www.poppys.social/)
 - [Privacy policy](https://www.poppys.social/privacy)
-- Contact: poppysdotsocial@gmail.com
+- Contact: team@poppys.social
