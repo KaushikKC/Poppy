@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { useFlowerField } from "@/lib/useFlowerField";
+import { CONTACT, FAQ, TESTFLIGHT } from "@/lib/content";
 
 type Tone = "calm" | "bright" | "deep";
 type PrivacyMode = "local" | "erase" | "quiet";
@@ -26,14 +27,12 @@ const PRIVACY_NOTES: Record<PrivacyMode, string> = {
 };
 
 const CHECKIN_NOTES = [
-  "Pick a character, press call, and she speaks first.",
-  "No typing needed. Just talk, and she talks back in real time.",
-  "Saved for this moment only: her voice, her face, her full attention.",
+  "Six characters: Poppy, Luna, Zoe, Leo, Kai and Ravi.",
+  "Type or send a voice note. She answers the way you reached her.",
+  "Each one has a life of her own, and remembers yours.",
 ];
 
-const DEFAULT_CHECKIN_NOTE = "She picks up on the first ring, every time.";
-
-const MODE_METER_LEVELS = ["42%", "68%", "50%", "76%", "58%"];
+const DEFAULT_CHECKIN_NOTE = "She answers every time, day or night.";
 
 const TONE_OPTIONS: { key: Tone; num: string; title: string; sub: string }[] = [
   { key: "calm", num: "01 Calm", title: "slow support", sub: "gentle check-ins" },
@@ -49,15 +48,15 @@ const PRIVACY_OPTIONS: { key: PrivacyMode; label: string }[] = [
 
 const LOCAL_LIST = [
   "Runs fully on-device",
-  "Encrypted memory",
+  "Works offline",
   "Consent before saving",
-  "No account, no cloud",
+  "No account required",
 ];
 
 const PRIVACY_FLOW: [string, string][] = [
   ["01", "On-device"],
-  ["02", "Encrypted"],
-  ["03", "Consent-gated"],
+  ["02", "Stored on your phone"],
+  ["03", "Erase any time"],
 ];
 
 const MOTION_CARDS: { num: string; title: string; body: string; bg: string }[] = [
@@ -69,8 +68,8 @@ const MOTION_CARDS: { num: string; title: string; body: string; bg: string }[] =
   },
   {
     num: "02",
-    title: "Talk in real time",
-    body: "Press call and she speaks first. A face that talks back, listens, and answers out loud. No typing required.",
+    title: "Text or talk",
+    body: "Type, or send a voice note. She replies in her own voice or in text, the way you reached her.",
     bg: "bg-[var(--poppy)]",
   },
   {
@@ -81,15 +80,25 @@ const MOTION_CARDS: { num: string; title: string; body: string; bg: string }[] =
   },
 ];
 
-// The on-device pipeline, stated plainly. Everything below runs locally.
+// The on-device pipeline, stated plainly. Everything below runs on the phone, and every
+// line has to stay true of the shipping app: agents and reviewers quote this section.
 const TECH_STACK: { num: string; label: string; body: string }[] = [
-  { num: "01", label: "Speech to text", body: "Whisper, running on the Apple Silicon GPU." },
-  { num: "02", label: "The mind", body: "Llama 3.2 in-process, no server call." },
-  { num: "03", label: "Her voice", body: "Kokoro speaks each reply as it streams." },
-  { num: "04", label: "Her face", body: "A 3D avatar lip-synced to her voice." },
-  { num: "05", label: "Memory", body: "Encrypted SQLite, saved only on consent." },
-  { num: "06", label: "The shell", body: "A native desktop app for Mac and Windows." },
+  { num: "01", label: "Speech to text", body: "Whisper turns your voice notes into text on the phone." },
+  { num: "02", label: "The mind", body: "Poppys 0.6B, our own fine-tuned model, run by llama.cpp." },
+  { num: "03", label: "Her voice", body: "Kokoro speaks her replies, one voice per character." },
+  { num: "04", label: "Memory", body: "Kept in the app's own storage, encrypted by iOS. Only on consent." },
+  { num: "05", label: "Safety", body: "Crisis signals are detected on-device, with helplines one tap away." },
+  { num: "06", label: "The app", body: "iPhone, in public beta on TestFlight. Android is in testing." },
 ];
+
+// The next form she takes. A concept, described as one: no dates, no prices, nothing
+// promised that is not being built.
+const HARDWARE_POINTS: { num: string; title: string; body: string }[] = [
+  { num: "01", title: "Always on, no phone", body: "A palm-sized companion with a small screen, a speaker and a microphone." },
+  { num: "02", title: "The same on-device mind", body: "The model in the app, running locally. Nothing you say leaves it." },
+  { num: "03", title: "She checks in", body: "A gentle chime when it has been a while, the way a friend would." },
+];
+
 
 // Shared utility recipes (kept inline-Tailwind, just DRY).
 const SECTION =
@@ -99,18 +108,13 @@ const BTN_BASE =
   "inline-flex min-h-[48px] cursor-pointer items-center justify-center rounded-[8px] px-[18px] font-extrabold transition-[transform,background,color,border-color] duration-200 hover:-translate-y-[2px]";
 const PRIMARY = `${BTN_BASE} bg-[var(--poppy)] text-[color:var(--cream)] shadow-[0_16px_36px_rgba(152,16,26,0.26)]`;
 const SECONDARY = `${BTN_BASE} border border-[rgba(255,248,234,0.72)] bg-[var(--cream)] text-[color:var(--leaf)] hover:border-[var(--cream)]`;
+const SECONDARY_DARK = `${BTN_BASE} border border-[var(--leaf)] bg-transparent text-[color:var(--leaf)] hover:bg-[var(--leaf)] hover:text-[color:var(--cream)]`;
 
-// The Mac download. Uses the "latest release" URL so it always points at the newest
-// published DMG — no need to touch the site when we ship an update. The GitHub release
-// asset must be named Poppys.dmg.
-const DOWNLOAD_MAC =
-  "https://github.com/KaushikKC/Poppy/releases/latest/download/Poppys.dmg";
 
 export default function Home() {
   const [tone, setTone] = useState<Tone>("calm");
   const [privacyMode, setPrivacyMode] = useState<PrivacyMode>("local");
   const [checkinNoteIndex, setCheckinNoteIndex] = useState(-1);
-  const [isBlooming, setIsBlooming] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mainRef = useRef<HTMLElement>(null);
@@ -148,12 +152,6 @@ export default function Home() {
     triggerBloom(0.8);
   }
 
-  function handleBloomButtonClick() {
-    setIsBlooming(true);
-    triggerBloom(1);
-    window.setTimeout(() => setIsBlooming(false), 900);
-  }
-
   function handleCheckinClick() {
     setCheckinNoteIndex((index) => index + 1);
     triggerBloom(1);
@@ -189,7 +187,6 @@ export default function Home() {
               alt=""
               fill
               sizes="48px"
-              style={{ transform: isBlooming ? "rotate(135deg) scale(1.08)" : undefined }}
               className="rounded-full object-cover transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
             />
           </span>
@@ -201,9 +198,9 @@ export default function Home() {
         >
           {[
             ["#companion", "Companion"],
-            ["#modes", "Modes"],
             ["#privacy", "Privacy"],
-            ["#stack", "Stack"],
+            ["#device", "Device"],
+            ["#faq", "FAQ"],
           ].map(([href, label]) => (
             <a
               key={href}
@@ -291,22 +288,19 @@ export default function Home() {
               <span className="text-[color:var(--poppy)]">the one who picks up</span>
             </h1>
             <p className="mt-[16px] w-[min(650px,100%)] text-[clamp(1rem,1.6vw,1.24rem)] leading-[1.58] text-[color:rgba(255,248,234,0.9)] max-[620px]:w-[min(330px,100%)] max-[620px]:text-[0.98rem]">
-              Not a chatbot you type at. A face that talks back in real time, remembers
-              you, and is genuinely happy to hear from you.
+              An AI companion who texts back, sends voice notes, remembers what matters
+              to you, and is genuinely happy to hear from you. All of it on your phone.
             </p>
             <div className="mt-[22px] flex flex-wrap items-center gap-[10px]">
-              <a className={PRIMARY} href={DOWNLOAD_MAC}>
-                Download for Mac
+              <a className={PRIMARY} href={TESTFLIGHT} target="_blank" rel="noopener">
+                Join the iPhone beta
               </a>
               <a className={SECONDARY} href="#modes">
                 Meet Poppy
               </a>
-              <button className={SECONDARY} type="button" onClick={handleBloomButtonClick}>
-                Bloom the mark
-              </button>
             </div>
             <p className="mt-[10px] font-mono text-[0.72rem] font-extrabold uppercase tracking-wide text-[color:rgba(255,248,234,0.72)]">
-              Free · macOS · Apple notarized · 100% on-device
+              Free · iPhone beta on TestFlight · 100% on-device
             </p>
           </div>
         </section>
@@ -314,7 +308,7 @@ export default function Home() {
         {/* PROMISE */}
         <section
           id="promise"
-          className={`${SECTION} grid h-[100svh] min-h-[620px] grid-cols-[minmax(0,0.92fr)_minmax(360px,1.08fr)] items-center gap-[34px] py-[var(--section-pad)] max-[980px]:grid-cols-1 max-[620px]:pb-[64px] max-[620px]:pt-[88px]`}
+          className={`${SECTION} grid min-h-[max(100svh,620px)] grid-cols-[minmax(0,0.92fr)_minmax(360px,1.08fr)] items-center gap-[34px] py-[var(--section-pad)] max-[980px]:grid-cols-1 max-[620px]:pb-[64px] max-[620px]:pt-[88px]`}
         >
           <div>
             <p className={EYEBROW}>What Poppys does</p>
@@ -345,7 +339,7 @@ export default function Home() {
         {/* SIGNAL */}
         <section
           id="signal"
-          className={`${SECTION} grid h-[100svh] min-h-[620px] grid-cols-[minmax(320px,0.9fr)_minmax(0,0.82fr)] items-center gap-[38px] py-[var(--section-pad)] max-[980px]:grid-cols-1 max-[620px]:pb-[64px] max-[620px]:pt-[88px]`}
+          className={`${SECTION} grid min-h-[max(100svh,620px)] grid-cols-[minmax(320px,0.9fr)_minmax(0,0.82fr)] items-center gap-[38px] py-[var(--section-pad)] max-[980px]:grid-cols-1 max-[620px]:pb-[64px] max-[620px]:pt-[88px]`}
         >
           <div className="relative h-[min(58svh,560px)] min-h-[360px] overflow-hidden rounded-[8px] bg-[var(--night)] shadow-[0_28px_96px_rgba(5,7,6,0.2)] max-[620px]:min-h-[430px]">
             <video
@@ -371,12 +365,12 @@ export default function Home() {
           <div>
             <p className={EYEBROW}>How it feels</p>
             <h2 className="font-display font-bold text-[24px] text-[color:rgba(7,18,7,0.76)]">
-              Not a chatbot box. You call, she answers, and you actually hear her
-              voice.
+              Not a chatbot box. You write, she answers, and you can actually hear
+              her voice.
             </h2>
             <p className="mt-[20px] w-[min(520px,100%)] text-[1rem] leading-[1.72] text-[color:rgba(7,18,7,0.72)] font-semibold">
-              Her face reacts as she speaks, her voice carries the reply, and the whole
-              exchange happens in real time, on your machine.
+              Each character has her own voice, her own life and her own way of
+              talking, and the whole exchange happens on your phone.
             </p>
           </div>
         </section>
@@ -384,7 +378,7 @@ export default function Home() {
         {/* MODES */}
         <section
           id="modes"
-          className={`${SECTION} grid h-[100svh] min-h-[620px] grid-cols-[minmax(340px,0.84fr)_minmax(0,1.16fr)] items-center gap-[clamp(2rem,5vw,5.5rem)] pb-[clamp(1.5rem,4vh,2.75rem)] pt-[clamp(5.2rem,10vh,6.4rem)] max-[980px]:grid-cols-1 max-[980px]:content-center max-[980px]:gap-[18px] max-[620px]:content-start max-[620px]:gap-[12px] max-[620px]:pb-[64px] max-[620px]:pt-[88px]`}
+          className={`${SECTION} grid min-h-[max(100svh,620px)] grid-cols-[minmax(340px,0.84fr)_minmax(0,1.16fr)] items-center gap-[clamp(2rem,5vw,5.5rem)] pb-[clamp(1.5rem,4vh,2.75rem)] pt-[clamp(5.2rem,10vh,6.4rem)] max-[980px]:grid-cols-1 max-[980px]:content-center max-[980px]:gap-[18px] max-[620px]:content-start max-[620px]:gap-[12px] max-[620px]:pb-[64px] max-[620px]:pt-[88px]`}
         >
           <div
             aria-hidden="true"
@@ -500,7 +494,7 @@ export default function Home() {
 
         {/* TYPE BREAK */}
         <section
-          className={`${SECTION} grid h-[100svh] min-h-[620px] items-center py-[var(--section-pad)] max-[620px]:py-[76px]`}
+          className={`${SECTION} grid min-h-[max(100svh,620px)] items-center py-[var(--section-pad)] max-[620px]:py-[76px]`}
         >
           <p className="m-0 font-display text-[clamp(3.4rem,9vw,10rem)] leading-[0.9] text-[color:var(--leaf)] max-[620px]:text-[3.45rem]">
             A face when you need presence. A voice when you need words. A memory that stays
@@ -511,7 +505,7 @@ export default function Home() {
         {/* PRIVACY */}
         <section
           id="privacy"
-          className={`${SECTION} grid h-[100svh] min-h-[620px] grid-cols-[minmax(280px,0.78fr)_minmax(0,1.22fr)] items-center gap-[clamp(1.5rem,3.7vw,4.25rem)] rounded-[8px] border border-[color:var(--line)] bg-[var(--panel)] p-[clamp(1.5rem,3.4vw,3.2rem)] shadow-[0_24px_80px_rgba(7,18,7,0.1)] backdrop-blur-[18px] max-[980px]:grid-cols-1 max-[620px]:content-start max-[620px]:gap-[10px] max-[620px]:px-[18px] max-[620px]:pb-[18px] max-[620px]:pt-[calc(var(--header-space)_+_14px)]`}
+          className={`${SECTION} grid min-h-[max(100svh,620px)] grid-cols-[minmax(280px,0.78fr)_minmax(0,1.22fr)] items-center gap-[clamp(1.5rem,3.7vw,4.25rem)] rounded-[8px] border border-[color:var(--line)] bg-[var(--panel)] p-[clamp(1.5rem,3.4vw,3.2rem)] shadow-[0_24px_80px_rgba(7,18,7,0.1)] backdrop-blur-[18px] max-[980px]:grid-cols-1 max-[620px]:content-start max-[620px]:gap-[10px] max-[620px]:px-[18px] max-[620px]:pb-[18px] max-[620px]:pt-[calc(var(--header-space)_+_14px)]`}
         >
           <div className="flex min-h-0 flex-col justify-center gap-[clamp(0.75rem,1.8vh,1.35rem)] self-stretch max-[980px]:gap-[28px] max-[620px]:order-2 max-[620px]:gap-0">
             <p className={`${EYEBROW} max-[620px]:hidden`}>Private by design</p>
@@ -581,11 +575,12 @@ export default function Home() {
           </div>
           <div className="grid gap-[clamp(0.85rem,1.9vh,1.35rem)] max-[620px]:order-1 max-[620px]:gap-[12px]">
             <h2 className="m-0 pt-[40px] max-w-[12.5ch] font-display text-[clamp(3rem,5.3vw,6.25rem)] font-normal leading-[0.88] text-[color:var(--leaf)] max-[620px]:max-w-full max-[620px]:text-[clamp(2.35rem,12vw,3rem)] max-[620px]:leading-[0.94]">
-              She can feel this close because nothing ever leaves your machine.
+              She can feel this close because nothing ever leaves your phone.
             </h2>
             <p className="m-0 w-[min(560px,100%)] text-[1rem] font-semibold leading-[1.65] text-[color:rgba(7,18,7,0.68)] max-[620px]:text-[0.86rem] max-[620px]:leading-[1.46]">
               Speech, replies, voice, and memory all run on-device. She only remembers
-              what you consent to keep, stored encrypted, with no account and no cloud.
+              what you consent to keep, stored in the app on your phone, and you can
+              erase it with one tap.
             </p>
             <div
               aria-label="Privacy flow"
@@ -610,16 +605,16 @@ export default function Home() {
         {/* TECH STACK */}
         <section
           id="stack"
-          className={`${SECTION} grid h-[100svh] min-h-[620px] content-center gap-[clamp(1.5rem,3.4vh,2.6rem)] py-[var(--section-pad)] max-[620px]:content-start max-[620px]:gap-[16px] max-[620px]:pb-[64px] max-[620px]:pt-[88px]`}
+          className={`${SECTION} grid min-h-[max(100svh,620px)] content-center gap-[clamp(1.5rem,3.4vh,2.6rem)] py-[var(--section-pad)] max-[620px]:content-start max-[620px]:gap-[16px] max-[620px]:pb-[64px] max-[620px]:pt-[88px]`}
         >
           <div className="grid gap-[10px]">
             <p className={EYEBROW}>Under the hood</p>
             <h2 className="m-0 max-w-[16ch] font-display text-[clamp(2.6rem,5.4vw,5.6rem)] font-normal leading-[0.9] text-[color:var(--leaf)] max-[620px]:text-[2.4rem]">
-              The whole pipeline runs on your machine.
+              The whole pipeline runs on your phone.
             </h2>
             <p className="m-0 w-[min(620px,100%)] text-[1rem] font-semibold leading-[1.6] text-[color:rgba(7,18,7,0.66)] max-[620px]:text-[0.86rem]">
-              Speech to text, the model, her voice, her face, and her memory. Every step
-              is local and open, with no API keys and nothing sent to a server.
+              Speech to text, the model, her voice and her memory. Every step is local,
+              with no API keys and nothing you say sent to a server.
             </p>
           </div>
           <div className="grid grid-cols-3 gap-[10px] max-[980px]:grid-cols-2 max-[620px]:grid-cols-1 max-[620px]:gap-[8px]">
@@ -639,18 +634,114 @@ export default function Home() {
           </div>
         </section>
 
+        {/* DEVICE */}
+        <section
+          id="device"
+          aria-labelledby="device-title"
+          className={`${SECTION} grid min-h-[100svh] grid-cols-[minmax(0,1.05fr)_minmax(300px,0.95fr)] items-center gap-[clamp(2rem,5vw,5rem)] pb-[var(--section-pad)] pt-[calc(var(--header-space)+24px)] max-[980px]:grid-cols-1 max-[980px]:content-center max-[980px]:gap-[22px] max-[620px]:content-start max-[620px]:gap-[16px] max-[620px]:pb-[64px] max-[620px]:pt-[88px]`}
+        >
+          <div className="grid gap-[clamp(0.85rem,1.9vh,1.3rem)]">
+            <p className={`${EYEBROW} flex items-center gap-[10px]`}>
+              What comes next
+              <span className="rounded-full border border-[color:var(--poppy)] px-[8px] py-[3px] text-[0.62rem] text-[color:var(--poppy)]">
+                Concept
+              </span>
+            </p>
+            <h2
+              id="device-title"
+              className="m-0 max-w-[13ch] font-display text-[clamp(2.8rem,5.4vw,5.6rem)] font-normal leading-[0.9] text-[color:var(--leaf)] max-[620px]:text-[2.5rem]"
+            >
+              Poppys, in a form you can hold.
+            </h2>
+            <p className="m-0 w-[min(560px,100%)] text-[1rem] font-semibold leading-[1.65] text-[color:rgba(7,18,7,0.68)] max-[620px]:text-[0.88rem] max-[620px]:leading-[1.5]">
+              We are designing a small companion device: something you keep on a desk or
+              clip to a bag, that greets you, listens and talks back, with no phone in
+              between. Think of the pocket pets you grew up with, except she remembers
+              your day.
+            </p>
+            <div className="grid w-[min(620px,100%)] gap-[8px]">
+              {HARDWARE_POINTS.map((point) => (
+                <article
+                  key={point.num}
+                  className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-[12px] rounded-[8px] border border-[color:var(--line)] bg-[rgba(255,248,234,0.62)] p-[14px] max-[620px]:p-[11px]"
+                >
+                  <span className="mt-[2px] w-max rounded-full bg-[var(--leaf)] px-[7px] py-[5px] font-mono text-[0.66rem] font-extrabold leading-none text-[color:var(--cream)]">
+                    {point.num}
+                  </span>
+                  <div>
+                    <h3 className="m-0 text-[1rem] font-extrabold text-[color:var(--leaf)]">
+                      {point.title}
+                    </h3>
+                    <p className="m-0 mt-[3px] text-[0.92rem] font-semibold leading-[1.45] text-[color:rgba(7,18,7,0.66)] max-[620px]:text-[0.84rem]">
+                      {point.body}
+                    </p>
+                  </div>
+                </article>
+              ))}
+            </div>
+            <div className="mt-[4px] flex flex-wrap items-center gap-[10px]">
+              <a
+                className={SECONDARY_DARK}
+                href={`mailto:${CONTACT}?subject=${encodeURIComponent("Poppys device: keep me posted")}`}
+              >
+                Keep me posted
+              </a>
+              <span className="text-[0.82rem] font-semibold text-[color:rgba(7,18,7,0.6)]">
+                No dates or pre-orders yet. We will write when there is something to show.
+              </span>
+            </div>
+          </div>
+
+          {/* The device, drawn rather than photographed: it does not exist yet, and a
+              rendering would promise more than a sketch should. */}
+          <figure
+            aria-label="Illustration of the Poppys companion device concept"
+            className="relative m-0 grid h-[min(66svh,600px)] min-h-[420px] place-items-center overflow-hidden rounded-[8px] border border-[rgba(255,248,234,0.42)] shadow-[0_30px_100px_rgba(5,7,6,0.22)] [background:radial-gradient(circle_at_70%_18%,rgba(120,201,246,0.55),transparent_34%),radial-gradient(circle_at_24%_82%,rgba(233,40,50,0.28),transparent_34%),linear-gradient(160deg,var(--leaf),var(--night))] max-[980px]:h-[400px] max-[980px]:min-h-[400px] max-[620px]:h-[300px] max-[620px]:min-h-[300px]"
+          >
+            <div className="pointer-events-none absolute inset-0 opacity-40 mix-blend-overlay [background-image:linear-gradient(rgba(255,248,234,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(255,248,234,0.08)_1px,transparent_1px)] [background-size:34px_34px]" />
+            <div aria-hidden="true" className="relative grid justify-items-center">
+              {/* strap loop */}
+              <div className="mb-[-14px] h-[46px] w-[46px] rounded-full border-[7px] border-[rgba(255,248,234,0.72)] max-[620px]:h-[34px] max-[620px]:w-[34px] max-[620px]:border-[5px]" />
+              {/* shell */}
+              <div className="relative grid h-[330px] w-[270px] content-start justify-items-center rounded-[50%_50%_46%_46%/58%_58%_42%_42%] pt-[64px] shadow-[inset_0_-18px_40px_rgba(5,7,6,0.28),inset_0_14px_30px_rgba(255,248,234,0.32),0_40px_80px_rgba(5,7,6,0.45)] [background:radial-gradient(circle_at_34%_22%,#ff6b6b,var(--poppy)_42%,var(--poppy-dark))] max-[980px]:h-[270px] max-[980px]:w-[222px] max-[980px]:pt-[52px] max-[620px]:h-[200px] max-[620px]:w-[164px] max-[620px]:pt-[38px]">
+                {/* screen */}
+                <div className="grid h-[132px] w-[150px] place-items-center rounded-[22px] border-[6px] border-[rgba(5,7,6,0.55)] shadow-[inset_0_4px_14px_rgba(5,7,6,0.5)] [background:linear-gradient(180deg,#dff3e4,#b9dcc2)] max-[980px]:h-[108px] max-[980px]:w-[124px] max-[620px]:h-[80px] max-[620px]:w-[92px] max-[620px]:rounded-[16px] max-[620px]:border-[4px]">
+                  <div className="grid justify-items-center gap-[8px] max-[620px]:gap-[4px]">
+                    <div className="h-[46px] w-[46px] rounded-full shadow-[0_0_24px_rgba(233,40,50,0.45)] [background:radial-gradient(circle_at_40%_35%,var(--cream),var(--poppy)_55%,var(--poppy-dark))] max-[620px]:h-[30px] max-[620px]:w-[30px]" />
+                    <span className="font-mono text-[0.62rem] font-extrabold uppercase tracking-wide text-[color:var(--leaf)] max-[620px]:text-[0.48rem]">
+                      Hi, how was today?
+                    </span>
+                  </div>
+                </div>
+                {/* buttons */}
+                <div className="mt-[30px] flex items-center gap-[22px] max-[980px]:mt-[24px] max-[620px]:mt-[16px] max-[620px]:gap-[14px]">
+                  {[0, 1, 2].map((i) => (
+                    <span
+                      key={i}
+                      className={`block h-[26px] w-[26px] rounded-full bg-[var(--cream)] shadow-[inset_0_-4px_6px_rgba(5,7,6,0.25),0_4px_10px_rgba(5,7,6,0.3)] max-[620px]:h-[18px] max-[620px]:w-[18px] ${i === 1 ? "translate-y-[10px]" : ""}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+            <figcaption className="absolute bottom-[16px] left-[18px] right-[18px] font-mono text-[0.68rem] font-extrabold uppercase text-[color:rgba(255,248,234,0.72)]">
+              Concept sketch · not final hardware
+            </figcaption>
+          </figure>
+        </section>
+
         {/* CLOSING */}
         <section
-          className={`${SECTION} grid h-[100svh] min-h-[620px] grid-cols-[minmax(0,1fr)_minmax(310px,0.72fr)] items-center gap-[clamp(2rem,6vw,6rem)] py-[var(--section-pad)] max-[980px]:grid-cols-1 max-[620px]:pb-[64px] max-[620px]:pt-[88px]`}
+          className={`${SECTION} grid min-h-[max(100svh,620px)] grid-cols-[minmax(0,1fr)_minmax(310px,0.72fr)] items-center gap-[clamp(2rem,6vw,6rem)] py-[var(--section-pad)] max-[980px]:grid-cols-1 max-[620px]:pb-[64px] max-[620px]:pt-[88px]`}
         >
           <div className="relative z-[2]">
             <p className={EYEBROW}>Your first call</p>
             <h2 className="m-0 w-[min(820px,100%)] font-display text-[clamp(3rem,6.4vw,7rem)] font-normal leading-[0.9] text-[color:var(--leaf)] max-[620px]:text-[2.46rem]">
-              Pick a character, press call, and let her say the first hello.
+              Pick a character, say hi, and let her take it from there.
             </h2>
             <div className="mt-[28px] flex flex-wrap items-center gap-[10px]">
-              <a className={PRIMARY} href={DOWNLOAD_MAC}>
-                Download for Mac
+              <a className={PRIMARY} href={TESTFLIGHT} target="_blank" rel="noopener">
+                Join the iPhone beta
               </a>
               <button className={SECONDARY} type="button" onClick={handleCheckinClick}>
                 Meet the characters
@@ -671,6 +762,59 @@ export default function Home() {
               className="scale-[1.02] object-cover object-[50%_50%]"
             />
           </figure>
+        </section>
+
+        {/* FAQ */}
+        <section
+          id="faq"
+          aria-labelledby="faq-title"
+          className={`${SECTION} grid min-h-[100svh] content-center gap-[clamp(1.25rem,3vh,2.2rem)] py-[var(--section-pad)] max-[620px]:content-start max-[620px]:pb-[40px] max-[620px]:pt-[88px]`}
+        >
+          <div className="grid gap-[10px]">
+            <p className={EYEBROW}>Questions</p>
+            <h2
+              id="faq-title"
+              className="m-0 font-display text-[clamp(2.6rem,5vw,5rem)] font-normal leading-[0.92] text-[color:var(--leaf)] max-[620px]:text-[2.4rem]"
+            >
+              The short answers.
+            </h2>
+          </div>
+          <div className="grid grid-cols-2 gap-[10px] max-[980px]:grid-cols-1 max-[620px]:gap-[8px]">
+            {FAQ.map((item) => (
+              <details
+                key={item.q}
+                className="group rounded-[8px] border border-[color:var(--line)] bg-[rgba(255,248,234,0.72)] p-[16px] open:bg-[rgba(255,248,234,0.9)] max-[620px]:p-[13px]"
+              >
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-[12px] text-[1.02rem] font-extrabold text-[color:var(--leaf)] [&::-webkit-details-marker]:hidden max-[620px]:text-[0.94rem]">
+                  {item.q}
+                  <span
+                    aria-hidden="true"
+                    className="font-mono text-[1.1rem] text-[color:var(--poppy)] transition-transform group-open:rotate-45"
+                  >
+                    +
+                  </span>
+                </summary>
+                <p className="m-0 mt-[10px] text-[0.94rem] font-semibold leading-[1.6] text-[color:rgba(7,18,7,0.7)] max-[620px]:text-[0.86rem]">
+                  {item.a}
+                </p>
+              </details>
+            ))}
+          </div>
+
+          <footer className="mt-[clamp(0.5rem,2vh,1.5rem)] flex flex-wrap items-center justify-between gap-[14px] rounded-[8px] bg-[var(--leaf)] px-[18px] py-[16px] text-[0.86rem] font-semibold text-[color:rgba(255,248,234,0.8)]">
+            <span>© {new Date().getFullYear()} Poppys. An AI companion, not a medical service.</span>
+            <nav aria-label="Footer" className="flex flex-wrap items-center gap-[16px]">
+              <a className="hover:text-[color:var(--cream)]" href={TESTFLIGHT} target="_blank" rel="noopener">
+                iPhone beta
+              </a>
+              <a className="hover:text-[color:var(--cream)]" href="/privacy">
+                Privacy
+              </a>
+              <a className="hover:text-[color:var(--cream)]" href={`mailto:${CONTACT}`}>
+                {CONTACT}
+              </a>
+            </nav>
+          </footer>
         </section>
       </main>
     </>
