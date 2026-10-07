@@ -70,6 +70,11 @@ export type TurnOptions = {
   /** The user's own name, if known. See fixVocative() for what it is used for. */
   userName?: string;
   history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  /**
+   * Her earlier replies to check for repeats, reaching further back than `history`,
+   * which is trimmed to the context. See herLines in socket.ts. Defaults to history.
+   */
+  avoid?: string[];
   voice: string;
   signal?: AbortSignal;
   /**
@@ -352,7 +357,7 @@ export async function runTurn(
       events.onToken?.(canned);
     } else {
       // Her earlier replies in this conversation, as six-word runs. See repeats().
-      const earlier = runsOf((opts.history ?? []).filter((m) => m.role === 'assistant').map((m) => m.content));
+      const earlier = runsOf(opts.avoid ?? (opts.history ?? []).filter((m) => m.role === 'assistant').map((m) => m.content));
 
       // One generation. Sentences are checked as they finish and only then shown, so
       // a repeat is caught before it reaches the screen rather than after. A typed

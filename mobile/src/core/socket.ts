@@ -56,6 +56,17 @@ const SYSTEM_PROMPT =
  */
 const history: Array<{ role: 'user' | 'assistant'; content: string }> = [];
 
+/**
+ * Everything she has said this conversation, for the repeat check alone (turn.ts
+ * repeats()). Not the history above: that is trimmed to what fits the context, and
+ * on the phone the prompt leaves room for only a few turns, so her first reply had
+ * fallen out of it by the seventh and came back word for word. The model cannot see
+ * it either, which is why it wrote it again, and why the check must look further back
+ * than the model does.
+ */
+const herLines: string[] = [];
+const HER_LINES_KEPT = 30;
+
 type Session = {
   reply: SocketReply;
   abort: AbortController;
@@ -475,6 +486,7 @@ export function createSocketHandler(): SocketHandler {
             system,
             greeting: greetText ?? warmText ?? undefined,
             history: sized.history,
+            avoid: herLines,
             // So a reply that opens "Sam, …" is corrected to their own name. See
             // fixVocative() in turn.ts for why the model needs this.
             userName: who,
@@ -507,6 +519,8 @@ export function createSocketHandler(): SocketHandler {
 
         history.push({ role: 'user', content: msg.text });
         history.push({ role: 'assistant', content: said });
+        herLines.push(said);
+        while (herLines.length > HER_LINES_KEPT) herLines.shift();
         // Bounded here as well as in fitContext: that one sizes what is sent, this one
         // stops the array itself growing for the life of the app.
         while (history.length > MAX_HISTORY_TURNS * 2) history.shift();
@@ -574,6 +588,7 @@ export function createSocketHandler(): SocketHandler {
  */
 export function clearHistory(): void {
   history.length = 0;
+  herLines.length = 0;
 }
 
 export function activeSessions(): number {
