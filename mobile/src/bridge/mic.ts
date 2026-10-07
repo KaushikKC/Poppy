@@ -27,6 +27,22 @@ function heardNothing(): string {
 }
 
 /**
+ * Nothing reached the microphone at all: no samples, or samples that are all silence.
+ *
+ * Seen on a tester's phone during a phone call. iOS keeps the microphone for the call,
+ * so the recording comes back empty, and an empty transcript was dropped by the page
+ * without a word: the voice note simply never appeared. Said out loud instead, because
+ * "you are on a call" is the one cause nobody guesses.
+ */
+const NO_SOUND =
+  "No sound reached the microphone. If you're on a call, iPhone keeps the microphone for the call. Try again after it ends.";
+
+function silent(pcm: Float32Array): boolean {
+  for (let i = 0; i < pcm.length; i++) if (Math.abs(pcm[i]) > 1e-4) return false;
+  return true;
+}
+
+/**
  * Keep what the user just recorded, and describe it to the page.
  *
  * A voice message shown as text throws away the thing that was actually sent. The
@@ -48,6 +64,11 @@ export function createMic(send: MicSend) {
     async (pcm) => {
       send({ t: 'mic:state', state: 'transcribing' });
       try {
+        if (silent(pcm)) {
+          send({ t: 'mic:error', message: NO_SOUND });
+          if (auto.running) send({ t: 'mic:state', state: 'recording' });
+          return;
+        }
         const text = await transcribe(pcm);
         console.log('[mic]', MicRecorder.lastDiagnostic);
         if (!text) {
@@ -87,8 +108,8 @@ export function createMic(send: MicSend) {
     send({ t: 'mic:state', state: 'transcribing' });
     try {
       const pcm = await recorder.stop();
-      if (!pcm || pcm.length === 0) {
-        send({ t: 'mic:transcript', text: '' });
+      if (!pcm || pcm.length === 0 || silent(pcm)) {
+        send({ t: 'mic:error', message: NO_SOUND });
         return;
       }
       const text = await transcribe(pcm);
