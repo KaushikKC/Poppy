@@ -85,7 +85,7 @@ export function wantsVoice(userText: string): boolean {
  *
  * The cap is the fix rather than the prompt, because a model this size drifts into its
  * own life whenever it has room to and cannot reliably be told not to. Given forty
- * tokens it says one sentence, and toLastSentence() trims that to a whole one.
+ * tokens it says one sentence, and turn.ts drops a sentence the cap cut mid-phrase.
  */
 const GREETING = /^\s*(hi|hey|hello|yo|hiya|good (morning|afternoon|evening)|how are you|how'?s it going|what'?s up|sup)\b[\s!,.?]*$/i;
 

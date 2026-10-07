@@ -102,27 +102,6 @@ export async function transcribe(pcm16k: Float32Array): Promise<string> {
  * duration rather than a spinner of unknown size.
  */
 /**
- * Cut a reply back to its last finished sentence.
- *
- * The token cap ends generation wherever it lands, and where it landed was
- * "There's something so satisfying about bringing color" — a voice note that simply
- * stops. Text has the same problem and hides it better.
- *
- * Only trims when there is a real sentence to keep: a short reply with no full stop
- * is left alone, because half of nothing is worse than an unfinished sentence.
- */
-function toLastSentence(reply: string): string {
-  const text = reply.trim();
-  if (!text) return text;
-  // Already ends properly.
-  if (/[.!?…"'\)]$/.test(text)) return text;
-  const cut = Math.max(text.lastIndexOf('. '), text.lastIndexOf('! '), text.lastIndexOf('? '));
-  // Keep it only if a sentence survives that is worth hearing on its own.
-  if (cut < 40) return text;
-  return text.slice(0, cut + 1);
-}
-
-/**
  * Two sentences, then she stops.
  *
  * Measured on v7a on a phone: every reply ran 11 to 13 seconds as a voice note, and
@@ -143,14 +122,66 @@ function toLastSentence(reply: string): string {
 const MAX_SENTENCES = 2;
 const BOUNDARY = /[.!?…]+["'”’)\]]*(?=\s+["'“‘(]?[A-Z])/g;
 
-export function capSentences(text: string, final = true): string | null {
+/**
+ * The sentences in a partial reply that are known to be finished.
+ *
+ * Finished means the next one has started (BOUNDARY), or, when `final`, the text has
+ * ended. The unfinished tail is left out: it is not yet anything to check or show.
+ */
+export function finishedSentences(text: string, final: boolean): string[] {
+  const out: string[] = [];
   BOUNDARY.lastIndex = 0;
-  let seen = 0;
+  let from = 0;
   let m: RegExpExecArray | null;
   while ((m = BOUNDARY.exec(text))) {
-    if (++seen === MAX_SENTENCES) return text.slice(0, m.index + m[0].length);
+    const end = m.index + m[0].length;
+    out.push(text.slice(from, end).trim());
+    from = end;
   }
-  return final ? text : null;
+  const tail = text.slice(from).trim();
+  if (final && tail) out.push(tail);
+  return out.filter(Boolean);
+}
+
+/**
+ * Has she said this already?
+ *
+ * Six words running, matched against her own earlier replies in this conversation.
+ * "Just got back from my morning swim in the ocean" came back word for word in the
+ * same conversation on a phone; "How's your day been?" is four words and is allowed to
+ * come back, because a friend asks that twice.
+ *
+ * ── Why this is code and not the sampler ─────────────────────────────────────
+ *
+ * penalty_repeat over the last 512 tokens was meant to stop exactly this, and on the
+ * phone it never could: llama.rn feeds only the tokens it generates into the sampler,
+ * never the prompt (rn-completion.cpp), so the penalty saw the reply being written and
+ * nothing she had said before it. llama-server feeds the whole prompt in, which is why
+ * the same weights repeated in 2% of turns on the Mac and constantly on the phone. DRY
+ * has the same blind spot, and iOS ships llama.rn prebuilt, so it cannot be patched.
+ */
+const REPEAT_RUN = 6;
+
+function words(s: string): string[] {
+  return s.toLowerCase().match(/[a-z0-9']+/g) ?? [];
+}
+
+export function runsOf(texts: string[]): Set<string> {
+  const runs = new Set<string>();
+  for (const t of texts) {
+    const w = words(t);
+    for (let i = 0; i + REPEAT_RUN <= w.length; i++) runs.add(w.slice(i, i + REPEAT_RUN).join(' '));
+  }
+  return runs;
+}
+
+export function repeats(sentence: string, earlier: Set<string>): boolean {
+  if (!earlier.size) return false;
+  const w = words(sentence);
+  for (let i = 0; i + REPEAT_RUN <= w.length; i++) {
+    if (earlier.has(w.slice(i, i + REPEAT_RUN).join(' '))) return true;
+  }
+  return false;
 }
 
 /**
@@ -305,7 +336,12 @@ export async function runTurn(
   events.onConfig?.(engine.sampleRate);
 
   let reply = '';
-  let streamed = '';
+  // What has reached the screen so far, sentence by sentence, on a typed turn.
+  let shown = 0;
+  const show = (sentence: string): void => {
+    if (spoken) return;
+    events.onToken?.(shown++ === 0 ? sentence : ` ${sentence}`);
+  };
   try {
     // Hello does not go to the model. See greeting.ts for the three attempts that came
     // before this and what each one came back with. Everything that is not an exact
@@ -314,68 +350,92 @@ export async function runTurn(
     if (canned) {
       reply = canned;
       events.onToken?.(canned);
-    } else
-    reply = await llm.complete(
-      opts.system,
-      // ── /no_think ─────────────────────────────────────────────────────────
-      //
-      // Qwen3 is a thinking model and the fine-tune sits on top of that, so it
-      // reasons before answering whether or not anyone wants it to. Stripping the
-      // <think> markers afterwards cleans up the tags and leaves the reasoning, which
-      // is written *about* the user rather than to them: "I think I should tell him
-      // about the movie… His name is Kaushik, and he's feeling a bit bored today."
-      // Her own notes, read out in a voice note, in the third person.
-      //
-      // The flag is what the Qwen3 chat template reads to skip thinking entirely, and
-      // it goes on the user turn because that is where the template looks for it.
-      // Measured against the shipped weights: without it the reply is reasoning, with
-      // it the reply is an answer.
-      //
-      // Appended here and nowhere else, so the text stored in history, shown on screen
-      // and spoken aloud never contains it.
-      [...(opts.history ?? []), { role: 'user', content: `${text} /no_think` }],
-      (token) => {
-        reply += token;
-        // Two sentences are confirmed once the third begins. Stop there, and do not
-        // show the word that started it.
-        const capped = capSentences(visibleSoFar(reply), false);
-        if (capped !== null) {
-          reply = capped;
-          if (!spoken && capped.length > streamed.length) {
-            const delta = capped.slice(streamed.length);
-            streamed = capped;
-            events.onToken?.(streamed.length === delta.length ? delta.replace(/^\s+/, '') : delta);
-          }
-          return true;
-        }
-        // A spoken turn sends nothing at all while it generates. A reply that can be
-        // read while it is being recorded is read, and then the recording is only
-        // something to sit through. A typed turn is the mirror: tokens, never a sound.
-        //
-        // Emitted as the difference between what is now safe to show and what has
-        // already been shown, rather than as the raw token, so a reasoning trace never
-        // reaches the screen even for an instant.
-        if (spoken) return;
-        const visible = visibleSoFar(reply);
-        if (visible.length > streamed.length) {
-          const delta = visible.slice(streamed.length);
-          streamed = visible;
-          // Leading blank lines are what the stripped block left behind.
-          events.onToken?.(streamed.length === delta.length ? delta.replace(/^\s+/, '') : delta);
-        }
-      },
-      opts.signal,
-      // A reply that will be read can be longer than one that will be listened to.
-      // A greeting gets a greeting, not a biography. See isGreeting() for why the cap
-      // does this and the prompt cannot.
-      isGreeting(text) ? 40 : spoken ? MAX_TOKENS_SPOKEN : MAX_TOKENS_TEXT,
-    );
+    } else {
+      // Her earlier replies in this conversation, as six-word runs. See repeats().
+      const earlier = runsOf((opts.history ?? []).filter((m) => m.role === 'assistant').map((m) => m.content));
 
-    // Ending mid-phrase is the cap's doing, not hers.
-    // The cap is for what she generates. A written line (hello, warmth) is exactly as
-    // long as it was written to be, and the warm ones are three sentences.
-    const clean = withoutReasoning(reply);
-    reply = fixVocative(toLastSentence(canned ? clean : capSentences(clean) ?? clean), opts.userName);
+      // One generation. Sentences are checked as they finish and only then shown, so
+      // a repeat is caught before it reaches the screen rather than after. A typed
+      // reply therefore arrives a sentence at a time instead of a token at a time,
+      // which at two sentences is barely different and reads like texting anyway.
+      const generate = async (): Promise<{ kept: string[]; first: string }> => {
+        let raw = '';
+        let done = 0;
+        let stop = false;
+        const kept: string[] = [];
+        let first = '';
+        // Returns true when generation should end here.
+        const take = (sentences: string[]): boolean => {
+          for (; done < sentences.length && !stop; done++) {
+            const s = sentences[done];
+            if (!first) first = s;
+            // Said before: end the reply where it is, and never show it.
+            if (repeats(s, earlier)) {
+              stop = true;
+              break;
+            }
+            kept.push(s);
+            show(s);
+            // Two sentences, then she stops. See MAX_SENTENCES.
+            if (kept.length >= MAX_SENTENCES) stop = true;
+          }
+          return stop;
+        };
+        await llm.complete(
+          opts.system,
+          // ── /no_think ─────────────────────────────────────────────────────
+          //
+          // Qwen3 is a thinking model and the fine-tune sits on top of that, so it
+          // reasons before answering whether or not anyone wants it to. Stripping the
+          // <think> markers afterwards cleans up the tags and leaves the reasoning,
+          // which is written *about* the user rather than to them: "I think I should
+          // tell him about the movie… His name is Kaushik, and he's feeling a bit
+          // bored today." Her own notes, read out in a voice note, in the third person.
+          //
+          // The flag is what the Qwen3 chat template reads to skip thinking entirely,
+          // and it goes on the user turn because that is where the template looks for
+          // it. Appended here and nowhere else, so the text stored in history, shown
+          // on screen and spoken aloud never contains it.
+          [...(opts.history ?? []), { role: 'user', content: `${text} /no_think` }],
+          // visibleSoFar() keeps a reasoning trace off the screen even for an instant.
+          (token) => {
+            raw += token;
+            return take(finishedSentences(visibleSoFar(raw), false));
+          },
+          opts.signal,
+          // A reply that will be read can be longer than one that will be listened to.
+          // A greeting gets a greeting, not a biography. See isGreeting() for why the
+          // cap does this and the prompt cannot.
+          isGreeting(text) ? 40 : spoken ? MAX_TOKENS_SPOKEN : MAX_TOKENS_TEXT,
+        );
+        if (!stop) {
+          // The last sentence ends with the text rather than with a next one. If the
+          // token cap cut it mid-phrase it is dropped ("There's something so satisfying
+          // about bringing color" was a whole voice note once),
+          // unless it is all there is.
+          const all = finishedSentences(withoutReasoning(raw), true);
+          const tail = all[all.length - 1] ?? '';
+          const cut = done === all.length - 1 && !/[.!?…"'”’)\]]$/.test(tail) && kept.length > 0;
+          take(cut ? all.slice(0, -1) : all);
+        }
+        return { kept, first };
+      };
+
+      let out = await generate();
+      // The very first sentence was a repeat, so nothing was said. Sampling is random,
+      // so a second try is a different reply; if that one opens with a repeat too,
+      // it is said anyway, because a repeat is better than silence.
+      if (!out.kept.length && !opts.signal?.aborted) {
+        const retry = await generate();
+        out = retry.kept.length ? retry : { kept: [retry.first || out.first], first: '' };
+        if (!retry.kept.length && out.kept[0]) show(out.kept[0]);
+      }
+      reply = out.kept.join(' ');
+    }
+
+    // A written line (hello, warmth) is exactly as long as it was written to be: the
+    // warm ones are three sentences, and none of them is checked for repeats.
+    reply = fixVocative(canned ? withoutReasoning(reply) : reply, opts.userName);
 
     // Decided here, on the finished reply, because that is the only point at which
     // the length is known — and it is known for free, before a sound is made.

@@ -327,9 +327,11 @@ async function loadOnce(onProgress: (msg: string) => void): Promise<void> {
           // failure: "get you out of bed and feeling fresh" came back in three
           // consecutive replies, each time to a different question.
           //
-          // 512 reaches back over roughly the last two exchanges, which is where the
-          // echo comes from. Further would start penalising the user's own words and
-          // her character's vocabulary, which is not repetition, it is her.
+          // 512 was meant to reach back over the last two exchanges, and does not:
+          // llama.rn feeds only generated tokens into the sampler, never the prompt, so
+          // this window only ever holds the reply being written. Repeats across turns
+          // are caught in turn.ts instead (repeats()). Kept, because within one reply
+          // it still does its job.
           penalty_last_n: 512,
           // Cutting the tail matters more here than temperature does. Without it
           // 0.7 still samples from the whole vocabulary, and a small model's tail
