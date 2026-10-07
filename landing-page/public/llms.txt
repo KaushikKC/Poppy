@@ -1,0 +1,32 @@
+# Poppys
+
+> Poppys is a private AI companion app for iPhone. You pick one of six characters, text or send voice notes, and she replies in her own voice. Speech recognition, the language model, her voice and her memory all run on the phone, so nothing you say leaves it. Free public beta on Apple TestFlight.
+
+## Get it
+
+- [iPhone public beta (TestFlight)](https://testflight.apple.com/join/6cHu33a3): install Apple's TestFlight app, open this link, tap Accept. Free, no account required.
+- Android: in closed testing, not yet public.
+
+## What it does
+
+- Six characters (Poppy, Luna, Zoe, Leo, Kai, Ravi), each with her own voice, personality and life story.
+- Text or voice notes in; text or voice replies out, matching how you reached her.
+- Remembers what matters to you, only with your consent. Memory can be erased in one tap.
+- Detects crisis signals on-device and shows local helplines. Poppys is a companion, not a medical or mental health service.
+
+## How it works
+
+- Speech to text: Whisper, on-device.
+- Language model: Poppys 0.6B, a model fine-tuned in-house, run by llama.cpp on the phone.
+- Voice: Kokoro text-to-speech, on-device.
+- Models download once on first launch, then the app works offline.
+
+## What comes next
+
+- The Poppys device: a concept for a small, always-on hardware companion with a screen, speaker and microphone, running the same on-device model with no phone needed. Not for sale; no dates announced.
+
+## Links
+
+- [Home](https://www.poppys.social/)
+- [Privacy policy](https://www.poppys.social/privacy)
+- Contact: poppysdotsocial@gmail.com
